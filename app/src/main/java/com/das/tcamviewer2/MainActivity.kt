@@ -19,10 +19,11 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -36,10 +37,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +53,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,14 +115,12 @@ fun MainScreen() {
 @Composable
 fun CameraScreen() {
     val context = LocalContext.current
+    val paletteOptions = listOf("RGB", "Grayscale", "Thermal", "Sepia")
 
     // State to control visibility of the menus
     var mainMenuExpanded by remember { mutableStateOf(false) }
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var selectedPalette by remember { mutableStateOf("Default") }
-
-    // List of palettes for our nested dropdown
-    val paletteOptions = listOf("RGB", "Grayscale", "Thermal", "Sepia")
 
     Scaffold(
         topBar = {
@@ -200,12 +202,32 @@ fun CameraScreen() {
         }
     }}
 
+/***********************************************************
+ *             SettingsScreen
+ ************************************************************/
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
+    val context = LocalContext.current
+    val dataManager = remember { SettingsDataManager(context) }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Local state tracking variables for Dropdown UI
+    var resMenuExpanded by remember { mutableStateOf(false) }
+    // List of resolutions for our Export Resolution
+    val resolutions = listOf("160x120", "320x240", "480x360", "640x480")
+    // List of palettes for our nested dropdown
+    val paletteOptions = listOf("RGB", "Grayscale", "Thermal", "Sepia")
+    val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "")
+
     // State initialization with your required default values
     var cameraIpAddress by remember { mutableStateOf("192.168.4.1") }
     var exportPictureOnSave by remember { mutableStateOf(false) } // initialized to off
+    var exportMetadata by remember { mutableStateOf(true) } // initialized to on
+    var resSelected by remember {mutableStateOf(resolutions[1])}
+
+    // This local variable bridges the async DataStore flow with the UI text wrapper
+    var currentResSelection by remember(savedExportRes) { mutableStateOf(savedExportRes) }
 
     Scaffold(
         topBar = {
@@ -228,20 +250,23 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
             )
 
-            // 1. Camera IP Address (TextEdit / TextField)
+            // Camera IP Address (TextEdit / TextField)
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 OutlinedTextField(
                     value = cameraIpAddress,
-                    onValueChange = { cameraIpAddress = it },
+                    onValueChange = { cameraIpAddress ->
+                        coroutineScope.launch { dataManager.saveCameraIp(cameraIpAddress) }
+                    },
                     label = { Text("Camera IP Address") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
+                    enabled = false,
                     // Optimizes the digital keyboard layout for typing numbers and dots
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
                 )
             }
 
-            // 2. Export Picture on Save (On/Off Switch)
+            // Export Picture on Save (On/Off Switch)
             ListItem(
                 headlineContent = { Text("Export Picture on Save") },
                 supportingContent = {
@@ -250,10 +275,69 @@ fun SettingsScreen() {
                 trailingContent = {
                     Switch(
                         checked = exportPictureOnSave,
-                        onCheckedChange = { exportPictureOnSave = it }
+                        onCheckedChange = { isChecked ->
+                            coroutineScope.launch { dataManager.saveExportPicture(isChecked)
+                            }
+                        }
                     )
                 }
             )
+
+            // Export Meta Data (On/Off Switch)
+            ListItem(
+                headlineContent = { Text("Export Metadata") },
+                supportingContent = {
+                    Text(if (exportMetadata) "Enabled" else "Disabled")
+                },
+                trailingContent = {
+                    Switch(
+                        checked = exportMetadata,
+                        onCheckedChange = { isChecked ->
+                            coroutineScope.launch { dataManager.saveExportMetadata(isChecked) }
+                        }
+                    )
+                }
+            )
+
+            //Export Resolution (drop down)
+            ExposedDropdownMenuBox(
+                expanded = resMenuExpanded,
+                onExpandedChange = { resMenuExpanded = it }
+
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(), // Anchors the menu dropdown to this layout bounds
+                    value = currentResSelection,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Export Resolution") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = resMenuExpanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                )
+                // The actual hidden menu that floats open when clicked
+                ExposedDropdownMenu(
+                    expanded = resMenuExpanded,
+                    onDismissRequest = { resMenuExpanded = false }
+                ) {
+                    resolutions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                currentResSelection = option
+                                coroutineScope.launch { dataManager.saveExportResolution(option)
+                                }
+                                resMenuExpanded = false // Hide menu after selectionexpanded = false // Hide menu after selection
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                        )
+                    }
+                }
+            }
+        }
+
+
 
             HorizontalDivider(
                 modifier = Modifier.padding(top = 16.dp),
@@ -262,7 +346,7 @@ fun SettingsScreen() {
             )
         }
     }
-}
+
 
 @Composable
 fun GenericScreen(name: String) {
