@@ -9,19 +9,29 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,6 +45,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
@@ -53,9 +65,10 @@ class MainActivity : ComponentActivity() {
 
 enum class ScreenTab(val title: String, val icon: ImageVector) {
     Camera("Camera", Icons.Filled.CameraAlt),
-    Library("Library", Icons.Filled.PhotoLibrary),
-    Settings("Settings", Icons.Filled.Settings)
+    Settings("Settings", Icons.Filled.Settings),
+    Library("Library", Icons.Filled.PhotoLibrary)
 }
+
 
 @Composable
 fun MainScreen() {
@@ -84,8 +97,8 @@ fun MainScreen() {
         ) {
             when (tabs[selectedTabItem]) {
                 ScreenTab.Camera -> CameraScreen()
+                ScreenTab.Settings -> SettingsScreen()
                 ScreenTab.Library -> GenericScreen(name = "Library")
-                ScreenTab.Settings -> GenericScreen(name = "Settings")
             }
         }
     }
@@ -186,6 +199,70 @@ fun CameraScreen() {
             }
         }
     }}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen() {
+    // State initialization with your required default values
+    var cameraIpAddress by remember { mutableStateOf("192.168.4.1") }
+    var exportPictureOnSave by remember { mutableStateOf(false) } // initialized to off
+
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("Settings") })
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+        ) {
+
+            // --- Group Header: APPLICATION SETTINGS ---
+            Text(
+                text = "APPLICATION SETTINGS",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
+            )
+
+            // 1. Camera IP Address (TextEdit / TextField)
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                OutlinedTextField(
+                    value = cameraIpAddress,
+                    onValueChange = { cameraIpAddress = it },
+                    label = { Text("Camera IP Address") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    // Optimizes the digital keyboard layout for typing numbers and dots
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                )
+            }
+
+            // 2. Export Picture on Save (On/Off Switch)
+            ListItem(
+                headlineContent = { Text("Export Picture on Save") },
+                supportingContent = {
+                    Text(if (exportPictureOnSave) "Enabled" else "Disabled")
+                },
+                trailingContent = {
+                    Switch(
+                        checked = exportPictureOnSave,
+                        onCheckedChange = { exportPictureOnSave = it }
+                    )
+                }
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 16.dp),
+                thickness = 1.dp, // Optional: customize the line thickness
+                color = MaterialTheme.colorScheme.outlineVariant // Optional: customize the line color
+            )
+        }
+    }
+}
 
 @Composable
 fun GenericScreen(name: String) {
