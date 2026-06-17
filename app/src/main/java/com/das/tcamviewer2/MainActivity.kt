@@ -8,17 +8,22 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,11 +31,13 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -175,7 +182,11 @@ fun CameraScreen() {
                                     onClick = {
                                         selectedPalette = palette
                                         paletteMenuExpanded = false
-                                        Toast.makeText(context, "Palette: $palette", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            "Palette: $palette",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 )
                             }
@@ -200,7 +211,8 @@ fun CameraScreen() {
                 )
             }
         }
-    }}
+    }
+}
 
 /***********************************************************
  *             SettingsScreen
@@ -228,15 +240,22 @@ fun SettingsScreen() {
     val manualRangeEnabled by dataManager.manualRangeFlow.collectAsState(initial = false)
     val savedMinVal by dataManager.minValueFlow.collectAsState(initial = "0")
     val savedMaxVal by dataManager.maxValueFlow.collectAsState(initial = "100")
+    val savedPalette by dataManager.selectedPaletteFlow.collectAsState(initial = "Default")
 
     //  LOCAL STATE PROXIES FOR INTUITIVE TYPING ---
     var localMin by remember(savedMinVal) { mutableStateOf(savedMinVal) }
     var localMax by remember(savedMaxVal) { mutableStateOf(savedMaxVal) }
 
-    var resSelected by remember {mutableStateOf(resolutions[1])}
+    var resSelected by remember { mutableStateOf(resolutions[1]) }
 
     // This local variable bridges the async DataStore flow with the UI text wrapper
     var currentResSelection by remember(savedExportRes) { mutableStateOf(savedExportRes) }
+
+    // States to handle Palette Popup Window
+    var showPaletteDialog by remember { mutableStateOf(false) }
+    val paletteChoices = listOf("Default", "RGB", "Grayscale", "Thermal", "Sepia")
+    // Tracks temporary dialog choice before user clicks "OK"
+    var tempDialogSelection by remember(savedPalette) { mutableStateOf(savedPalette) }
 
     Scaffold(
         topBar = {
@@ -285,7 +304,8 @@ fun SettingsScreen() {
                     Switch(
                         checked = exportPictureOnSave,
                         onCheckedChange = { isChecked ->
-                            coroutineScope.launch { dataManager.saveExportPicture(isChecked)
+                            coroutineScope.launch {
+                                dataManager.saveExportPicture(isChecked)
                             }
                         }
                     )
@@ -335,9 +355,11 @@ fun SettingsScreen() {
                             text = { Text(option) },
                             onClick = {
                                 currentResSelection = option
-                                coroutineScope.launch { dataManager.saveExportResolution(option)
+                                coroutineScope.launch {
+                                    dataManager.saveExportResolution(option)
                                 }
-                                resMenuExpanded = false // Hide menu after selectionexpanded = false // Hide menu after selection
+                                resMenuExpanded =
+                                    false // Hide menu after selectionexpanded = false // Hide menu after selection
                             },
                             contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                         )
@@ -345,7 +367,7 @@ fun SettingsScreen() {
                 }
             }
 
-            // --- 3. NEW MANUAL RANGE SETTING TOGGLE ---
+            // MANUAL RANGE SETTING TOGGLE ---
             ListItem(
                 headlineContent = { Text("Manual Range") },
                 supportingContent = { Text(if (manualRangeEnabled) "Custom Bounds Active" else "Automatic Scaling") },
@@ -367,7 +389,9 @@ fun SettingsScreen() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(
+                            16.dp
+                        )
                     ) {
                         // Min Text Field
                         OutlinedTextField(
@@ -396,10 +420,124 @@ fun SettingsScreen() {
                         )
                     }
                 }
+
+
+// --- 4. POPUP DIALOG WINDOW ---
+                if (showPaletteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showPaletteDialog = false },
+                        title = { Text(text = "Select Palette") },
+                        text = {
+                            Column {
+                                paletteChoices.forEach { palette ->
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .selectable(
+                                                selected = (palette == tempDialogSelection),
+                                                onClick = { tempDialogSelection = palette }
+                                            )
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = (palette == tempDialogSelection),
+                                            onClick = { tempDialogSelection = palette }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(text = palette, fontSize = 16.sp)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showPaletteDialog = false
+                                    // Persistent save to Datastore occurs here
+                                    coroutineScope.launch {
+                                        dataManager.saveSelectedPalette(tempDialogSelection)
+                                    }
+                                }
+                            ) {
+                                Text("OK")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showPaletteDialog = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
+
+
             }
-        }
 
-
+            // --- PALETTE SETTING ROW WITH PLAY BUTTON ---
+            ListItem(
+                headlineContent = { Text("Palette") },
+                supportingContent = { Text("Active: $savedPalette") },
+                trailingContent = {
+                    IconButton(onClick = {
+                        tempDialogSelection = savedPalette // Reset temporary selection to current value
+                        showPaletteDialog = true
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Open Palette Selection"
+                        )
+                    }
+                }
+            )
+// --- POPUP DIALOG WINDOW ---
+            if (showPaletteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPaletteDialog = false },
+                    title = { Text(text = "Select Palette") },
+                    text = {
+                        Column {
+                            paletteChoices.forEach { palette ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = (palette == tempDialogSelection),
+                                            onClick = { tempDialogSelection = palette }
+                                        )
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = (palette == tempDialogSelection),
+                                        onClick = { tempDialogSelection = palette }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(text = palette, fontSize = 16.sp)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showPaletteDialog = false
+                                // Persistent save to Datastore occurs here
+                                coroutineScope.launch {
+                                    dataManager.saveSelectedPalette(tempDialogSelection)
+                                }
+                            }
+                        ) {
+                            Text("OK")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showPaletteDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
 
             HorizontalDivider(
                 modifier = Modifier.padding(top = 16.dp),
@@ -407,7 +545,11 @@ fun SettingsScreen() {
                 color = MaterialTheme.colorScheme.outlineVariant // Optional: customize the line color
             )
         }
+
+
     }
+
+}
 
 
 @Composable

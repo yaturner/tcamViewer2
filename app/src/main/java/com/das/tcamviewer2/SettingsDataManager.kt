@@ -23,6 +23,7 @@ class SettingsDataManager(private val context: Context) {
         val MANUAL_RANGE_KEY = booleanPreferencesKey("manual_range")
         val MIN_VALUE_KEY = stringPreferencesKey("min_value")
         val MAX_VALUE_KEY = stringPreferencesKey("max_value")
+        val SELECTED_PALETTE_KEY = stringPreferencesKey("selected_palette")
     }
 
     val cameraIpFlow: Flow<String> = context.dataStore.data.map { preferences ->
@@ -53,6 +54,10 @@ class SettingsDataManager(private val context: Context) {
         prefs[MAX_VALUE_KEY] ?: "100" // Default max
     }
 
+    val selectedPaletteFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[SELECTED_PALETTE_KEY] ?: "Default" // Default palette
+    }
+
     // Write tasks
     suspend fun saveCameraIp(ip: String) {
         context.dataStore.edit { preferences -> preferences[CAMERA_IP_KEY] = ip }
@@ -81,4 +86,9 @@ class SettingsDataManager(private val context: Context) {
     suspend fun saveMaxValue(value: String) {
         context.dataStore.edit { prefs -> prefs[MAX_VALUE_KEY] = value }
     }
+
+    suspend fun saveSelectedPalette(palette: String) {
+        context.dataStore.edit { prefs -> prefs[SELECTED_PALETTE_KEY] = palette }
+    }
+
 }
