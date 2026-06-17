@@ -55,7 +55,7 @@ class SettingsDataManager(private val context: Context) {
     }
 
     val selectedPaletteFlow: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[SELECTED_PALETTE_KEY] ?: "Default" // Default palette
+        prefs[SELECTED_PALETTE_KEY] ?: "Rainbow" // Default palette
     }
 
     // Write tasks

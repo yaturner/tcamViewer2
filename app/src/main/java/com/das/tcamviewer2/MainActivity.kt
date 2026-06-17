@@ -127,7 +127,7 @@ fun CameraScreen() {
     // State to control visibility of the menus
     var mainMenuExpanded by remember { mutableStateOf(false) }
     var paletteMenuExpanded by remember { mutableStateOf(false) }
-    var selectedPalette by remember { mutableStateOf("Default") }
+    var selectedPalette by remember { mutableStateOf("Rainbow") }
 
     Scaffold(
         topBar = {
@@ -229,7 +229,8 @@ fun SettingsScreen() {
     // List of resolutions for our Export Resolution
     val resolutions = listOf("160x120", "320x240", "480x360", "640x480")
     // List of palettes for our nested dropdown
-    val paletteOptions = listOf("RGB", "Grayscale", "Thermal", "Sepia")
+    val paletteOptions = listOf("Arctic", "Banded", "DoubleRainbow",
+        "Fusion", "Grey", "Ironblack", "Rainbow", "Sepia")
     val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "")
 
     // State initialization with your required default values
@@ -253,7 +254,7 @@ fun SettingsScreen() {
 
     // States to handle Palette Popup Window
     var showPaletteDialog by remember { mutableStateOf(false) }
-    val paletteChoices = listOf("Default", "RGB", "Grayscale", "Thermal", "Sepia")
+    val paletteChoices = paletteOptions
     // Tracks temporary dialog choice before user clicks "OK"
     var tempDialogSelection by remember(savedPalette) { mutableStateOf(savedPalette) }
 
@@ -422,7 +423,7 @@ fun SettingsScreen() {
                 }
 
 
-// --- 4. POPUP DIALOG WINDOW ---
+                // ---POPUP DIALOG WINDOW ---
                 if (showPaletteDialog) {
                     AlertDialog(
                         onDismissRequest = { showPaletteDialog = false },
@@ -437,14 +438,14 @@ fun SettingsScreen() {
                                                 selected = (palette == tempDialogSelection),
                                                 onClick = { tempDialogSelection = palette }
                                             )
-                                            .padding(vertical = 8.dp),
+                                            .padding(vertical = 12.dp, horizontal = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         RadioButton(
                                             selected = (palette == tempDialogSelection),
                                             onClick = { tempDialogSelection = palette }
                                         )
-                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
                                         Text(text = palette, fontSize = 16.sp)
                                     }
                                 }
@@ -470,8 +471,6 @@ fun SettingsScreen() {
                         }
                     )
                 }
-
-
             }
 
             // --- PALETTE SETTING ROW WITH PLAY BUTTON ---
@@ -496,7 +495,12 @@ fun SettingsScreen() {
                     onDismissRequest = { showPaletteDialog = false },
                     title = { Text(text = "Select Palette") },
                     text = {
-                        Column {
+                        // Adding verticalScroll ensures items never clip off-screen
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()) // Makes the inner dialog scrollable
+                        ) {
                             paletteChoices.forEach { palette ->
                                 Row(
                                     Modifier
