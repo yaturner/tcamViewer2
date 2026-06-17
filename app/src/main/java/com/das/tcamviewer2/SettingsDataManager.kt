@@ -24,6 +24,9 @@ class SettingsDataManager(private val context: Context) {
         val MIN_VALUE_KEY = stringPreferencesKey("min_value")
         val MAX_VALUE_KEY = stringPreferencesKey("max_value")
         val SELECTED_PALETTE_KEY = stringPreferencesKey("selected_palette")
+        val SHUTTER_SOUND_KEY = booleanPreferencesKey("shutter_sound")
+        val SPOTMETER_KEY = booleanPreferencesKey("spotmeter")
+        val TEMPERATURE_UNIT_KEY = stringPreferencesKey("temperature_unit")
     }
 
     val cameraIpFlow: Flow<String> = context.dataStore.data.map { preferences ->
@@ -56,6 +59,18 @@ class SettingsDataManager(private val context: Context) {
 
     val selectedPaletteFlow: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[SELECTED_PALETTE_KEY] ?: "Rainbow" // Default palette
+    }
+
+    val shutterSoundFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[SHUTTER_SOUND_KEY] ?: true // Default palette
+    }
+
+    val spotmeterFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[SPOTMETER_KEY] ?: true // Default palette
+    }
+
+    val temperatureUnitFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[TEMPERATURE_UNIT_KEY] ?: "Celsius" // Default setting choice
     }
 
     // Write tasks
@@ -91,4 +106,15 @@ class SettingsDataManager(private val context: Context) {
         context.dataStore.edit { prefs -> prefs[SELECTED_PALETTE_KEY] = palette }
     }
 
+    suspend fun saveShutterSound(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[SHUTTER_SOUND_KEY] = enabled }
+    }
+
+    suspend fun saveSpotmeter(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[SPOTMETER_KEY] = enabled }
+    }
+
+    suspend fun saveTemperatureUnit(unit: String) {
+        context.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
+    }
 }
