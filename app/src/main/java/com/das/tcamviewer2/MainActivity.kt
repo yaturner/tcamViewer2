@@ -221,9 +221,18 @@ fun SettingsScreen() {
     val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "")
 
     // State initialization with your required default values
-    var cameraIpAddress by remember { mutableStateOf("192.168.4.1") }
-    var exportPictureOnSave by remember { mutableStateOf(false) } // initialized to off
-    var exportMetadata by remember { mutableStateOf(true) } // initialized to on
+    val cameraIpAddress by dataManager.cameraIpFlow.collectAsState(initial = "192.168.4.1")
+    val exportPictureOnSave by dataManager.exportPictureFlow.collectAsState(initial = false)
+    val exportMetadata by dataManager.exportMetadataFlow.collectAsState(initial = false)
+    val exportImageResolution by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
+    val manualRangeEnabled by dataManager.manualRangeFlow.collectAsState(initial = false)
+    val savedMinVal by dataManager.minValueFlow.collectAsState(initial = "0")
+    val savedMaxVal by dataManager.maxValueFlow.collectAsState(initial = "100")
+
+    //  LOCAL STATE PROXIES FOR INTUITIVE TYPING ---
+    var localMin by remember(savedMinVal) { mutableStateOf(savedMinVal) }
+    var localMax by remember(savedMaxVal) { mutableStateOf(savedMaxVal) }
+
     var resSelected by remember {mutableStateOf(resolutions[1])}
 
     // This local variable bridges the async DataStore flow with the UI text wrapper
@@ -331,6 +340,59 @@ fun SettingsScreen() {
                                 resMenuExpanded = false // Hide menu after selectionexpanded = false // Hide menu after selection
                             },
                             contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                        )
+                    }
+                }
+            }
+
+            // --- 3. NEW MANUAL RANGE SETTING TOGGLE ---
+            ListItem(
+                headlineContent = { Text("Manual Range") },
+                supportingContent = { Text(if (manualRangeEnabled) "Custom Bounds Active" else "Automatic Scaling") },
+                trailingContent = {
+                    Switch(
+                        checked = manualRangeEnabled,
+                        onCheckedChange = { isChecked ->
+                            coroutineScope.launch { dataManager.saveManualRange(isChecked) }
+                        }
+                    )
+                }
+            )
+
+            // Manual Range Settings
+            // When manualRangeEnabled is true, the layout engine inserts this Row block
+            if (manualRangeEnabled) {
+                androidx.compose.animation.AnimatedVisibility(visible = manualRangeEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Min Text Field
+                        OutlinedTextField(
+                            value = localMin,
+                            onValueChange = { nextMin ->
+                                localMin = nextMin
+                                coroutineScope.launch { dataManager.saveMinValue(nextMin) }
+                            },
+                            label = { Text("Min") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+
+                        // Max Text Field
+                        OutlinedTextField(
+                            value = localMax,
+                            onValueChange = { nextMax ->
+                                localMax = nextMax
+                                coroutineScope.launch { dataManager.saveMaxValue(nextMax) }
+                            },
+                            label = { Text("Max") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
                     }
                 }
