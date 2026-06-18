@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.timber)
 
     // Tooling/Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
