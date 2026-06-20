@@ -25,11 +25,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.sp
+import com.das.tcamviewer2.factory.PaletteFactory
+import com.das.tcamviewer2.services.CameraService
 import com.das.tcamviewer2.ui.CameraScreen
 import com.das.tcamviewer2.ui.SettingsScreen
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
+import com.das.tcamviewer2.utils.CameraUtils
+
+lateinit var cameraService: CameraService
+lateinit var settingsDataManager: SettingsDataManager
+lateinit var cameraUtils: CameraUtils
+lateinit var paletteFactory: PaletteFactory
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -38,7 +47,27 @@ class MainActivity : ComponentActivity() {
                 MainScreen()
             }
         }
+        cameraService = CameraService()
+        settingsDataManager = SettingsDataManager(this)
+        val viewModelScope = null
+        cameraUtils = CameraUtils(this)
+        paletteFactory = PaletteFactory()
     }
+
+//    public fun getImage() : Bitmap {
+//        // Example inside a ViewModel or CoroutineScope enabled Activity
+//        lifecycleScope.launch {
+//            // 1. Call your bound service reference
+//            val resultJson = cameraService.sendCmd(
+//                cmd = "{\"cmd\": \"get_device_info\"}",
+//                expectedKey = "get_device_info"
+//            )
+//
+//            // 2. Direct use of returned data on Main Thread context!
+//            val serialNumber = resultJson.optString("serial_number", "Unknown")
+//            return Bitmap.createBitmap()
+//        }
+//    }
 }
 
 enum class ScreenTab(val title: String, val icon: ImageVector) {
@@ -91,5 +120,4 @@ fun GenericScreen(name: String) {
         Text(text = "Hello $name Screen!", fontSize = 24.sp)
     }
 }
-
 

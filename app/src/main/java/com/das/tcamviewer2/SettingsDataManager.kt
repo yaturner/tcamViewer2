@@ -8,12 +8,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 // Explicitly bound to your package context namespace
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "tcam_preferences")
 
-class SettingsDataManager(private val context: Context) {
+class SettingsDataManager(context: Context) {
+    private val appContext = context.applicationContext
 
     companion object {
         val CAMERA_IP_KEY = stringPreferencesKey("camera_ip")
@@ -29,92 +31,157 @@ class SettingsDataManager(private val context: Context) {
         val TEMPERATURE_UNIT_KEY = stringPreferencesKey("temperature_unit")
     }
 
-    val cameraIpFlow: Flow<String> = context.dataStore.data.map { preferences ->
+    val cameraIpFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
         preferences[CAMERA_IP_KEY] ?: "192.168.4.1"
     }
 
-    val exportPictureFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[EXPORT_PICTURE_KEY] ?: false
+    val exportPictureFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
+        preferences[EXPORT_PICTURE_KEY] == true
     }
 
-    val exportMetadataFlow: Flow<Boolean> = context.dataStore.data.map { preferences ->
-        preferences[EXPORT_METADATA_KEY] ?: false
+    val exportMetadataFlow: Flow<Boolean> = appContext.dataStore.data.map { preferences ->
+        preferences[EXPORT_METADATA_KEY] == true
     }
 
-    val exportResolutionFlow: Flow<String> = context.dataStore.data.map { preferences ->
+    val exportResolutionFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
         preferences[EXPORT_RESOLUTION_KEY] ?: "320x240"
     }
 
-    val manualRangeFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[MANUAL_RANGE_KEY] ?: false // Default off
+    val manualRangeFlow: Flow<Boolean> = appContext.dataStore.data.map { prefs ->
+        prefs[MANUAL_RANGE_KEY] == true // Default off
     }
 
-    val minValueFlow: Flow<String> = context.dataStore.data.map { prefs ->
+    val minValueFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
         prefs[MIN_VALUE_KEY] ?: "0" // Default min
     }
 
-    val maxValueFlow: Flow<String> = context.dataStore.data.map { prefs ->
+    val maxValueFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
         prefs[MAX_VALUE_KEY] ?: "100" // Default max
     }
 
-    val selectedPaletteFlow: Flow<String> = context.dataStore.data.map { prefs ->
+    val selectedPaletteFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
         prefs[SELECTED_PALETTE_KEY] ?: "Rainbow" // Default palette
     }
 
-    val shutterSoundFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[SHUTTER_SOUND_KEY] ?: true // Default palette
+    val shutterSoundFlow: Flow<Boolean> = appContext.dataStore.data.map { prefs ->
+        prefs[SHUTTER_SOUND_KEY] != false // Default palette
     }
 
-    val spotmeterFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[SPOTMETER_KEY] ?: true // Default palette
+    val spotmeterFlow: Flow<Boolean> = appContext.dataStore.data.map { prefs ->
+        prefs[SPOTMETER_KEY] != false // Default palette
     }
 
-    val temperatureUnitFlow: Flow<String> = context.dataStore.data.map { prefs ->
+    val temperatureUnitFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
         prefs[TEMPERATURE_UNIT_KEY] ?: "Celsius" // Default setting choice
     }
 
     // Write tasks
     suspend fun saveCameraIp(ip: String) {
-        context.dataStore.edit { preferences -> preferences[CAMERA_IP_KEY] = ip }
+        appContext.dataStore.edit { preferences -> preferences[CAMERA_IP_KEY] = ip }
     }
 
     suspend fun saveExportPicture(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[EXPORT_PICTURE_KEY] = enabled }
+        appContext.dataStore.edit { preferences -> preferences[EXPORT_PICTURE_KEY] = enabled }
     }
 
     suspend fun saveExportMetadata(enabled: Boolean) {
-        context.dataStore.edit { preferences -> preferences[EXPORT_METADATA_KEY] = enabled }
+        appContext.dataStore.edit { preferences -> preferences[EXPORT_METADATA_KEY] = enabled }
     }
 
     suspend fun saveExportResolution(quality: String) {
-        context.dataStore.edit { preferences -> preferences[EXPORT_RESOLUTION_KEY] = quality }
+        appContext.dataStore.edit { preferences -> preferences[EXPORT_RESOLUTION_KEY] = quality }
     }
 
     suspend fun saveManualRange(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[MANUAL_RANGE_KEY] = enabled }
+        appContext.dataStore.edit { prefs -> prefs[MANUAL_RANGE_KEY] = enabled }
     }
 
     suspend fun saveMinValue(value: String) {
-        context.dataStore.edit { prefs -> prefs[MIN_VALUE_KEY] = value }
+        appContext.dataStore.edit { prefs -> prefs[MIN_VALUE_KEY] = value }
     }
 
     suspend fun saveMaxValue(value: String) {
-        context.dataStore.edit { prefs -> prefs[MAX_VALUE_KEY] = value }
+        appContext.dataStore.edit { prefs -> prefs[MAX_VALUE_KEY] = value }
     }
 
     suspend fun saveSelectedPalette(palette: String) {
-        context.dataStore.edit { prefs -> prefs[SELECTED_PALETTE_KEY] = palette }
+        appContext.dataStore.edit { prefs -> prefs[SELECTED_PALETTE_KEY] = palette }
     }
 
     suspend fun saveShutterSound(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[SHUTTER_SOUND_KEY] = enabled }
+        appContext.dataStore.edit { prefs -> prefs[SHUTTER_SOUND_KEY] = enabled }
     }
 
     suspend fun saveSpotmeter(enabled: Boolean) {
-        context.dataStore.edit { prefs -> prefs[SPOTMETER_KEY] = enabled }
+        appContext.dataStore.edit { prefs -> prefs[SPOTMETER_KEY] = enabled }
     }
 
     suspend fun saveTemperatureUnit(unit: String) {
-        context.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
+        appContext.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
     }
-}
+
+    // Get methods (one-shot retrieval)
+    suspend fun getCameraIp(): String {
+        return cameraIpFlow.first()
+    }
+
+    suspend fun getExportPicture(): Boolean {
+        return exportPictureFlow.first()
+    }
+
+    suspend fun getExportMetadata(): Boolean {
+        return exportMetadataFlow.first()
+    }
+
+    suspend fun getExportResolution(): String {
+        return exportResolutionFlow.first()
+    }
+
+    suspend fun getManualRange(): Boolean {
+        return manualRangeFlow.first()
+    }
+
+    suspend fun getMinValue(): String {
+        return minValueFlow.first()
+    }
+
+    suspend fun getMaxValue(): String {
+        return maxValueFlow.first()
+    }
+
+    suspend fun getSelectedPalette(): String {
+        return selectedPaletteFlow.first()
+    }
+
+    suspend fun getShutterSound(): Boolean {
+        return shutterSoundFlow.first()
+    }
+
+    suspend fun getSpotmeter(): Boolean {
+        return spotmeterFlow.first()
+    }
+
+    suspend fun getTemperatureUnit(): String {
+        return temperatureUnitFlow.first()
+    }
+
+    suspend fun isUnitsCelsius(): Boolean {
+        return temperatureUnitFlow.first() == "Celsius"
+    }
+
+    suspend fun isUnitsFahrenheit(): Boolean {
+        return temperatureUnitFlow.first() == "Fahrenheit"
+    }
+
+    suspend fun isManualRange(): Boolean {
+        return manualRangeFlow.first()
+    }
+
+    suspend fun getManualMinTemperature(): Float {
+        return minValueFlow.first().toFloat()
+    }
+
+    suspend fun getManualMaxTemperature(): Float {
+        return maxValueFlow.first().toFloat()
+    }
+ }

@@ -6,6 +6,8 @@ import android.os.Binder
 import android.os.IBinder
 import android.os.SystemClock
 import com.das.tcamviewer2.constants.Constants
+import io.reactivex.rxjava3.core.Observable
+import io.reactivex.rxjava3.subjects.PublishSubject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,10 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -33,7 +32,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 class CameraService : Service() {
 
-    private val binder: IBinder = CameraServiceBinder()
     private var cameraSocket: Socket? = null
     private var isStreaming = false
     private var ipAddress: String? = null
@@ -58,13 +56,23 @@ class CameraService : Service() {
     private var startFound = false
     private var endFound = false
     private var prevTime = 0L
-    private val _imageFlow = MutableSharedFlow<JSONObject>(extraBufferCapacity = 256, onBufferOverflow = BufferOverflow.DROP_LATEST)
-    val imageFlow = _imageFlow.asSharedFlow()
+    // Create the private pipeline where the socket loop dumps raw data
+    private val imageChannel = PublishSubject.create<JSONObject>()
+    // Binder setup that gives the ViewModel access to this service instance
+    private val binder = CameraServiceBinder()
 
+    // EXPOSE THE METHOD HERE (This is what your ViewModel is calling!)
+    fun getImageChannel(): Observable<JSONObject> {
+        return imageChannel.hide()
+        // .hide() is an RxJava best-practice that prevents external classes
+        // from calling .onNext() and tampering with your stream directly.
+    }
     inner class CameraServiceBinder : Binder() {
         val service: CameraService
             get() = this@CameraService
     }
+
+    override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onCreate() {
         super.onCreate()
@@ -74,8 +82,6 @@ class CameraService : Service() {
         cameraSocket = Socket()
         resetBuffers()
     }
-
-    override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onDestroy() {
         serviceScope.cancel()
@@ -207,7 +213,7 @@ class CameraService : Service() {
                         running = false
                     }
                     val jsonString = String.format(Constants.ERROR_RESPONSE, e.toString())
-                    _imageFlow.tryEmit(parseResponse(jsonString))
+                    imageChannel.onNext(parseResponse(jsonString))
                     continue
                 }
 
@@ -233,7 +239,7 @@ class CameraService : Service() {
 
                         if (!routed) {
                             // Fallback: If it's a generic frame or unrequested telemetry, route to Rx image stream
-                            _imageFlow.tryEmit(parsedJson)
+                            imageChannel.onNext(parsedJson)
                         }
 
                         resetBuffers()

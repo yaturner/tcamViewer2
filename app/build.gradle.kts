@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.das.tcamviewer2"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -35,6 +35,8 @@ android {
     }
     buildFeatures {
         compose = true
+        dataBinding = true
+        viewBinding = true
     }
     composeOptions {
         // Keeps the compiler extension aligned with your Kotlin version
@@ -62,7 +64,11 @@ dependencies {
     implementation(libs.androidx.compose.material.icons)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.timber)
-
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.rxjava)
+    implementation(libs.rxandroid)
     // Tooling/Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
