@@ -11,7 +11,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import timber.log.Timber
 
@@ -63,12 +66,22 @@ class CameraViewModel : ViewModel() {
 
     private fun connectAndStream() {
         viewModelScope.launch(Dispatchers.IO) {
-            val ip = settingsDataManager.getCameraIp()
-            cameraService.setIpAddress(ip)
-            val connected = cameraService.connect()
-            _isConnected.value = connected
-            if (connected) cameraService.startStreaming()
+            connectToCamera(settingsDataManager.getCameraIp())
         }
+        viewModelScope.launch {
+            settingsDataManager.cameraIpFlow
+                .drop(1)
+                .distinctUntilChanged()
+                .collect { ip -> withContext(Dispatchers.IO) { connectToCamera(ip) } }
+        }
+    }
+
+    private fun connectToCamera(ip: String) {
+        cameraService.disconnect()
+        cameraService.setIpAddress(ip)
+        val connected = cameraService.connect()
+        _isConnected.value = connected
+        if (connected) cameraService.startStreaming()
     }
 
     private suspend fun processFrame(json: JSONObject) {

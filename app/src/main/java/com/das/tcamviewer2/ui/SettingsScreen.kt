@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,6 +58,7 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val dataManager = remember { SettingsDataManager(context) }
     val coroutineScope = rememberCoroutineScope()
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     // Local state tracking variables for Dropdown UI
     var resMenuExpanded by remember { mutableStateOf(false) }
@@ -67,8 +71,8 @@ fun SettingsScreen() {
     )
     val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "")
 
-    // State initialization with your required default values
     val cameraIpAddress by dataManager.cameraIpFlow.collectAsState(initial = "192.168.4.1")
+    var localIp by remember(cameraIpAddress) { mutableStateOf(cameraIpAddress) }
     val exportPictureOnSave by dataManager.exportPictureFlow.collectAsState(initial = false)
     val exportMetadata by dataManager.exportMetadataFlow.collectAsState(initial = false)
     val exportImageResolution by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
@@ -119,19 +123,24 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
             )
 
-            // Camera IP Address (TextEdit / TextField)
+            // Camera IP Address
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 OutlinedTextField(
-                    value = cameraIpAddress,
-                    onValueChange = { cameraIpAddress ->
-                        coroutineScope.launch { dataManager.saveCameraIp(cameraIpAddress) }
-                    },
+                    value = localIp,
+                    onValueChange = { localIp = it },
                     label = { Text("Camera IP Address") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    enabled = false,
-                    // Optimizes the digital keyboard layout for typing numbers and dots
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            coroutineScope.launch { dataManager.saveCameraIp(localIp) }
+                            keyboardController?.hide()
+                        }
+                    )
                 )
             }
 
