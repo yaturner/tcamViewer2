@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -126,11 +125,11 @@ fun SettingsScreen() {
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = { resetKey++ }) {
+                FeedbackTextButton(onClick = { resetKey++ }) {
                     Text("Cancel")
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = {
+                FeedbackButton(onClick = {
                     coroutineScope.launch {
                         dataManager.saveCameraIp(localIp)
                         dataManager.saveExportPicture(localExportPic)

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -265,7 +264,7 @@ fun CameraScreen(
                 val btnPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 
                 // Connect / Disconnect
-                Button(
+                FeedbackButton(
                     onClick = { viewModel.toggleConnection() },
                     contentPadding = btnPadding
                 ) {
@@ -273,7 +272,7 @@ fun CameraScreen(
                 }
 
                 // Get — single frame capture; only meaningful when connected but not streaming
-                Button(
+                FeedbackButton(
                     onClick = { viewModel.getImage() },
                     enabled = isConnected && !isStreaming,
                     contentPadding = btnPadding
@@ -282,7 +281,7 @@ fun CameraScreen(
                 }
 
                 // Save (stub)
-                Button(
+                FeedbackButton(
                     onClick = { /* TODO */ },
                     enabled = false,
                     contentPadding = btnPadding
@@ -291,7 +290,7 @@ fun CameraScreen(
                 }
 
                 // Stream / Stop
-                Button(
+                FeedbackButton(
                     onClick = { viewModel.toggleStreaming() },
                     enabled = isConnected,
                     contentPadding = btnPadding
@@ -301,7 +300,7 @@ fun CameraScreen(
 
                 // Palette dropdown
                 Box {
-                    Button(
+                    FeedbackButton(
                         onClick = { paletteMenuExpanded = true },
                         contentPadding = btnPadding
                     ) {
