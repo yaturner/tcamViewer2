@@ -146,12 +146,13 @@ class CameraViewModel : ViewModel() {
         if (!json.has("radiometric")) return
         try {
             val dto = ImageDto.create(json, selectedPalette, isManualRange, manualMin, manualMax, isCelsius)
-            if (dto.tLinearEnabled == 0) return
-            val scale = if (dto.tLinearResolution == 0) 10f else 100f
-            _currentBitmap.value = dto.bitmap
-            _spotmeterTemp.value = formatTemp(dto.spotmeterMean, scale)
-            _maxTemp.value = formatTemp(dto.maxTemperature, scale)
-            _minTemp.value = formatTemp(dto.minTemperature, scale)
+            _currentBitmap.value = dto.bitmap  // always update the image
+            if (dto.tLinearEnabled != 0) {
+                val scale = if (dto.tLinearResolution == 0) 10f else 100f
+                _spotmeterTemp.value = formatTemp(dto.spotmeterMean, scale)
+                _maxTemp.value = formatTemp(dto.maxTemperature, scale)
+                _minTemp.value = formatTemp(dto.minTemperature, scale)
+            }
             updateFps()
         } catch (e: Exception) {
             Timber.e(e, "Frame processing error")

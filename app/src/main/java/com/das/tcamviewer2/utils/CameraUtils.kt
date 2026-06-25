@@ -72,8 +72,8 @@ class CameraUtils @Inject constructor(
         Base64.getDecoder().decode(radiometricString.toByteArray(), imageBytes)
 
         imageDto.creationDate = try {
-            sdf.parse(metadata.getString("Date") + " " + metadata.getString("Time"))
-        } catch (e: ParseException) {
+            sdf.parse(metadata.optString("Date") + " " + metadata.optString("Time"))
+        } catch (e: Exception) {
             Date()
         }
 
