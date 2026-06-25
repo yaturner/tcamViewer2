@@ -26,7 +26,7 @@ class CameraUtils @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     // Pre-allocated per-frame buffers — eliminates ~153 KB of heap allocation per frame
-    private val pixels   = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
+    private val pixels    = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
     private val imageData = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
     private val imageBytes = ByteArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT * 2)
     private val telData  = IntArray(3 * 80) // 3 Lepton telemetry rows × 80 words

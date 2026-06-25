@@ -2,7 +2,6 @@ package com.das.tcamviewer2.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,8 +40,8 @@ import com.das.tcamviewer2.model.CameraViewModel
 fun CameraScreen(
     viewModel: CameraViewModel = viewModel()
 ) {
-    val displayImageWidth = 280.dp
-    val displayImageHeight = 350.dp
+    val displayImageWidth = 320.dp
+    val displayImageHeight = 240.dp
     val colorBarWidth = 32.dp
     val histogramWidth = 64.dp
 
