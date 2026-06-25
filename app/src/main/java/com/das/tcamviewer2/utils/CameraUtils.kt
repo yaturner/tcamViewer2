@@ -1,6 +1,7 @@
 package com.das.tcamviewer2.utils
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
@@ -150,15 +151,17 @@ class CameraUtils @Inject constructor(
                 pixels[i] = rgbToPixel(palette?.get(min(max(value.toDouble(), 0.0), 255.0).toInt()))
             }
         }
+
+        val bmp = Bitmap.createBitmap(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, Bitmap.Config.ARGB_8888)
+        bmp.setPixels(pixels, 0, Constants.IMAGE_WIDTH, 0, 0, Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT)
+        imageDto.bitmap = bmp
     }
 
     private fun rgbToPixel(rgb: IntArray?): Int {
-        // Fallback to 0 if null, and clamp between 0 and 255
         val red = (rgb?.get(0) ?: 0).coerceIn(0, 255)
         val green = (rgb?.get(1) ?: 0).coerceIn(0, 255)
         val blue = (rgb?.get(2) ?: 0).coerceIn(0, 255)
-
-        return (red shl 16) or (green shl 8) or blue
+        return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
     }
 
     private fun parseTelemetryData(telemetryString: String): IntArray {

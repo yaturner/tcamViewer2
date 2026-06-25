@@ -42,16 +42,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        cameraService = CameraService()
+        settingsDataManager = SettingsDataManager(this)
+        cameraUtils = CameraUtils(this)
+        paletteFactory = PaletteFactory()
         setContent {
             TcamViewer2Theme {
                 MainScreen()
             }
         }
-        cameraService = CameraService()
-        settingsDataManager = SettingsDataManager(this)
-        val viewModelScope = null
-        cameraUtils = CameraUtils(this)
-        paletteFactory = PaletteFactory()
     }
 
 //    public fun getImage() : Bitmap {

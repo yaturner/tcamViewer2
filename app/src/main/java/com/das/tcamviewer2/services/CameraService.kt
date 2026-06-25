@@ -51,8 +51,8 @@ class CameraService : Service() {
     private var inFromSocket: InputStream? = null
     private var outToSocket: OutputStream? = null
 
-    private lateinit var readBuffer: ByteArray
-    private lateinit var response: CharArray
+    private var readBuffer = ByteArray(Constants.BUFFER_LENGTH)
+    private var response = CharArray(Constants.BUFFER_LENGTH)
     private var startFound = false
     private var endFound = false
     private var prevTime = 0L

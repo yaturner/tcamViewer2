@@ -2,6 +2,7 @@ package com.das.tcamviewer2.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,26 +37,26 @@ import com.das.tcamviewer2.model.CameraViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
-    // Injects your new ViewModel architecture controller layer instance automatically
-    viewModel: CameraViewModel = CameraViewModel()
+    viewModel: CameraViewModel = viewModel()
 ) {
     val displayImageWidth = 280.dp
     val displayImageHeight = 350.dp
     val colorBarWidth = 32.dp
     val histogramWidth = 64.dp
 
-    // --- COLLECT REACTIVE APP STATE FROM VIEWMODEL ---
     val spotmeterText by viewModel.spotmeterTemp.collectAsState()
     val maxTempText by viewModel.maxTemp.collectAsState()
     val minTempText by viewModel.minTemp.collectAsState()
     val fpsText by viewModel.fpsCounter.collectAsState()
+    val isConnected by viewModel.isConnected.collectAsState()
+    val bitmap by viewModel.currentBitmap.collectAsState()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (viewModel.isConnected) "Thermal Viewer (Connected)" else "Thermal Viewer (Connecting...)",
+                        text = if (isConnected) "Thermal Viewer (Connected)" else "Thermal Viewer (Connecting...)",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp
                     )
@@ -88,12 +89,21 @@ fun CameraScreen(
                         .size(width = displayImageWidth, height = displayImageHeight)
                         .padding(end = 10.dp)
                 ) {
-                    Image(
-                        painter = painterResource(id = android.R.drawable.ic_menu_camera),
-                        contentDescription = "Main Camera Feed",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.FillBounds
-                    )
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap!!.asImageBitmap(),
+                            contentDescription = "Thermal Camera Feed",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.FillBounds
+                        )
+                    } else {
+                        Image(
+                            painter = painterResource(id = android.R.drawable.ic_menu_camera),
+                            contentDescription = "Waiting for camera",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.FillBounds
+                        )
+                    }
 
                     // Dynamically binds observed spotmeter temperature value overlay updates
                     Text(
