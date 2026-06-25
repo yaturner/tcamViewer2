@@ -30,7 +30,7 @@ class CameraViewModel : ViewModel() {
     private val _minTemp = MutableStateFlow("--")
     val minTemp: StateFlow<String> = _minTemp.asStateFlow()
 
-    private val _fpsCounter = MutableStateFlow("0 fps")
+    private val _fpsCounter = MutableStateFlow("-- fps")
     val fpsCounter: StateFlow<String> = _fpsCounter.asStateFlow()
 
     private val _isConnected = MutableStateFlow(false)
@@ -60,7 +60,7 @@ class CameraViewModel : ViewModel() {
     private var manualMax = 100f
 
     private var frameCount = 0
-    private var fpsWindowStart = SystemClock.elapsedRealtime()
+    private var fpsWindowStart = -1L   // -1 = not yet started; initialised on first frame
 
     init {
         observeSettings()
@@ -133,7 +133,12 @@ class CameraViewModel : ViewModel() {
         if (_isStreaming.value) {
             cameraService.stopStreaming()
             _isStreaming.value = false
+            frameCount = 0
+            fpsWindowStart = -1L
+            _fpsCounter.value = "-- fps"
         } else {
+            frameCount = 0
+            fpsWindowStart = -1L
             cameraService.startStreaming()
             _isStreaming.value = true
         }
@@ -170,8 +175,14 @@ class CameraViewModel : ViewModel() {
     }
 
     private fun updateFps() {
-        frameCount++
         val now = SystemClock.elapsedRealtime()
+        if (fpsWindowStart < 0L) {
+            // First frame after reset: anchor the window here, don't publish yet
+            fpsWindowStart = now
+            frameCount = 0
+            return
+        }
+        frameCount++
         val elapsed = now - fpsWindowStart
         if (elapsed >= 1000L) {
             _fpsCounter.value = "${(frameCount * 1000f / elapsed).toInt()} fps"
