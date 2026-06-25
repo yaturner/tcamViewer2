@@ -186,26 +186,20 @@ class CameraUtils @Inject constructor(
 
     @Throws(IOException::class)
     fun saveTjsn(imageDto: ImageDto): Boolean {
-        val rootDir: File? =
-            context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-        val file: String = generateNewFilename() + ".tjsn"
-        val path = File(rootDir.toString() + "/" + generateNewPath())
-        if (!path.exists()) {
-            path.mkdir()
-        }
-        val tjsn = File(path, file)
-        val fileOutputStream = FileOutputStream(tjsn)
-        imageDto.filename = tjsn.getName()
-        if (!tjsn.exists()) {
-            tjsn.createNewFile()
-        }
-        fileOutputStream.write(
-            imageDto.getJsonObject().toString().toByteArray(StandardCharsets.US_ASCII)
-        )
-        fileOutputStream.flush()
-        fileOutputStream.close()
+        // getExternalFilesDir is app-private; no storage permission needed.
+        // Fall back to internal filesDir if external storage is unavailable.
+        val rootDir: File = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+            ?: context.filesDir
 
+        // mkdirs() creates the full path including any missing parents; mkdir() only creates one level.
+        val dir = File(rootDir, generateNewPath())
+        if (!dir.exists() && !dir.mkdirs()) return false
 
+        val tjsn = File(dir, generateNewFilename() + ".tjsn")
+        imageDto.filename = tjsn.name
+        FileOutputStream(tjsn).use { stream ->
+            stream.write(imageDto.getJsonObject().toString().toByteArray(StandardCharsets.US_ASCII))
+        }
         return true
     }
 

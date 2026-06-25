@@ -285,7 +285,7 @@ fun CameraScreen(
                 // Save (stub)
                 FeedbackButton(
                     onClick = { cameraUtils.saveTjsn(currentImageDto!!)},
-                    enabled = false,
+                    enabled = true,
                     contentPadding = btnPadding
                 ) {
                     Text("Save", fontSize = 12.sp)
