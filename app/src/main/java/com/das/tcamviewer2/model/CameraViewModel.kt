@@ -55,8 +55,7 @@ class CameraViewModel : ViewModel() {
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
     private var frameDisposable: Disposable? = null
 
-    // isCelsius needed for formatTemp; selectedPalette passed as hint to ImageDto.create
-    private var isCelsius = true
+    // selectedPalette drives currentPalette StateFlow and is passed as a hint to ImageDto.create
     private var selectedPalette = "Rainbow"
 
     private var frameCount = 0
@@ -76,9 +75,6 @@ class CameraViewModel : ViewModel() {
     }
 
     private fun observeSettings() {
-        viewModelScope.launch {
-            settingsDataManager.temperatureUnitFlow.collect { isCelsius = (it == "Celsius") }
-        }
         viewModelScope.launch {
             settingsDataManager.selectedPaletteFlow.collect {
                 selectedPalette = it
@@ -151,14 +147,15 @@ class CameraViewModel : ViewModel() {
         if (!json.has("radiometric")) return
         try {
             val dto = ImageDto.create(json, selectedPalette)
+            val celsius = settingsDataManager.isUnitsCelsius()
             _currentImageDto.value = dto
             _currentBitmap.value = dto.bitmap
             _histogram.value = dto.histogram
             if (dto.tLinearEnabled != 0) {
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
-                _spotmeterTemp.value = formatTemp(dto.spotmeterMean, scale)
-                _maxTemp.value = formatTemp(dto.maxTemperature, scale)
-                _minTemp.value = formatTemp(dto.minTemperature, scale)
+                _spotmeterTemp.value = formatTemp(dto.spotmeterMean, scale, celsius)
+                _maxTemp.value = formatTemp(dto.maxTemperature, scale, celsius)
+                _minTemp.value = formatTemp(dto.minTemperature, scale, celsius)
             }
             updateFps()
         } catch (e: Exception) {
@@ -166,7 +163,7 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun formatTemp(rawValue: Int, scale: Float): String {
+    private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
         val tempC = rawValue / scale - 273.15f
         return if (isCelsius) "%.1f°C".format(tempC)
         else "%.1f°F".format(tempC * 9f / 5f + 32f)
