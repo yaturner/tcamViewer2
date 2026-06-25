@@ -1,5 +1,8 @@
 package com.das.tcamviewer2.ui
 
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,12 +15,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,12 +45,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,9 +63,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 
-/***********************************************************
- *             SettingsScreen
- ************************************************************/
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
@@ -78,51 +77,77 @@ fun SettingsScreen() {
     var isDiscovering by remember { mutableStateOf(false) }
     var discoverySelectedDevice by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    // Local state tracking variables for Dropdown UI
-    var resMenuExpanded by remember { mutableStateOf(false) }
-    // List of resolutions for our Export Resolution
-    val resolutions = listOf("160x120", "320x240", "480x360", "640x480")
-    // List of palettes for our nested dropdown
-    val paletteOptions = listOf(
-        "Arctic", "Banded", "DoubleRainbow",
-        "Fusion", "Grey", "Ironblack", "Rainbow", "Sepia"
-    )
-    val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "")
-
-    val cameraIpAddress by dataManager.cameraIpFlow.collectAsState(initial = "192.168.4.1")
-    var localIp by remember(cameraIpAddress) { mutableStateOf(cameraIpAddress) }
-    val exportPictureOnSave by dataManager.exportPictureFlow.collectAsState(initial = false)
-    val exportMetadata by dataManager.exportMetadataFlow.collectAsState(initial = false)
-    val exportImageResolution by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
-    val shutterSound by dataManager.shutterSoundFlow.collectAsState(initial = true)
-    val spotmeter by dataManager.spotmeterFlow.collectAsState(initial = true)
-    val manualRangeEnabled by dataManager.manualRangeFlow.collectAsState(initial = false)
-    val savedMinVal by dataManager.minValueFlow.collectAsState(initial = "0")
-    val savedMaxVal by dataManager.maxValueFlow.collectAsState(initial = "100")
-    val savedUnitsF by dataManager.minValueFlow.collectAsState(initial = true)
-    val savedUnitsC by dataManager.maxValueFlow.collectAsState(initial = false)
-    val savedPalette by dataManager.selectedPaletteFlow.collectAsState(initial = "Default")
-
-    //  LOCAL STATE PROXIES FOR INTUITIVE TYPING ---
-    var localMin by remember(savedMinVal) { mutableStateOf(savedMinVal) }
-    var localMax by remember(savedMaxVal) { mutableStateOf(savedMaxVal) }
-    var localUnitsF by remember(savedUnitsF) { mutableStateOf(savedUnitsF) }
-    var localUnitsC by remember(savedUnitsC) { mutableStateOf(savedUnitsC) }
-
-    var resSelected by remember { mutableStateOf(resolutions[1]) }
-
-    // This local variable bridges the async DataStore flow with the UI text wrapper
-    var currentResSelection by remember(savedExportRes) { mutableStateOf(savedExportRes) }
-
-    // States to handle Palette Popup Window
     var showPaletteDialog by remember { mutableStateOf(false) }
-    val paletteChoices = paletteOptions
-    // Tracks temporary dialog choice before user clicks "OK"
-    var tempDialogSelection by remember(savedPalette) { mutableStateOf(savedPalette) }
+    var tempDialogPalette by remember { mutableStateOf("Rainbow") }
+    var resMenuExpanded by remember { mutableStateOf(false) }
+
+    val resolutions = listOf("160x120", "320x240", "480x360", "640x480")
+    val paletteOptions = listOf(
+        "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
+        "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia"
+    )
+
+    // --- Saved DataStore values (source of truth) ---
+    val savedIp           by dataManager.cameraIpFlow.collectAsState(initial = "192.168.4.1")
+    val savedExportPic    by dataManager.exportPictureFlow.collectAsState(initial = false)
+    val savedExportMeta   by dataManager.exportMetadataFlow.collectAsState(initial = false)
+    val savedExportRes    by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
+    val savedManualRange  by dataManager.manualRangeFlow.collectAsState(initial = false)
+    val savedMin          by dataManager.minValueFlow.collectAsState(initial = "0")
+    val savedMax          by dataManager.maxValueFlow.collectAsState(initial = "100")
+    val savedShutter      by dataManager.shutterSoundFlow.collectAsState(initial = true)
+    val savedSpotmeter    by dataManager.spotmeterFlow.collectAsState(initial = true)
+    val savedUnit         by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
+    val savedPalette      by dataManager.selectedPaletteFlow.collectAsState(initial = "Rainbow")
+
+    // Incrementing this forces every local state to reinitialize from saved values (Cancel)
+    var resetKey by remember { mutableStateOf(0) }
+
+    // --- Local (unsaved) working copies ---
+    var localIp          by remember(savedIp, resetKey)          { mutableStateOf(savedIp) }
+    var localExportPic   by remember(savedExportPic, resetKey)   { mutableStateOf(savedExportPic) }
+    var localExportMeta  by remember(savedExportMeta, resetKey)  { mutableStateOf(savedExportMeta) }
+    var localResolution  by remember(savedExportRes, resetKey)   { mutableStateOf(savedExportRes) }
+    var localManualRange by remember(savedManualRange, resetKey) { mutableStateOf(savedManualRange) }
+    var localMin         by remember(savedMin, resetKey)         { mutableStateOf(savedMin) }
+    var localMax         by remember(savedMax, resetKey)         { mutableStateOf(savedMax) }
+    var localShutter     by remember(savedShutter, resetKey)     { mutableStateOf(savedShutter) }
+    var localSpotmeter   by remember(savedSpotmeter, resetKey)   { mutableStateOf(savedSpotmeter) }
+    var localUnit        by remember(savedUnit, resetKey)        { mutableStateOf(savedUnit) }
+    var localPalette     by remember(savedPalette, resetKey)     { mutableStateOf(savedPalette) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Settings") })
+        topBar = { TopAppBar(title = { Text("Settings") }) },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = { resetKey++ }) {
+                    Text("Cancel")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = {
+                    coroutineScope.launch {
+                        dataManager.saveCameraIp(localIp)
+                        dataManager.saveExportPicture(localExportPic)
+                        dataManager.saveExportMetadata(localExportMeta)
+                        dataManager.saveExportResolution(localResolution)
+                        dataManager.saveManualRange(localManualRange)
+                        dataManager.saveMinValue(localMin)
+                        dataManager.saveMaxValue(localMax)
+                        dataManager.saveShutterSound(localShutter)
+                        dataManager.saveSpotmeter(localSpotmeter)
+                        dataManager.saveTemperatureUnit(localUnit)
+                        dataManager.saveSelectedPalette(localPalette)
+                    }
+                }) {
+                    Text("Done")
+                }
+            }
         }
     ) { innerPadding ->
         Column(
@@ -131,8 +156,6 @@ fun SettingsScreen() {
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-
-            // --- Group Header: APPLICATION SETTINGS ---
             Text(
                 text = "APPLICATION SETTINGS",
                 fontSize = 12.sp,
@@ -157,10 +180,7 @@ fun SettingsScreen() {
                         imeAction = ImeAction.Done
                     ),
                     keyboardActions = KeyboardActions(
-                        onDone = {
-                            coroutineScope.launch { dataManager.saveCameraIp(localIp) }
-                            keyboardController?.hide()
-                        }
+                        onDone = { keyboardController?.hide() }
                     )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -173,58 +193,38 @@ fun SettingsScreen() {
                 }
             }
 
-            // Export Picture on Save (On/Off Switch)
+            // Export Picture on Save
             ListItem(
                 headlineContent = { Text("Export Picture on Save") },
-                supportingContent = {
-                    Text(if (exportPictureOnSave) "Enabled" else "Disabled")
-                },
+                supportingContent = { Text(if (localExportPic) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(
-                        checked = exportPictureOnSave,
-                        onCheckedChange = { isChecked ->
-                            coroutineScope.launch {
-                                dataManager.saveExportPicture(isChecked)
-                            }
-                        }
-                    )
+                    Switch(checked = localExportPic, onCheckedChange = { localExportPic = it })
                 }
             )
 
-            // Export Meta Data (On/Off Switch)
+            // Export Metadata
             ListItem(
                 headlineContent = { Text("Export Metadata") },
-                supportingContent = {
-                    Text(if (exportMetadata) "Enabled" else "Disabled")
-                },
+                supportingContent = { Text(if (localExportMeta) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(
-                        checked = exportMetadata,
-                        onCheckedChange = { isChecked ->
-                            coroutineScope.launch { dataManager.saveExportMetadata(isChecked) }
-                        }
-                    )
+                    Switch(checked = localExportMeta, onCheckedChange = { localExportMeta = it })
                 }
             )
 
-            //Export Resolution (drop down)
+            // Export Resolution dropdown
             ExposedDropdownMenuBox(
                 expanded = resMenuExpanded,
                 onExpandedChange = { resMenuExpanded = it }
-
             ) {
                 OutlinedTextField(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(), // Anchors the menu dropdown to this layout bounds
-                    value = currentResSelection,
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    value = localResolution,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Export Resolution") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = resMenuExpanded) },
                     colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
                 )
-                // The actual hidden menu that floats open when clicked
                 ExposedDropdownMenu(
                     expanded = resMenuExpanded,
                     onDismissRequest = { resMenuExpanded = false }
@@ -233,12 +233,8 @@ fun SettingsScreen() {
                         DropdownMenuItem(
                             text = { Text(option) },
                             onClick = {
-                                currentResSelection = option
-                                coroutineScope.launch {
-                                    dataManager.saveExportResolution(option)
-                                }
-                                resMenuExpanded =
-                                    false // Hide menu after selectionexpanded = false // Hide menu after selection
+                                localResolution = option
+                                resMenuExpanded = false
                             },
                             contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
                         )
@@ -246,262 +242,150 @@ fun SettingsScreen() {
                 }
             }
 
-            // MANUAL RANGE SETTING TOGGLE ---
+            // Manual Range toggle
             ListItem(
                 headlineContent = { Text("Manual Range") },
-                supportingContent = { Text(if (manualRangeEnabled) "Custom Bounds Active" else "Automatic Scaling") },
+                supportingContent = { Text(if (localManualRange) "Custom Bounds Active" else "Automatic Scaling") },
                 trailingContent = {
-                    Switch(
-                        checked = manualRangeEnabled,
-                        onCheckedChange = { isChecked ->
-                            coroutineScope.launch { dataManager.saveManualRange(isChecked) }
-                        }
-                    )
+                    Switch(checked = localManualRange, onCheckedChange = { localManualRange = it })
                 }
             )
 
-            // Manual Range Settings
-            // When manualRangeEnabled is true, the layout engine inserts this Row block
-            if (manualRangeEnabled) {
-                androidx.compose.animation.AnimatedVisibility(visible = manualRangeEnabled) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(
-                            16.dp
-                        )
-                    ) {
-                        // Min Text Field
-                        OutlinedTextField(
-                            value = localMin,
-                            onValueChange = { nextMin ->
-                                localMin = nextMin
-                                coroutineScope.launch { dataManager.saveMinValue(nextMin) }
-                            },
-                            label = { Text("Min") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-
-                        // Max Text Field
-                        OutlinedTextField(
-                            value = localMax,
-                            onValueChange = { nextMax ->
-                                localMax = nextMax
-                                coroutineScope.launch { dataManager.saveMaxValue(nextMax) }
-                            },
-                            label = { Text("Max") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-                    }
-                }
-
-
-                // ---POPUP DIALOG WINDOW ---
-                if (showPaletteDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showPaletteDialog = false },
-                        title = { Text(text = "Select Palette") },
-                        text = {
-                            Column {
-                                paletteChoices.forEach { palette ->
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .selectable(
-                                                selected = (palette == tempDialogSelection),
-                                                onClick = { tempDialogSelection = palette }
-                                            )
-                                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RadioButton(
-                                            selected = (palette == tempDialogSelection),
-                                            onClick = { tempDialogSelection = palette }
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(text = palette, fontSize = 16.sp)
-                                    }
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    showPaletteDialog = false
-                                    // Persistent save to Datastore occurs here
-                                    coroutineScope.launch {
-                                        dataManager.saveSelectedPalette(tempDialogSelection)
-                                    }
-                                }
-                            ) {
-                                Text("OK")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showPaletteDialog = false }) {
-                                Text("Cancel")
-                            }
-                        }
+            // Manual Range min/max fields
+            if (localManualRange) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = localMin,
+                        onValueChange = { localMin = it },
+                        label = { Text("Min") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                    OutlinedTextField(
+                        value = localMax,
+                        onValueChange = { localMax = it },
+                        label = { Text("Max") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
                 }
             }
 
-            // --- PALETTE SETTING ROW WITH PLAY BUTTON ---
+            // Palette
             ListItem(
                 headlineContent = { Text("Palette") },
-                supportingContent = { Text("Active: $savedPalette") },
+                supportingContent = { Text("Active: $localPalette") },
                 trailingContent = {
                     IconButton(onClick = {
-                        tempDialogSelection =
-                            savedPalette // Reset temporary selection to current value
+                        tempDialogPalette = localPalette
                         showPaletteDialog = true
                     }) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Open Palette Selection"
-                        )
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Open Palette Selection")
                     }
                 }
             )
-            // --- Palette Selection Dialog ---
             if (showPaletteDialog) {
                 AlertDialog(
                     onDismissRequest = { showPaletteDialog = false },
-                    title = { Text(text = "Select Palette") },
+                    title = { Text("Select Palette") },
                     text = {
-                        // Adding verticalScroll ensures items never clip off-screen
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .verticalScroll(rememberScrollState()) // Makes the inner dialog scrollable
+                                .verticalScroll(rememberScrollState())
                         ) {
-                            paletteChoices.forEach { palette ->
+                            paletteOptions.forEach { palette ->
                                 Row(
-                                    Modifier
+                                    modifier = Modifier
                                         .fillMaxWidth()
                                         .selectable(
-                                            selected = (palette == tempDialogSelection),
-                                            onClick = { tempDialogSelection = palette }
+                                            selected = palette == tempDialogPalette,
+                                            onClick = { tempDialogPalette = palette }
                                         )
                                         .padding(vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RadioButton(
-                                        selected = (palette == tempDialogSelection),
-                                        onClick = { tempDialogSelection = palette }
+                                        selected = palette == tempDialogPalette,
+                                        onClick = { tempDialogPalette = palette }
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(text = palette, fontSize = 16.sp)
+                                    Text(palette, fontSize = 16.sp)
                                 }
                             }
                         }
                     },
                     confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showPaletteDialog = false
-                                // Persistent save to Datastore occurs here
-                                coroutineScope.launch {
-                                    dataManager.saveSelectedPalette(tempDialogSelection)
-                                }
-                            }
-                        ) {
-                            Text("OK")
-                        }
+                        TextButton(onClick = {
+                            localPalette = tempDialogPalette
+                            showPaletteDialog = false
+                        }) { Text("OK") }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showPaletteDialog = false }) {
-                            Text("Cancel")
-                        }
+                        TextButton(onClick = { showPaletteDialog = false }) { Text("Cancel") }
                     }
                 )
             }
 
-            // Shutter Sound (On/Off Switch)
+            // Shutter Sound
             ListItem(
                 headlineContent = { Text("Shutter Sound") },
-                supportingContent = {
-                    Text(if (shutterSound) "Enabled" else "Disabled")
-                },
+                supportingContent = { Text(if (localShutter) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(
-                        checked = shutterSound,
-                        onCheckedChange = { isChecked ->
-                            coroutineScope.launch { dataManager.saveShutterSound(isChecked) }
-                        }
-                    )
+                    Switch(checked = localShutter, onCheckedChange = { localShutter = it })
                 }
             )
 
-            // SpotMeter (On/Off Switch)
+            // Spotmeter
             ListItem(
                 headlineContent = { Text("Spotmeter") },
-                supportingContent = {
-                    Text(if (spotmeter) "Enabled" else "Disabled")
-                },
+                supportingContent = { Text(if (localSpotmeter) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(
-                        checked = spotmeter,
-                        onCheckedChange = { isChecked ->
-                            coroutineScope.launch { dataManager.saveSpotmeter(isChecked) }
-                        }
-                    )
+                    Switch(checked = localSpotmeter, onCheckedChange = { localSpotmeter = it })
                 }
             )
 
+            // Temperature Units
             Column(modifier = Modifier.fillMaxWidth()) {
                 ListItem(
                     headlineContent = { Text("Units") },
-                    supportingContent = { Text("Select your global temperature unitd") }
+                    supportingContent = { Text("Select your global temperature unit") }
                 )
-
-                // Collect the stream state from your DataStore
-                val selectedUnit by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
                 val unitOptions = listOf("Celsius (°C)", "Fahrenheit (°F)")
-
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(24.dp)
+                    horizontalArrangement = Arrangement.spacedBy(24.dp)
                 ) {
                     unitOptions.forEach { option ->
+                        val unitName = if (option.contains("Celsius")) "Celsius" else "Fahrenheit"
                         Row(
                             modifier = Modifier
                                 .selectable(
-                                    selected = (option.startsWith(selectedUnit)),
-                                    onClick = {
-                                        // Extract just the name ("Celsius" or "Fahrenheit") to save to disk
-                                        val unitName = if (option.contains("Celsius")) "Celsius" else "Fahrenheit"
-                                        coroutineScope.launch {
-                                            dataManager.saveTemperatureUnit(unitName)
-                                        }
-                                    }
+                                    selected = localUnit == unitName,
+                                    onClick = { localUnit = unitName }
                                 )
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = (option.startsWith(selectedUnit)),
-                                onClick = {
-                                    val unitName = if (option.contains("Celsius")) "Celsius" else "Fahrenheit"
-                                    coroutineScope.launch {
-                                        dataManager.saveTemperatureUnit(unitName)
-                                    }
-                                }
+                                selected = localUnit == unitName,
+                                onClick = { localUnit = unitName }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = option, fontSize = 16.sp)
+                            Text(option, fontSize = 16.sp)
                         }
                     }
                 }
             }
-            /**** INSERT NEW COMPSABLES HERE ****/
         }
     }
 
@@ -592,10 +476,7 @@ fun SettingsScreen() {
                 TextButton(
                     enabled = discoverySelectedDevice != null,
                     onClick = {
-                        discoverySelectedDevice?.let { (_, ip) ->
-                            localIp = ip
-                            coroutineScope.launch { dataManager.saveCameraIp(ip) }
-                        }
+                        discoverySelectedDevice?.let { (_, ip) -> localIp = ip }
                         showDiscoveryDialog = false
                     }
                 ) { Text("Done") }
