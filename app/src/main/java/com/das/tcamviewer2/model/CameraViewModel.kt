@@ -104,8 +104,8 @@ class CameraViewModel : ViewModel() {
         cameraService.setIpAddress(ip)
         val connected = cameraService.connect()
         _isConnected.value = connected
-        _isStreaming.value = connected
-        if (connected) cameraService.startStreaming()
+        _isStreaming.value = false
+        if (connected) cameraService.getImage()
     }
 
     // --- Public actions called from the UI ---
