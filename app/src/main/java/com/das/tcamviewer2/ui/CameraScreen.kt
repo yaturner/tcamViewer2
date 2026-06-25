@@ -31,13 +31,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.das.tcamviewer2.ui.camera.CameraViewModel
+import com.das.tcamviewer2.model.CameraViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
     // Injects your new ViewModel architecture controller layer instance automatically
-    viewModel: CameraViewModel = viewModel()
+    viewModel: CameraViewModel = CameraViewModel()
 ) {
     val displayImageWidth = 280.dp
     val displayImageHeight = 350.dp

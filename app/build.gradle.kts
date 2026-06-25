@@ -1,6 +1,8 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    id("com.android.application")
+    alias(libs.plugins.google.devtools.ksp)     // Apply KSP
+    alias(libs.plugins.dagger.hilt.android)     // Apply Hilt
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
@@ -17,31 +19,32 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-    }
+
+//    buildTypes {
+//        release {
+//            isMinifyEnabled = false
+//            proguardFiles(
+//                getDefaultProguardFile("proguard-android-optimize.txt"),
+//                "proguard-rules.pro"
+//            )
+//        }
+//    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
+//    kotlinOptions {
+//        jvmTarget = "1.8"
+//    }
     buildFeatures {
         compose = true
         dataBinding = true
         viewBinding = true
     }
-    composeOptions {
-        // Keeps the compiler extension aligned with your Kotlin version
-        kotlinCompilerExtensionVersion = "1.5.8"
-    }
+//    composeOptions {
+//        // Keeps the compiler extension aligned with your Kotlin version
+//        kotlinCompilerExtensionVersion = "1.5.8"
+//    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -69,6 +72,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.rxjava)
     implementation(libs.rxandroid)
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
     // Tooling/Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

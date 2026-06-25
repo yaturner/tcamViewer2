@@ -2,14 +2,10 @@ package com.das.tcamviewer2.model
 
 import android.graphics.Bitmap
 import android.graphics.Rect
-import android.util.Pair
 import com.das.tcamviewer2.cameraUtils
-import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.paletteFactory
 import org.json.JSONException
 import org.json.JSONObject
-import java.io.File
-import java.io.IOException
 import java.util.Date
 
 class ImageDto {
@@ -29,6 +25,7 @@ class ImageDto {
     var minTemperature: Int = 0
     var creationDate: Date? = null
 
+    @get:JvmName("getJsonObjectNullable")
     var jsonObject: JSONObject? = null
     var metadata: JSONObject? = null
     var filename: String? = ""
@@ -36,32 +33,54 @@ class ImageDto {
     var palette: Array<IntArray?>? = null
     var imageData: IntArray? = null
     var paletteName: String? = null
+        set(value) {
+            field = value
+            try {
+                val meta = jsonObject!!.getJSONObject("metadata")
+                meta.remove("paletteName")
+                meta.put("palette", value)
+            } catch (_: JSONException) {}
+        }
     var bitmap: Bitmap? = null
 
     //Constructor from camera response
-    constructor(jsonObject: JSONObject, paletteName: String?) {
-        this.jsonObject = jsonObject
-        init(paletteName)
-    }
 
     //Constructor from file
-    constructor(filename: String?, paletteName: String?) {
-        this.filename = filename
-        tjsnString = cameraUtils.readTjsnFile(filename, false)
-        if (tjsnString != null && !tjsnString!!.isEmpty()) {
-            try {
-                jsonObject = JSONObject(tjsnString)
-            } catch (e: JSONException) {
-                //Sentry.captureException(e)
-            }
-        } else {
-            //TODO Handle error
-            return
-        }
-        init(paletteName)
+    //TODO JMT
+    suspend fun initFromFile(filename: String?, paletteName: String?) {
+//        this.filename = filename
+//        tjsnString = cameraUtils.readTjsnFile(filename, false)
+//        if (tjsnString != null && !tjsnString!!.isEmpty()) {
+//            try {
+//                jsonObject = JSONObject(tjsnString)
+//            } catch (e: JSONException) {
+//                //Sentry.captureException(e)
+//            }
+//        } else {
+//            //TODO Handle error
+//            return
+//        }
+//        init(paletteName)
     }
 
-    private fun init(paletteName: String?) {
+    companion object {
+        // The factory function that handles creation and async init
+        suspend fun create(jsonObject: JSONObject, paletteName: String?): ImageDto {
+            val imageDto = ImageDto()
+            imageDto.jsonObject = jsonObject
+            imageDto.init(paletteName) // Allowed here because create is a suspend fun
+            return imageDto
+        }
+
+        suspend fun create(filename: String, paletteName: String?): ImageDto {
+            val imageDto = ImageDto()
+            imageDto.initFromFile(filename, paletteName) // Allowed here because create is a suspend fun
+            return imageDto
+        }
+
+    }
+
+    private suspend fun init(paletteName: String?) {
         try {
             //add the palette name to the metadata if it isn't there already
             metadata = jsonObject!!.getJSONObject("metadata")
@@ -83,77 +102,60 @@ class ImageDto {
         creationDate = Date()
     }
 
-    fun parse(obj: JSONObject, PaletteName: String?) {
+    suspend fun parse(obj: JSONObject, PaletteName: String?) {
         jsonObject = obj
-        init(paletteName)
+        create(obj, paletteName)
     }
 
-    fun getJsonObject(): JSONObject {
-        return jsonObject!!
-    }
+    fun getJsonObject(): JSONObject = jsonObject!!
 
-    fun getPaletteName(): String? {
-        return paletteName
-    }
-
-    fun setPaletteName(paletteName: String?) {
-        this.paletteName = paletteName
-        //change it in the jsonObject.metadata
-        try {
-            val meta = jsonObject!!.getJSONObject("metadata")
-            meta.remove("paletteName")
-            meta.put("palette", paletteName)
-        } catch (e: JSONException) {
-            //Sentry.captureException(e)
-        }
-    }
-
-    /** */
-    /*                                                                   */
-    /*                      Extensions                                  */
-    /*                                                                   */
-    /** */
-    fun convertToRadiometric(value: Float): Int {
-        return cameraUtils.convertToRadiometric(this, value)
-    }
-
-    fun createColorBar(): Bitmap {
-        return cameraUtils.createColorBar(this, Constants.COLORBAR_WIDTH)
-    }
-
-    fun remapImage() {
-        cameraUtils.remapImage(this)
-    }
-
-    fun drawHotspot(): Bitmap {
-        return cameraUtils.drawHotspot(this)
-    }
-
-    val radiometricTemperatures: android.util.Pair<Int?, Int?>
-        get() = cameraUtils.getRadiometricTemperatures(this)
-
-    val temperatures: Pair<Float?, Float?>
-        get() = cameraUtils.getTemperatures(this)
-
-    val meanTemperatureAtSpotmeter: Float
-        get() = cameraUtils.getMeanTemperatureAtSpotmeter(this)
-
-    fun createHistogram(): Bitmap {
-        return cameraUtils.createHistogram(this)
-    }
-
-    @Throws(IOException::class)
-    fun saveTjsn(): Boolean {
-        return cameraUtils.saveTjsn(this)
-    }
-
-    @Throws(IOException::class)
-    fun saveBitmapToFile(newFile: File?) {
-        //TODO JMT cameraUtils.saveBitmapToFile(this, newFile)
-    }
-
-
-    fun rotateColormap(direction: Int) {
-        cameraUtils.rotateColormap(this, direction)
-    }
+    /**********************************************************************/
+    /*                                                                    */
+    /*                      Extensions                                    */
+    /*                                                                    */
+    /**********************************************************************/
+    //TODO JMT
+//    fun convertToRadiometric(value: Float): Int {
+//        return cameraUtils.convertToRadiometric(this, value)
+//    }
+//
+//    fun createColorBar(): Bitmap {
+//        return cameraUtils.createColorBar(this, Constants.COLORBAR_WIDTH)
+//    }
+//
+//    fun remapImage() {
+//        cameraUtils.remapImage(this)
+//    }
+//
+//    fun drawHotspot(): Bitmap {
+//        return cameraUtils.drawHotspot(this)
+//    }
+//
+//    val radiometricTemperatures: android.util.Pair<Int?, Int?>
+//        get() = cameraUtils.getRadiometricTemperatures(this)
+//
+//    val temperatures: Pair<Float?, Float?>
+//        get() = cameraUtils.getTemperatures(this)
+//
+//    val meanTemperatureAtSpotmeter: Float
+//        get() = cameraUtils.getMeanTemperatureAtSpotmeter(this)
+//
+//    fun createHistogram(): Bitmap {
+//        return cameraUtils.createHistogram(this)
+//    }
+//
+//    @Throws(IOException::class)
+//    fun saveTjsn(): Boolean {
+//        return cameraUtils.saveTjsn(this)
+//    }
+//
+//    @Throws(IOException::class)
+//    fun saveBitmapToFile(newFile: File?) {
+//        //TODO JMT cameraUtils.saveBitmapToFile(this, newFile)
+//    }
+//
+//
+//    fun rotateColormap(direction: Int) {
+//        cameraUtils.rotateColormap(this, direction)
+//    }
 }

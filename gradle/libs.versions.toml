@@ -1,6 +1,6 @@
 [versions]
-agp = "8.3.0"
-kotlin = "1.9.22"
+agp = "9.0.1"
+kotlin = "2.2.10"
 coreKtx = "1.12.0"
 activityCompose = "1.8.2"
 composeBom = "2024.02.00"
@@ -10,6 +10,8 @@ datastore = "1.2.1"
 rxandroid = "3.0.2"
 rxjava = "3.1.8"
 timber = "5.0.1"
+hilt = "2.59.2"
+ksp = "2.2.10-2.0.2"
 androidxLifecycle = "2.8.1" # or matching your existing lifecycle runtime ktx version
 
 [libraries]
@@ -29,7 +31,12 @@ timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "tim
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "androidxLifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "androidxLifecycle" }
 androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "androidxLifecycle" }
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 
 [plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
+###android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+dagger-hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
