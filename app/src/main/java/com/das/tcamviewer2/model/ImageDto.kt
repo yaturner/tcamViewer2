@@ -47,35 +47,30 @@ class ImageDto {
     //Constructor from camera response
 
     //Constructor from file
-    //TODO JMT
     suspend fun initFromFile(filename: String?, paletteName: String?) {
-//        this.filename = filename
-//        tjsnString = cameraUtils.readTjsnFile(filename, false)
-//        if (tjsnString != null && !tjsnString!!.isEmpty()) {
-//            try {
-//                jsonObject = JSONObject(tjsnString)
-//            } catch (e: JSONException) {
-//                //Sentry.captureException(e)
-//            }
-//        } else {
-//            //TODO Handle error
-//            return
-//        }
-//        init(paletteName)
+        this.filename = filename
+        tjsnString = cameraUtils.readTjsnFile(filename!!)
+        if (tjsnString != null && !tjsnString!!.isEmpty()) {
+            try {
+                jsonObject = JSONObject(tjsnString!!)
+            } catch (e: JSONException) {
+                //Sentry.captureException(e)
+            }
+        } else {
+            //TODO Handle error
+            return
+        }
+        init(paletteName)
     }
 
     companion object {
         suspend fun create(
             jsonObject: JSONObject,
-            paletteName: String?,
-            isManualRange: Boolean = false,
-            manualMin: Float = 0f,
-            manualMax: Float = 100f,
-            isCelsius: Boolean = true
+            paletteName: String?
         ): ImageDto {
             val imageDto = ImageDto()
             imageDto.jsonObject = jsonObject
-            imageDto.init(paletteName, isManualRange, manualMin, manualMax, isCelsius)
+            imageDto.init(paletteName)
             return imageDto
         }
 
@@ -86,13 +81,7 @@ class ImageDto {
         }
     }
 
-    private suspend fun init(
-        paletteName: String?,
-        isManualRange: Boolean,
-        manualMin: Float,
-        manualMax: Float,
-        isCelsius: Boolean
-    ) {
+    private suspend fun init(paletteName: String?) {
         try {
             metadata = jsonObject!!.getJSONObject("metadata")
             if (!metadata!!.has("palette")) {
@@ -106,7 +95,7 @@ class ImageDto {
                 bitmap!!.recycle()
                 bitmap = null
             }
-            cameraUtils.processImageResponse(this, isManualRange, manualMin, manualMax, isCelsius)
+            cameraUtils.processImageResponse(this)
         } catch (e: JSONException) {
         }
         creationDate = Date()

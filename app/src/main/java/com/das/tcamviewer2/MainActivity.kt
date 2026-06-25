@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.das.tcamviewer2.factory.PaletteFactory
 import com.das.tcamviewer2.services.CameraService
 import com.das.tcamviewer2.ui.CameraScreen
+import com.das.tcamviewer2.ui.LibraryScreen
 import com.das.tcamviewer2.ui.SettingsScreen
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
 import com.das.tcamviewer2.utils.CameraUtils
@@ -112,7 +113,7 @@ fun MainScreen() {
                 ScreenTab.Settings -> SettingsScreen(
                     onNavigateBack = { selectedTabItem = previousTabItem }
                 )
-                ScreenTab.Library -> GenericScreen(name = "Library")
+                ScreenTab.Library -> LibraryScreen()
             }
         }
     }

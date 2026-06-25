@@ -8,11 +8,14 @@ import android.graphics.Rect
 import android.os.Environment
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.ImageDto
+import com.das.tcamviewer2.settingsDataManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONException
 import org.json.JSONObject
+import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileReader
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
@@ -58,15 +61,13 @@ class CameraUtils @Inject constructor(
     }
 
     @Throws(JSONException::class)
-    fun processImageResponse(
-        imageDto: ImageDto,
-        isManualRange: Boolean,
-        manualMin: Float,
-        manualMax: Float,
-        isCelsius: Boolean
-    ) {
+    suspend fun processImageResponse(
+        imageDto: ImageDto) {
         val palette: Array<IntArray?>? = imageDto.palette
-
+        val isManualRange: Boolean = settingsDataManager.isManualRange()
+        val manualMin: Float = settingsDataManager.getManualMinTemperature()
+        val manualMax: Float = settingsDataManager.getManualMaxTemperature()
+        val isCelsius: Boolean = settingsDataManager.isUnitsCelsius()
         val metadata: JSONObject = imageDto.getJsonObject().getJSONObject("metadata")
         val radiometricString: String = imageDto.getJsonObject().getString("radiometric")
         val telemetryString: String = imageDto.getJsonObject().getString("telemetry")
@@ -212,6 +213,36 @@ class CameraUtils @Inject constructor(
     fun generateNewPath(): String {
         val now = Date()
         return simpleDateFormatFolder.format(now)
+    }
+
+    fun readTjsnFile(path: String): String {
+        var json = ""
+        var line: String?
+        var bufferedReader: BufferedReader? = null
+        var fileReader: FileReader? = null
+        try {
+            fileReader = FileReader(File(path))
+            bufferedReader = BufferedReader(fileReader)
+            do {
+                line = bufferedReader.readLine()
+                if (line != null) {
+                    json = json + line
+                }
+            } while (line != null)
+        } catch (e: IOException) {
+            //TODO JMT Sentry.captureException(e)
+            json = ""
+        }
+
+        if (bufferedReader != null) {
+            try {
+                fileReader!!.close()
+                bufferedReader.close()
+            } catch (e: java.lang.Exception) {
+                //TODO JMT Sentry.captureException(e)
+            }
+        }
+        return json
     }
 
 }

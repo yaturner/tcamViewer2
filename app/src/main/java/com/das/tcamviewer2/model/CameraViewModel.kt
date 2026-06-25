@@ -55,12 +55,9 @@ class CameraViewModel : ViewModel() {
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
     private var frameDisposable: Disposable? = null
 
-    // Cached settings — updated reactively, read synchronously during frame processing
+    // isCelsius needed for formatTemp; selectedPalette passed as hint to ImageDto.create
     private var isCelsius = true
     private var selectedPalette = "Rainbow"
-    private var isManualRange = false
-    private var manualMin = 0f
-    private var manualMax = 100f
 
     private var frameCount = 0
     private var fpsWindowStart = -1L   // -1 = not yet started; initialised on first frame
@@ -88,9 +85,6 @@ class CameraViewModel : ViewModel() {
                 _currentPalette.value = it
             }
         }
-        viewModelScope.launch { settingsDataManager.manualRangeFlow.collect { isManualRange = it } }
-        viewModelScope.launch { settingsDataManager.minValueFlow.collect { manualMin = it.toFloatOrNull() ?: 0f } }
-        viewModelScope.launch { settingsDataManager.maxValueFlow.collect { manualMax = it.toFloatOrNull() ?: 100f } }
     }
 
     private fun connectAndStream() {
@@ -156,7 +150,7 @@ class CameraViewModel : ViewModel() {
     private suspend fun processFrame(json: JSONObject) {
         if (!json.has("radiometric")) return
         try {
-            val dto = ImageDto.create(json, selectedPalette, isManualRange, manualMin, manualMax, isCelsius)
+            val dto = ImageDto.create(json, selectedPalette)
             _currentImageDto.value = dto
             _currentBitmap.value = dto.bitmap
             _histogram.value = dto.histogram
