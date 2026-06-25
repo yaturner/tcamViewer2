@@ -65,7 +65,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onNavigateBack: () -> Unit = {}) {
     val context = LocalContext.current
     val dataManager = remember { SettingsDataManager(context) }
     val coroutineScope = rememberCoroutineScope()
@@ -127,7 +127,7 @@ fun SettingsScreen() {
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                FeedbackTextButton(onClick = { resetKey++ }) {
+                FeedbackTextButton(onClick = { resetKey++; onNavigateBack() }) {
                     Text("Cancel")
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -144,6 +144,7 @@ fun SettingsScreen() {
                         dataManager.saveSpotmeter(localSpotmeter)
                         dataManager.saveTemperatureUnit(localUnit)
                         dataManager.saveSelectedPalette(localPalette)
+                        onNavigateBack()
                     }
                 }) {
                     Text("Done")

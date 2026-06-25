@@ -78,6 +78,7 @@ enum class ScreenTab(val title: String, val icon: ImageVector) {
 @Composable
 fun MainScreen() {
     var selectedTabItem by remember { mutableIntStateOf(0) }
+    var previousTabItem by remember { mutableIntStateOf(0) }
     val tabs = ScreenTab.entries.toTypedArray()
 
     Scaffold(
@@ -87,7 +88,10 @@ fun MainScreen() {
                 tabs.forEachIndexed { index, tab ->
                     NavigationBarItem(
                         selected = selectedTabItem == index,
-                        onClick = { selectedTabItem = index },
+                        onClick = {
+                            previousTabItem = selectedTabItem
+                            selectedTabItem = index
+                        },
                         label = { Text(tab.title) },
                         icon = { Icon(imageVector = tab.icon, contentDescription = tab.title) }
                     )
@@ -102,7 +106,9 @@ fun MainScreen() {
         ) {
             when (tabs[selectedTabItem]) {
                 ScreenTab.Camera -> CameraScreen()
-                ScreenTab.Settings -> SettingsScreen()
+                ScreenTab.Settings -> SettingsScreen(
+                    onNavigateBack = { selectedTabItem = previousTabItem }
+                )
                 ScreenTab.Library -> GenericScreen(name = "Library")
             }
         }
