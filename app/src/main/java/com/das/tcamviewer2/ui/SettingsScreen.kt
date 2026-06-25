@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -77,6 +78,7 @@ fun SettingsScreen() {
     var discoverySelectedDevice by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     var showPaletteDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     var tempDialogPalette by remember { mutableStateOf("Rainbow") }
     var resMenuExpanded by remember { mutableStateOf(false) }
 
@@ -385,7 +387,67 @@ fun SettingsScreen() {
                     }
                 }
             }
+
+            // Version
+            ListItem(
+                headlineContent = { Text("Version") },
+                supportingContent = { Text("1.0 (1)") }
+            )
+
+            // Privacy Statement
+            ListItem(
+                headlineContent = { Text("Privacy Statement") },
+                supportingContent = { Text("Tap to read") },
+                trailingContent = {
+                    IconButton(onClick = { showPrivacyDialog = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "Privacy Statement")
+                    }
+                }
+            )
         }
+    }
+
+    // Privacy Statement Dialog
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("Privacy Statement") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = """
+tCam Viewer ("the App") is designed to connect to and display imagery from tCam thermal imaging cameras on your local network. We are committed to protecting your privacy.
+
+Data Collection
+The App does not collect, transmit, or share any personal information. All camera connections and image data remain entirely on your local device and local network.
+
+Network Access
+The App uses your device's Wi-Fi connection solely to communicate with tCam cameras on your local network. No data is sent to external servers or third parties.
+
+Image Storage
+Images saved through the App are stored locally on your device. The App does not upload images to any cloud service or remote server.
+
+Camera & Network Permissions
+The App requests network access permissions only to discover and connect to tCam cameras via mDNS and TCP on your local network.
+
+Changes to This Statement
+If this privacy statement is updated, the new version will be included in the next App release.
+
+Contact
+For questions about this privacy statement, please contact the developer through the app's distribution channel.
+                        """.trimIndent(),
+                        fontSize = 14.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text("Close") }
+            }
+        )
     }
 
     // Camera Discovery Dialog
