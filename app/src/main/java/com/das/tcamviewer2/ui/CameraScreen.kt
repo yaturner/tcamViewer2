@@ -2,7 +2,6 @@ package com.das.tcamviewer2.ui
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +44,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.createBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.model.CameraViewModel
 import com.das.tcamviewer2.paletteFactory
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +85,7 @@ fun CameraScreen(
     val bitmap by viewModel.currentBitmap.collectAsState()
     val currentPalette by viewModel.currentPalette.collectAsState()
     val histogram by viewModel.histogram.collectAsState()
+    val currentImageDto by viewModel.currentImageDto.collectAsState()
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
@@ -109,7 +111,7 @@ fun CameraScreen(
                     pixels[row * bmpWidth + col] = if (col < barWidth) color else 0xFF000000.toInt()
                 }
             }
-            Bitmap.createBitmap(bmpWidth, 256, Bitmap.Config.ARGB_8888).also {
+            createBitmap(bmpWidth, 256).also {
                 it.setPixels(pixels, 0, bmpWidth, 0, 0, bmpWidth, 256)
             }.asImageBitmap()
         }
@@ -125,7 +127,7 @@ fun CameraScreen(
             val b = rgb?.get(2) ?: 0
             (0xFF shl 24) or (r shl 16) or (g shl 8) or b
         }
-        Bitmap.createBitmap(1, 256, Bitmap.Config.ARGB_8888).also {
+        createBitmap(1, 256).also {
             it.setPixels(pixels, 0, 1, 0, 0, 1, 256)
         }.asImageBitmap()
     }
@@ -282,7 +284,7 @@ fun CameraScreen(
 
                 // Save (stub)
                 FeedbackButton(
-                    onClick = { /* TODO */ },
+                    onClick = { cameraUtils.saveTjsn(currentImageDto!!)},
                     enabled = false,
                     contentPadding = btnPadding
                 ) {

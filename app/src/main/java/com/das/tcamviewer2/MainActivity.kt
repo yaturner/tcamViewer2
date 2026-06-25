@@ -31,11 +31,13 @@ import com.das.tcamviewer2.ui.CameraScreen
 import com.das.tcamviewer2.ui.SettingsScreen
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
 import com.das.tcamviewer2.utils.CameraUtils
+import com.das.tcamviewer2.utils.Utils
 
 lateinit var cameraService: CameraService
 lateinit var settingsDataManager: SettingsDataManager
 lateinit var cameraUtils: CameraUtils
 lateinit var paletteFactory: PaletteFactory
+lateinit var utils: Utils
 
 class MainActivity : ComponentActivity() {
 
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
                 MainScreen()
             }
         }
+        utils = Utils(this)
     }
 
 //    public fun getImage() : Bitmap {

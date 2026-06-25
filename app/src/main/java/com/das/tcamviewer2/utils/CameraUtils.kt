@@ -5,12 +5,16 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.os.Environment
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.ImageDto
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONException
 import org.json.JSONObject
-import java.text.ParseException
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Base64
 import java.util.Date
@@ -18,8 +22,7 @@ import java.util.Locale
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.max
-import kotlin.math.min
+
 
 @Singleton
 class CameraUtils @Inject constructor(
@@ -180,4 +183,41 @@ class CameraUtils @Inject constructor(
             Math.round((c + 273.15f) * scale)
         }
     }
+
+    @Throws(IOException::class)
+    fun saveTjsn(imageDto: ImageDto): Boolean {
+        val rootDir: File? =
+            context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+        val file: String = generateNewFilename() + ".tjsn"
+        val path = File(rootDir.toString() + "/" + generateNewPath())
+        if (!path.exists()) {
+            path.mkdir()
+        }
+        val tjsn = File(path, file)
+        val fileOutputStream = FileOutputStream(tjsn)
+        imageDto.filename = tjsn.getName()
+        if (!tjsn.exists()) {
+            tjsn.createNewFile()
+        }
+        fileOutputStream.write(
+            imageDto.getJsonObject().toString().toByteArray(StandardCharsets.US_ASCII)
+        )
+        fileOutputStream.flush()
+        fileOutputStream.close()
+
+
+        return true
+    }
+
+
+    fun generateNewFilename(): String {
+        val now = Date()
+        return java.lang.String("img_" + simpleDateFormatFile.format(now)) as String
+    }
+
+    fun generateNewPath(): String {
+        val now = Date()
+        return simpleDateFormatFolder.format(now)
+    }
+
 }
