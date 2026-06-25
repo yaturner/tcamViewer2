@@ -36,8 +36,14 @@ class CameraViewModel : ViewModel() {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
+    private val _isStreaming = MutableStateFlow(false)
+    val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
+
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
     val currentBitmap: StateFlow<Bitmap?> = _currentBitmap.asStateFlow()
+
+    private val _currentPalette = MutableStateFlow("Rainbow")
+    val currentPalette: StateFlow<String> = _currentPalette.asStateFlow()
 
     // CONFLATED: only keeps the latest frame; old frames are dropped when processing falls behind
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
@@ -60,7 +66,6 @@ class CameraViewModel : ViewModel() {
                 { json -> frameChannel.trySend(json) },
                 { error -> Timber.e(error, "Frame stream error") }
             )
-        // Single processor coroutine — never more than one frame in flight
         viewModelScope.launch(Dispatchers.Default) {
             for (json in frameChannel) processFrame(json)
         }
@@ -68,8 +73,15 @@ class CameraViewModel : ViewModel() {
     }
 
     private fun observeSettings() {
-        viewModelScope.launch { settingsDataManager.temperatureUnitFlow.collect { isCelsius = (it == "Celsius") } }
-        viewModelScope.launch { settingsDataManager.selectedPaletteFlow.collect { selectedPalette = it } }
+        viewModelScope.launch {
+            settingsDataManager.temperatureUnitFlow.collect { isCelsius = (it == "Celsius") }
+        }
+        viewModelScope.launch {
+            settingsDataManager.selectedPaletteFlow.collect {
+                selectedPalette = it
+                _currentPalette.value = it
+            }
+        }
         viewModelScope.launch { settingsDataManager.manualRangeFlow.collect { isManualRange = it } }
         viewModelScope.launch { settingsDataManager.minValueFlow.collect { manualMin = it.toFloatOrNull() ?: 0f } }
         viewModelScope.launch { settingsDataManager.maxValueFlow.collect { manualMax = it.toFloatOrNull() ?: 100f } }
@@ -92,8 +104,43 @@ class CameraViewModel : ViewModel() {
         cameraService.setIpAddress(ip)
         val connected = cameraService.connect()
         _isConnected.value = connected
+        _isStreaming.value = connected
         if (connected) cameraService.startStreaming()
     }
+
+    // --- Public actions called from the UI ---
+
+    fun toggleConnection() {
+        if (_isConnected.value) {
+            cameraService.disconnect()
+            _isConnected.value = false
+            _isStreaming.value = false
+        } else {
+            viewModelScope.launch(Dispatchers.IO) {
+                connectToCamera(settingsDataManager.getCameraIp())
+            }
+        }
+    }
+
+    fun getImage() {
+        if (_isConnected.value) cameraService.getImage()
+    }
+
+    fun toggleStreaming() {
+        if (_isStreaming.value) {
+            cameraService.stopStreaming()
+            _isStreaming.value = false
+        } else {
+            cameraService.startStreaming()
+            _isStreaming.value = true
+        }
+    }
+
+    fun setPalette(name: String) {
+        viewModelScope.launch { settingsDataManager.saveSelectedPalette(name) }
+    }
+
+    // --- Frame processing ---
 
     private suspend fun processFrame(json: JSONObject) {
         if (!json.has("radiometric")) return

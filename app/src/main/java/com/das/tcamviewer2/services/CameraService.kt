@@ -198,6 +198,17 @@ class CameraService : Service() {
         }
     }
 
+    fun getImage() {
+        serviceScope.launch {
+            try {
+                outToSocket?.write(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
+                outToSocket?.flush()
+            } catch (e: Exception) {
+                Timber.e(e, "getImage failed")
+            }
+        }
+    }
+
     private fun startListening() {
         running = true
         totalBytesRead = 0
