@@ -12,9 +12,13 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.net.nsd.NsdManager
+import android.net.nsd.NsdServiceInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -31,8 +35,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,7 +53,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.das.tcamviewer2.SettingsDataManager
+import com.das.tcamviewer2.constants.Constants
+import java.net.Inet4Address
+import kotlin.coroutines.resume
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /***********************************************************
  *             SettingsScreen
@@ -59,6 +71,12 @@ fun SettingsScreen() {
     val dataManager = remember { SettingsDataManager(context) }
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
+
+    var showDiscoveryDialog by remember { mutableStateOf(false) }
+    val discoveredDevices = remember { mutableStateListOf<Pair<String, String>>() }
+    var isDiscovering by remember { mutableStateOf(false) }
+    var discoverySelectedDevice by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     // Local state tracking variables for Dropdown UI
     var resMenuExpanded by remember { mutableStateOf(false) }
@@ -124,12 +142,15 @@ fun SettingsScreen() {
             )
 
             // Camera IP Address
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 OutlinedTextField(
                     value = localIp,
                     onValueChange = { localIp = it },
                     label = { Text("Camera IP Address") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Uri,
@@ -142,6 +163,14 @@ fun SettingsScreen() {
                         }
                     )
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = {
+                    discoveredDevices.clear()
+                    discoverySelectedDevice = null
+                    showDiscoveryDialog = true
+                }) {
+                    Icon(Icons.Default.Search, contentDescription = "Find cameras")
+                }
             }
 
             // Export Picture on Save (On/Off Switch)
@@ -474,5 +503,106 @@ fun SettingsScreen() {
             }
             /**** INSERT NEW COMPSABLES HERE ****/
         }
+    }
+
+    // Camera Discovery Dialog
+    if (showDiscoveryDialog) {
+        LaunchedEffect(Unit) {
+            isDiscovering = true
+            val pendingResolves = Channel<NsdServiceInfo>(Channel.UNLIMITED)
+
+            val discoveryListener = object : NsdManager.DiscoveryListener {
+                override fun onDiscoveryStarted(serviceType: String) {}
+                override fun onDiscoveryStopped(serviceType: String) { isDiscovering = false }
+                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { isDiscovering = false }
+                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
+                override fun onServiceLost(serviceInfo: NsdServiceInfo) {}
+                override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                    if (serviceInfo.serviceName.lowercase().startsWith("tcam")) {
+                        pendingResolves.trySend(serviceInfo)
+                    }
+                }
+            }
+
+            nsdManager.discoverServices(Constants.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+
+            try {
+                withTimeoutOrNull(10_000L) {
+                    for (serviceInfo in pendingResolves) {
+                        val resolved = suspendCancellableCoroutine { cont ->
+                            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) { cont.resume(null) }
+                                override fun onServiceResolved(info: NsdServiceInfo) { cont.resume(info) }
+                            })
+                        }
+                        resolved?.let { info ->
+                            val ip = (info.host as? Inet4Address)?.hostAddress ?: return@let
+                            val name = info.serviceName
+                            if (discoveredDevices.none { it.first == name }) {
+                                discoveredDevices.add(name to ip)
+                            }
+                        }
+                    }
+                }
+            } finally {
+                try { nsdManager.stopServiceDiscovery(discoveryListener) } catch (_: Exception) {}
+                isDiscovering = false
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showDiscoveryDialog = false },
+            title = { Text("Find tCam Devices") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (isDiscovering) {
+                        CircularProgressIndicator(modifier = Modifier.padding(bottom = 12.dp))
+                    }
+                    if (discoveredDevices.isEmpty()) {
+                        Text(if (isDiscovering) "Searching for cameras on your network…" else "No tCam devices found.")
+                    } else {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            discoveredDevices.forEach { device ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .selectable(
+                                            selected = discoverySelectedDevice == device,
+                                            onClick = { discoverySelectedDevice = device }
+                                        )
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = discoverySelectedDevice == device,
+                                        onClick = { discoverySelectedDevice = device }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(device.first, fontWeight = FontWeight.SemiBold)
+                                        Text(device.second, fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = discoverySelectedDevice != null,
+                    onClick = {
+                        discoverySelectedDevice?.let { (_, ip) ->
+                            localIp = ip
+                            coroutineScope.launch { dataManager.saveCameraIp(ip) }
+                        }
+                        showDiscoveryDialog = false
+                    }
+                ) { Text("Done") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscoveryDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
