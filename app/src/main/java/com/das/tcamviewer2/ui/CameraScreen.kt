@@ -1,5 +1,6 @@
 package com.das.tcamviewer2.ui
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.model.CameraViewModel
+import com.das.tcamviewer2.paletteFactory
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
@@ -68,6 +70,21 @@ fun CameraScreen(
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
+
+    // Build a 1×256 bitmap from palette entries: index 255 at top, index 0 at bottom
+    val colorBarBitmap = remember(currentPalette) {
+        val palette = paletteFactory.getPaletteByName(currentPalette)
+        val pixels = IntArray(256) { i ->
+            val rgb = palette?.get(255 - i)
+            val r = rgb?.get(0) ?: 0
+            val g = rgb?.get(1) ?: 0
+            val b = rgb?.get(2) ?: 0
+            (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        Bitmap.createBitmap(1, 256, Bitmap.Config.ARGB_8888).also {
+            it.setPixels(pixels, 0, 1, 0, 0, 1, 256)
+        }.asImageBitmap()
+    }
 
     Scaffold(
         topBar = {
@@ -150,7 +167,7 @@ fun CameraScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Image(
-                            painter = painterResource(id = android.R.drawable.button_onoff_indicator_on),
+                            bitmap = colorBarBitmap,
                             contentDescription = "Color Bar Scale",
                             modifier = Modifier
                                 .width(colorBarWidth)
