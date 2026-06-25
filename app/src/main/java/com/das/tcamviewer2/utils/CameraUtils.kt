@@ -5,10 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
-import android.util.Pair
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.ImageDto
-import com.das.tcamviewer2.settingsDataManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONException
 import org.json.JSONObject
@@ -16,20 +14,22 @@ import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.Base64
 import java.util.Date
+import java.util.Locale
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.max
 import kotlin.math.min
 
-
 @Singleton
 class CameraUtils @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private lateinit var pixels: IntArray
-    private lateinit var imageBytes: ByteArray
-    private var imageLen = 0
+    // Pre-allocated per-frame buffers — eliminates ~153 KB of heap allocation per frame
+    private val pixels   = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
+    private val imageData = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
+    private val imageBytes = ByteArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT * 2)
+    private val telData  = IntArray(3 * 80) // 3 Lepton telemetry rows × 80 words
 
     companion object {
         private const val offsetA: Int = 0
@@ -37,118 +37,91 @@ class CameraUtils @Inject constructor(
         private const val offsetC: Int = 160
 
         private val paintBlack: Paint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.FILL
-            strokeWidth = 1.0f
+            color = Color.BLACK; style = Paint.Style.FILL; strokeWidth = 1.0f
         }
         private val paintWhite: Paint = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 1.0f
+            color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.0f
         }
-
-        private val paint: Paint? = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 1.0f
+        private val paint: Paint = Paint().apply {
+            color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.0f
         }
 
         val IP_PATTERN: Pattern = Pattern.compile(
             "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$"
         )
-        val sdf: SimpleDateFormat = SimpleDateFormat("MM/dd/yy HH:mm:ss")
-        val simpleDateFormatFolder: SimpleDateFormat = SimpleDateFormat("MM_dd_yyyy")
-        val simpleDateFormatFile: SimpleDateFormat = SimpleDateFormat("HH_mm_ss")
+        val sdf: SimpleDateFormat = SimpleDateFormat("MM/dd/yy HH:mm:ss", Locale.getDefault())
+        val simpleDateFormatFolder: SimpleDateFormat = SimpleDateFormat("MM_dd_yyyy", Locale.getDefault())
+        val simpleDateFormatFile: SimpleDateFormat = SimpleDateFormat("HH_mm_ss", Locale.getDefault())
     }
 
     @Throws(JSONException::class)
-    suspend fun processImageResponse(imageDto: ImageDto) {
+    fun processImageResponse(
+        imageDto: ImageDto,
+        isManualRange: Boolean,
+        manualMin: Float,
+        manualMax: Float,
+        isCelsius: Boolean
+    ) {
         val palette: Array<IntArray?>? = imageDto.palette
-        var diff = 0
-
-        imageDto.maxTemperature = Int.Companion.MIN_VALUE
-        imageDto.minTemperature = Int.Companion.MAX_VALUE
 
         val metadata: JSONObject = imageDto.getJsonObject().getJSONObject("metadata")
         val radiometricString: String = imageDto.getJsonObject().getString("radiometric")
         val telemetryString: String = imageDto.getJsonObject().getString("telemetry")
-        imageBytes = Base64.getDecoder().decode(radiometricString.toByteArray())
-        var date: Date?
-        try {
-            date = sdf.parse(
-                metadata.getString("Date") +
-                        " " +
-                        metadata.getString("Time")
-            )
+
+        // Decode radiometric data into pre-allocated imageBytes
+        Base64.getDecoder().decode(radiometricString.toByteArray(), imageBytes)
+
+        imageDto.creationDate = try {
+            sdf.parse(metadata.getString("Date") + " " + metadata.getString("Time"))
         } catch (e: ParseException) {
-            //TODO JMT Sentry.captureException(e)
-            date = Date()
+            Date()
         }
-        imageDto.creationDate = date
 
-        imageLen = imageBytes.size
-        val imageData = IntArray(imageLen / 2)
-        pixels = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
-        val telemetryData: IntArray?
+        parseTelemetryData(telemetryString)
 
-        telemetryData = parseTelemetryData(telemetryString)
-        val status = ((telemetryData!![4] and 0xffff) shl 16) or (telemetryData[3] and 0xffff)
-        imageDto.isAGC      = (status and Constants.TELEMETRY_MASK_AGC) == Constants.TELEMETRY_MASK_AGC
-        imageDto.isShutdown = (status and Constants.TELEMETRY_MASK_SHUTDOWN) == Constants.TELEMETRY_MASK_SHUTDOWN
-        imageDto.emissivity = (telemetryData[offsetB + 19])
-        imageDto.gainMode = (telemetryData[offsetC + 5])
-        imageDto.autoGainMode = (telemetryData[offsetC + 6])
-        imageDto.tLinearEnabled = (telemetryData[offsetC + 48])
-        imageDto.tLinearResolution = (telemetryData[offsetC + 49])
-        imageDto.spotmeterMean = (telemetryData[offsetC + 50])
-        val x1 = telemetryData[offsetC + 55] and 0xffff
-        val y1 = telemetryData[offsetC + 54] and 0xffff
-        val x2 = telemetryData[offsetC + 57] and 0xffff
-        val y2 = telemetryData[offsetC + 56] and 0xffff
-        imageDto.spotmeterLocation = (Rect(x1, y1, x2, y2))
+        val status = ((telData[4] and 0xffff) shl 16) or (telData[3] and 0xffff)
+        imageDto.isAGC          = (status and Constants.TELEMETRY_MASK_AGC)      == Constants.TELEMETRY_MASK_AGC
+        imageDto.isShutdown     = (status and Constants.TELEMETRY_MASK_SHUTDOWN) == Constants.TELEMETRY_MASK_SHUTDOWN
+        imageDto.emissivity     = telData[offsetB + 19]
+        imageDto.gainMode       = telData[offsetC + 5]
+        imageDto.autoGainMode   = telData[offsetC + 6]
+        imageDto.tLinearEnabled    = telData[offsetC + 48]
+        imageDto.tLinearResolution = telData[offsetC + 49]
+        imageDto.spotmeterMean  = telData[offsetC + 50]
+        val x1 = telData[offsetC + 55] and 0xffff
+        val y1 = telData[offsetC + 54] and 0xffff
+        val x2 = telData[offsetC + 57] and 0xffff
+        val y2 = telData[offsetC + 56] and 0xffff
+        imageDto.spotmeterLocation = Rect(x1, y1, x2, y2)
 
-        var minTemperature = Int.Companion.MAX_VALUE
-        var maxTemperature = Int.Companion.MIN_VALUE
-        var i = 0
-        var j = 0
-        while (i < imageLen) {
-            imageData[j] =
-                ((imageBytes[i + 1].toInt() and 0xff) shl 8) or (imageBytes[i].toInt() and 0xff)
-            minTemperature = min(imageData[j].toDouble(), minTemperature.toDouble()).toInt()
-            maxTemperature = max(imageData[j].toDouble(), maxTemperature.toDouble()).toInt()
-            i = i + 2
-            j++
+        // Decode 16-bit little-endian pixel values into imageData
+        var minTemp = Int.MAX_VALUE
+        var maxTemp = Int.MIN_VALUE
+        val nPixels = imageBytes.size / 2
+        for (j in 0 until nPixels) {
+            val i = j * 2
+            val v = ((imageBytes[i + 1].toInt() and 0xff) shl 8) or (imageBytes[i].toInt() and 0xff)
+            imageData[j] = v
+            if (v < minTemp) minTemp = v
+            if (v > maxTemp) maxTemp = v
         }
-        imageDto.imageData = (imageData)
-        imageDto.minTemperature = (minTemperature)
-        imageDto.maxTemperature = (maxTemperature)
+        imageDto.imageData      = imageData
+        imageDto.minTemperature = minTemp
+        imageDto.maxTemperature = maxTemp
 
         if (imageDto.isAGC) {
             for (i in pixels.indices) {
                 pixels[i] = rgbToPixel(palette?.get(imageData[i]))
             }
         } else {
-            val min: Int
-            val max: Int
-            val temps: Pair<Int?, Int?> = getRadiometricTemperatures(imageDto)
-            min = temps.first!!
-            max = temps.second!!
-            diff = max - min
-            for (i in imageData.indices) {
-                var v = imageData[i]
-                val value: Int
-                if (settingsDataManager.isManualRange()) {
-                    if (v < min) {
-                        v = min
-                    } else if (v > max) {
-                        v = max
-                    }
-                    value = ((v - min) * 255) / diff
-                } else {
-                    value = ((v - imageDto.minTemperature) * 255) / diff
-                }
-
-                pixels[i] = rgbToPixel(palette?.get(min(max(value.toDouble(), 0.0), 255.0).toInt()))
+            val (rangeMin, rangeMax) = getRadiometricTemperatures(
+                imageDto, isManualRange, manualMin, manualMax, isCelsius
+            )
+            val diff = if (rangeMax > rangeMin) rangeMax - rangeMin else 1
+            for (i in pixels.indices) {
+                val v = if (isManualRange) imageData[i].coerceIn(rangeMin, rangeMax) else imageData[i]
+                val idx = (((v - rangeMin) * 255) / diff).coerceIn(0, 255)
+                pixels[i] = rgbToPixel(palette?.get(idx))
             }
         }
 
@@ -158,57 +131,46 @@ class CameraUtils @Inject constructor(
     }
 
     private fun rgbToPixel(rgb: IntArray?): Int {
-        val red = (rgb?.get(0) ?: 0).coerceIn(0, 255)
+        val red   = (rgb?.get(0) ?: 0).coerceIn(0, 255)
         val green = (rgb?.get(1) ?: 0).coerceIn(0, 255)
-        val blue = (rgb?.get(2) ?: 0).coerceIn(0, 255)
+        val blue  = (rgb?.get(2) ?: 0).coerceIn(0, 255)
         return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
     }
 
-    private fun parseTelemetryData(telemetryString: String): IntArray {
-        val telemetryBytes = Base64.getDecoder().decode(telemetryString.toByteArray())
-        val telemetryData: IntArray?
-
-        val len = telemetryBytes.size
-        telemetryData = IntArray(len / 2)
-
-        var i = 0
-        var j = 0
-        while (i < len) {
-            telemetryData[j] =
-                ((telemetryBytes[i + 1].toInt() and 0xff) shl 8) or (telemetryBytes[i].toInt() and 0xff)
-            i = i + 2
-            j++
+    // Writes into pre-allocated telData field — no heap allocation
+    private fun parseTelemetryData(telemetryString: String) {
+        val telBytes = Base64.getDecoder().decode(telemetryString.toByteArray())
+        val nWords = telBytes.size / 2
+        for (j in 0 until nWords) {
+            val i = j * 2
+            telData[j] = ((telBytes[i + 1].toInt() and 0xff) shl 8) or (telBytes[i].toInt() and 0xff)
         }
-
-        return telemetryData
     }
 
-    /**
-     * getRadiometricTemperatures
-     *
-     * @return min, max temperatures in radiometric values
-     */
-    suspend fun getRadiometricTemperatures(imageDto: ImageDto): Pair<Int?, Int?> {
-        if (settingsDataManager.isManualRange()) {
-            return Pair<Int?, Int?>(
-                convertToRadiometric(imageDto, settingsDataManager.getManualMinTemperature()),
-                convertToRadiometric(imageDto, settingsDataManager.getManualMaxTemperature())
+    fun getRadiometricTemperatures(
+        imageDto: ImageDto,
+        isManualRange: Boolean,
+        manualMin: Float,
+        manualMax: Float,
+        isCelsius: Boolean
+    ): kotlin.Pair<Int, Int> {
+        return if (isManualRange) {
+            kotlin.Pair(
+                convertToRadiometric(imageDto, manualMin, isCelsius),
+                convertToRadiometric(imageDto, manualMax, isCelsius)
             )
         } else {
-            return Pair<Int?, Int?>(imageDto.minTemperature, imageDto.maxTemperature)
+            kotlin.Pair(imageDto.minTemperature, imageDto.maxTemperature)
         }
     }
 
-    //Convert Celsius/Fahrenheit to radiometric data
-    suspend fun convertToRadiometric(imageDto: ImageDto, value: Float): Int {
+    fun convertToRadiometric(imageDto: ImageDto, value: Float, isCelsius: Boolean): Int {
         val scale = if (imageDto.tLinearResolution == 0) 10f else 100f
-        if (settingsDataManager.isUnitsCelsius()) {
-            return Math.round((value + 273.15f) * scale)
+        return if (isCelsius) {
+            Math.round((value + 273.15f) * scale)
         } else {
             val c = (value - 32f) * .5556f
-            return Math.round((c + 273.15f) * scale)
+            Math.round((c + 273.15f) * scale)
         }
     }
-
-
 }

@@ -64,25 +64,35 @@ class ImageDto {
     }
 
     companion object {
-        // The factory function that handles creation and async init
-        suspend fun create(jsonObject: JSONObject, paletteName: String?): ImageDto {
+        suspend fun create(
+            jsonObject: JSONObject,
+            paletteName: String?,
+            isManualRange: Boolean = false,
+            manualMin: Float = 0f,
+            manualMax: Float = 100f,
+            isCelsius: Boolean = true
+        ): ImageDto {
             val imageDto = ImageDto()
             imageDto.jsonObject = jsonObject
-            imageDto.init(paletteName) // Allowed here because create is a suspend fun
+            imageDto.init(paletteName, isManualRange, manualMin, manualMax, isCelsius)
             return imageDto
         }
 
         suspend fun create(filename: String, paletteName: String?): ImageDto {
             val imageDto = ImageDto()
-            imageDto.initFromFile(filename, paletteName) // Allowed here because create is a suspend fun
+            imageDto.initFromFile(filename, paletteName)
             return imageDto
         }
-
     }
 
-    private suspend fun init(paletteName: String?) {
+    private suspend fun init(
+        paletteName: String?,
+        isManualRange: Boolean,
+        manualMin: Float,
+        manualMax: Float,
+        isCelsius: Boolean
+    ) {
         try {
-            //add the palette name to the metadata if it isn't there already
             metadata = jsonObject!!.getJSONObject("metadata")
             if (!metadata!!.has("palette")) {
                 metadata!!.put("palette", paletteName)
@@ -90,14 +100,13 @@ class ImageDto {
             } else {
                 this.paletteName = metadata!!.getString("palette")
             }
-            palette =
-                paletteFactory.getPaletteByName(this.paletteName)
+            palette = paletteFactory.getPaletteByName(this.paletteName)
             if (bitmap != null) {
                 bitmap!!.recycle()
+                bitmap = null
             }
-            cameraUtils.processImageResponse(this)
+            cameraUtils.processImageResponse(this, isManualRange, manualMin, manualMax, isCelsius)
         } catch (e: JSONException) {
-            //Sentry.captureException(e)
         }
         creationDate = Date()
     }

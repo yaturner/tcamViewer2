@@ -22,6 +22,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -50,6 +51,7 @@ fun CameraScreen(
     val fpsText by viewModel.fpsCounter.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val bitmap by viewModel.currentBitmap.collectAsState()
+    val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     Scaffold(
         topBar = {
@@ -89,9 +91,9 @@ fun CameraScreen(
                         .size(width = displayImageWidth, height = displayImageHeight)
                         .padding(end = 10.dp)
                 ) {
-                    if (bitmap != null) {
+                    if (imageBitmap != null) {
                         Image(
-                            bitmap = bitmap!!.asImageBitmap(),
+                            bitmap = imageBitmap,
                             contentDescription = "Thermal Camera Feed",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.FillBounds

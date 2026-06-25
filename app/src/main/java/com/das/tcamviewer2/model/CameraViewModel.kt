@@ -8,6 +8,7 @@ import com.das.tcamviewer2.cameraService
 import com.das.tcamviewer2.settingsDataManager
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,30 +39,40 @@ class CameraViewModel : ViewModel() {
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
     val currentBitmap: StateFlow<Bitmap?> = _currentBitmap.asStateFlow()
 
+    // CONFLATED: only keeps the latest frame; old frames are dropped when processing falls behind
+    private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
     private var frameDisposable: Disposable? = null
+
+    // Cached settings — updated reactively, read synchronously during frame processing
     private var isCelsius = true
     private var selectedPalette = "Rainbow"
+    private var isManualRange = false
+    private var manualMin = 0f
+    private var manualMax = 100f
+
     private var frameCount = 0
     private var fpsWindowStart = SystemClock.elapsedRealtime()
 
     init {
         observeSettings()
-        // Subscribe before connecting so no frames are missed
         frameDisposable = cameraService.getImageChannel()
             .subscribe(
-                { json -> viewModelScope.launch(Dispatchers.Default) { processFrame(json) } },
+                { json -> frameChannel.trySend(json) },
                 { error -> Timber.e(error, "Frame stream error") }
             )
+        // Single processor coroutine — never more than one frame in flight
+        viewModelScope.launch(Dispatchers.Default) {
+            for (json in frameChannel) processFrame(json)
+        }
         connectAndStream()
     }
 
     private fun observeSettings() {
-        viewModelScope.launch {
-            settingsDataManager.temperatureUnitFlow.collect { isCelsius = (it == "Celsius") }
-        }
-        viewModelScope.launch {
-            settingsDataManager.selectedPaletteFlow.collect { selectedPalette = it }
-        }
+        viewModelScope.launch { settingsDataManager.temperatureUnitFlow.collect { isCelsius = (it == "Celsius") } }
+        viewModelScope.launch { settingsDataManager.selectedPaletteFlow.collect { selectedPalette = it } }
+        viewModelScope.launch { settingsDataManager.manualRangeFlow.collect { isManualRange = it } }
+        viewModelScope.launch { settingsDataManager.minValueFlow.collect { manualMin = it.toFloatOrNull() ?: 0f } }
+        viewModelScope.launch { settingsDataManager.maxValueFlow.collect { manualMax = it.toFloatOrNull() ?: 100f } }
     }
 
     private fun connectAndStream() {
@@ -87,7 +98,7 @@ class CameraViewModel : ViewModel() {
     private suspend fun processFrame(json: JSONObject) {
         if (!json.has("radiometric")) return
         try {
-            val dto = ImageDto.create(json, selectedPalette)
+            val dto = ImageDto.create(json, selectedPalette, isManualRange, manualMin, manualMax, isCelsius)
             if (dto.tLinearEnabled == 0) return
             val scale = if (dto.tLinearResolution == 0) 10f else 100f
             _currentBitmap.value = dto.bitmap
@@ -119,6 +130,7 @@ class CameraViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
+        frameChannel.close()
         frameDisposable?.dispose()
         cameraService.disconnect()
     }
