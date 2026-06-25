@@ -45,6 +45,9 @@ class CameraViewModel : ViewModel() {
     private val _currentPalette = MutableStateFlow("Rainbow")
     val currentPalette: StateFlow<String> = _currentPalette.asStateFlow()
 
+    private val _histogram = MutableStateFlow<IntArray?>(null)
+    val histogram: StateFlow<IntArray?> = _histogram.asStateFlow()
+
     // CONFLATED: only keeps the latest frame; old frames are dropped when processing falls behind
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
     private var frameDisposable: Disposable? = null
@@ -146,7 +149,8 @@ class CameraViewModel : ViewModel() {
         if (!json.has("radiometric")) return
         try {
             val dto = ImageDto.create(json, selectedPalette, isManualRange, manualMin, manualMax, isCelsius)
-            _currentBitmap.value = dto.bitmap  // always update the image
+            _currentBitmap.value = dto.bitmap
+            _histogram.value = dto.histogram
             if (dto.tLinearEnabled != 0) {
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
                 _spotmeterTemp.value = formatTemp(dto.spotmeterMean, scale)

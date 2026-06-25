@@ -1,5 +1,7 @@
 package com.das.tcamviewer2.ui
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,6 +27,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,8 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +49,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.model.CameraViewModel
 import com.das.tcamviewer2.paletteFactory
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
@@ -54,10 +62,19 @@ private val PALETTE_OPTIONS = listOf(
 fun CameraScreen(
     viewModel: CameraViewModel = viewModel()
 ) {
+    val activity = LocalContext.current as? Activity
+    DisposableEffect(Unit) {
+        val original = activity?.requestedOrientation
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = original ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
     val displayImageWidth = 320.dp
     val displayImageHeight = 240.dp
     val colorBarWidth = 32.dp
-    val histogramWidth = 64.dp
+    val histogramWidth = 192.dp
 
     val spotmeterText by viewModel.spotmeterTemp.collectAsState()
     val maxTempText by viewModel.maxTemp.collectAsState()
@@ -67,9 +84,37 @@ fun CameraScreen(
     val isStreaming by viewModel.isStreaming.collectAsState()
     val bitmap by viewModel.currentBitmap.collectAsState()
     val currentPalette by viewModel.currentPalette.collectAsState()
+    val histogram by viewModel.histogram.collectAsState()
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
+
+    // Histogram bitmap: built off-thread whenever frame data or palette changes
+    var histogramBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(histogram, currentPalette) {
+        val hist = histogram ?: return@LaunchedEffect
+        histogramBitmap = withContext(Dispatchers.Default) {
+            val palette = paletteFactory.getPaletteByName(currentPalette)
+            val bmpWidth = 128
+            val maxCount = hist.max().coerceAtLeast(1)
+            val pixels = IntArray(bmpWidth * 256)
+            for (row in 0 until 256) {
+                val idx = 255 - row          // index 255 (hottest) at top, 0 at bottom
+                val barWidth = (hist[idx].toLong() * bmpWidth / maxCount).toInt()
+                val rgb = palette?.get(idx)
+                val color = if (rgb != null)
+                    (0xFF shl 24) or (rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2]
+                else
+                    0xFF000000.toInt()
+                for (col in 0 until bmpWidth) {
+                    pixels[row * bmpWidth + col] = if (col < barWidth) color else 0xFF000000.toInt()
+                }
+            }
+            Bitmap.createBitmap(bmpWidth, 256, Bitmap.Config.ARGB_8888).also {
+                it.setPixels(pixels, 0, bmpWidth, 0, 0, bmpWidth, 256)
+            }.asImageBitmap()
+        }
+    }
 
     // Build a 1×256 bitmap from palette entries: index 255 at top, index 0 at bottom
     val colorBarBitmap = remember(currentPalette) {
@@ -176,15 +221,17 @@ fun CameraScreen(
                             contentScale = ContentScale.FillBounds
                         )
 
-                        Image(
-                            painter = painterResource(id = android.R.drawable.ic_menu_report_image),
-                            contentDescription = "Histogram Chart",
-                            modifier = Modifier
-                                .width(histogramWidth)
-                                .fillMaxHeight()
-                                .padding(horizontal = 5.dp, vertical = 2.dp),
-                            contentScale = ContentScale.FillBounds
-                        )
+                        if (histogramBitmap != null) {
+                            Image(
+                                bitmap = histogramBitmap!!,
+                                contentDescription = "Histogram Chart",
+                                modifier = Modifier
+                                    .width(histogramWidth)
+                                    .fillMaxHeight()
+                                    .padding(horizontal = 5.dp, vertical = 2.dp),
+                                contentScale = ContentScale.FillBounds
+                            )
+                        }
                     }
 
                     Text(

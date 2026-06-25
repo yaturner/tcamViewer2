@@ -109,9 +109,13 @@ class CameraUtils @Inject constructor(
         imageDto.minTemperature = minTemp
         imageDto.maxTemperature = maxTemp
 
+        val histogram = IntArray(256)
+
         if (imageDto.isAGC) {
             for (i in pixels.indices) {
-                pixels[i] = rgbToPixel(palette?.get(imageData[i]))
+                val idx = imageData[i].coerceIn(0, 255)
+                pixels[i] = rgbToPixel(palette?.get(idx))
+                histogram[idx]++
             }
         } else {
             val (rangeMin, rangeMax) = getRadiometricTemperatures(
@@ -122,8 +126,11 @@ class CameraUtils @Inject constructor(
                 val v = if (isManualRange) imageData[i].coerceIn(rangeMin, rangeMax) else imageData[i]
                 val idx = (((v - rangeMin) * 255) / diff).coerceIn(0, 255)
                 pixels[i] = rgbToPixel(palette?.get(idx))
+                histogram[idx]++
             }
         }
+
+        imageDto.histogram = histogram
 
         val bmp = Bitmap.createBitmap(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, Bitmap.Config.ARGB_8888)
         bmp.setPixels(pixels, 0, Constants.IMAGE_WIDTH, 0, 0, Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT)

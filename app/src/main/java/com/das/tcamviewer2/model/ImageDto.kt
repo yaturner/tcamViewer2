@@ -42,6 +42,7 @@ class ImageDto {
             } catch (_: JSONException) {}
         }
     var bitmap: Bitmap? = null
+    var histogram: IntArray? = null
 
     //Constructor from camera response
 
