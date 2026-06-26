@@ -287,17 +287,20 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
                     }
                 },
                 actions = {
-                    // Share — saves bitmap as PNG to cache and fires the system share sheet
+                    // Share — composites the full screen (image + colorbar + temps) and shares as PNG
                     IconButton(
                         onClick = {
-                            val bitmap = dto?.bitmap ?: return@IconButton
+                            val currentDto = dto ?: return@IconButton
                             coroutineScope.launch {
+                                val shareBitmap = withContext(Dispatchers.Default) {
+                                    buildShareBitmap(currentDto, file, isCelsius)
+                                }
                                 val shareDir = File(context.cacheDir, "share")
                                     .also { it.mkdirs() }
                                 val shareFile = File(shareDir, "${file.nameWithoutExtension}.png")
                                 withContext(Dispatchers.IO) {
                                     shareFile.outputStream().use {
-                                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                                        shareBitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
                                     }
                                 }
                                 val uri = FileProvider.getUriForFile(
@@ -482,4 +485,112 @@ private fun formatFilename(name: String): String {
     val base = name.removeSuffix(".tjsn").removePrefix("img_")
     val parts = base.split("_")
     return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name
+}
+
+/**
+ * Builds a composite share image: scaled thermal image + colour bar sidebar + temperature labels
+ * + spotmeter overlay + filename header. All rendering via Android Canvas (no Compose layer).
+ */
+private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bitmap {
+    val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
+    val hasThermal = dto.tLinearEnabled != 0
+
+    // Layout constants (all in px — this is an off-screen bitmap, not dp)
+    val imgW = 640          // 160 × 4
+    val imgH = 480          // 120 × 4
+    val headerH = 72
+    val sidebarW = if (hasThermal) 110 else 0
+    val totalW = imgW + sidebarW
+    val totalH = imgH + headerH
+
+    val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(result)
+    canvas.drawColor(android.graphics.Color.BLACK)
+
+    // ── Header ────────────────────────────────────────────────────────────────
+    val titlePaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.WHITE
+        textSize = 44f
+        isAntiAlias = true
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    }
+    val subPaint = android.graphics.Paint().apply {
+        color = 0xFFAAAAAA.toInt()
+        textSize = 30f
+        isAntiAlias = true
+    }
+    val timeLabel = formatFilename(file.name)
+    canvas.drawText(timeLabel, 16f, 50f, titlePaint)
+    canvas.drawText(
+        file.name,
+        16f + titlePaint.measureText(timeLabel) + 20f,
+        50f,
+        subPaint
+    )
+
+    // ── Thermal image (scaled 4×) ─────────────────────────────────────────────
+    dto.bitmap?.let { src ->
+        val scaled = Bitmap.createScaledBitmap(src, imgW, imgH, true)
+        canvas.drawBitmap(scaled, 0f, headerH.toFloat(), null)
+        scaled.recycle()
+    }
+
+    if (hasThermal) {
+        // ── Spotmeter temp (centred on image, stroke + fill for readability) ──
+        val spotText = formatTemp(dto.spotmeterMean, tempScale, isCelsius)
+        val spotStroke = android.graphics.Paint().apply {
+            color = android.graphics.Color.BLACK
+            textSize = 56f
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            textAlign = android.graphics.Paint.Align.CENTER
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = 6f
+        }
+        val spotFill = android.graphics.Paint(spotStroke).apply {
+            color = android.graphics.Color.WHITE
+            style = android.graphics.Paint.Style.FILL
+        }
+        val cx = imgW / 2f
+        val cy = headerH + imgH / 2f + 20f
+        canvas.drawText(spotText, cx, cy, spotStroke)
+        canvas.drawText(spotText, cx, cy, spotFill)
+
+        // ── Colour bar (40 px wide, leaving room for temp labels above/below) ─
+        val cbPad = 40               // vertical padding inside sidebar for labels
+        val cbW = 40
+        val cbH = imgH - cbPad * 2
+        val cbX = imgW + (sidebarW - cbW) / 2
+        val cbY = headerH + cbPad
+
+        val cbPixels = IntArray(256) { i ->
+            val rgb = dto.palette?.get(255 - i)
+            val r = rgb?.get(0) ?: 0; val g = rgb?.get(1) ?: 0; val b = rgb?.get(2) ?: 0
+            (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        val cbSrc = Bitmap.createBitmap(1, 256, Bitmap.Config.ARGB_8888)
+        cbSrc.setPixels(cbPixels, 0, 1, 0, 0, 1, 256)
+        val cbScaled = Bitmap.createScaledBitmap(cbSrc, cbW, cbH, true)
+        canvas.drawBitmap(cbScaled, cbX.toFloat(), cbY.toFloat(), null)
+        cbSrc.recycle(); cbScaled.recycle()
+
+        // ── Max / min labels ──────────────────────────────────────────────────
+        val tempPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 30f
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        val sidebarCx = imgW + sidebarW / 2f
+        canvas.drawText(
+            formatTemp(dto.maxTemperature, tempScale, isCelsius),
+            sidebarCx, (headerH + cbPad - 8).toFloat(), tempPaint
+        )
+        canvas.drawText(
+            formatTemp(dto.minTemperature, tempScale, isCelsius),
+            sidebarCx, (headerH + imgH - 8).toFloat(), tempPaint
+        )
+    }
+
+    return result
 }
