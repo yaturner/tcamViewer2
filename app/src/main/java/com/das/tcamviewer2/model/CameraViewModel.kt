@@ -157,14 +157,10 @@ class CameraViewModel : ViewModel() {
         val dto = _currentImageDto.value
         if (dto?.imageData != null && dto.tLinearEnabled != 0) {
             viewModelScope.launch {
-                val imageData = dto.imageData!!
-                var sum = 0L; var count = 0
-                for (row in r1..r2) for (col in c1..c2) {
-                    sum += imageData[row * Constants.IMAGE_WIDTH + col]; count++
-                }
-                val mean = if (count > 0) (sum / count).toInt() else 0
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
-                _spotmeterTemp.value = formatTemp(mean, scale, settingsDataManager.isUnitsCelsius())
+                _spotmeterTemp.value = calcSpotTemp(
+                    dto.imageData!!, camX, camY, scale, settingsDataManager.isUnitsCelsius()
+                )
             }
         }
 
@@ -182,13 +178,20 @@ class CameraViewModel : ViewModel() {
             _currentImageDto.value = dto
             _currentBitmap.value = dto.bitmap
             _histogram.value = dto.histogram
+            if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
             if (dto.tLinearEnabled != 0) {
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
-                _spotmeterTemp.value = formatTemp(dto.spotmeterMean, scale, celsius)
+                val rect = _spotmeterRect.value
+                _spotmeterTemp.value = if (rect != null && dto.imageData != null) {
+                    val cx = (rect.left + rect.right) / 2
+                    val cy = (rect.top + rect.bottom) / 2
+                    calcSpotTemp(dto.imageData!!, cx, cy, scale, celsius)
+                } else {
+                    formatTemp(dto.spotmeterMean, scale, celsius)
+                }
                 _maxTemp.value = formatTemp(dto.maxTemperature, scale, celsius)
                 _minTemp.value = formatTemp(dto.minTemperature, scale, celsius)
             }
-            if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
             updateFps()
         } catch (e: Exception) {
             Timber.e(e, "Frame processing error")
@@ -199,6 +202,18 @@ class CameraViewModel : ViewModel() {
         val tempC = rawValue / scale - 273.15f
         return if (isCelsius) "%.1f°C".format(tempC)
         else "%.1f°F".format(tempC * 9f / 5f + 32f)
+    }
+
+    private fun calcSpotTemp(imageData: IntArray, cx: Int, cy: Int, scale: Float, isCelsius: Boolean): String {
+        val c1 = cx.coerceIn(0, Constants.IMAGE_WIDTH - 1)
+        val c2 = (cx + 1).coerceAtMost(Constants.IMAGE_WIDTH - 1)
+        val r1 = cy.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+        val r2 = (cy + 1).coerceAtMost(Constants.IMAGE_HEIGHT - 1)
+        var sum = 0L; var count = 0
+        for (row in r1..r2) for (col in c1..c2) {
+            sum += imageData[row * Constants.IMAGE_WIDTH + col]; count++
+        }
+        return formatTemp(if (count > 0) (sum / count).toInt() else 0, scale, isCelsius)
     }
 
     private fun updateFps() {
