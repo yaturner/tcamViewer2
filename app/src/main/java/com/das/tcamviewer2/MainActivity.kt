@@ -24,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.das.tcamviewer2.factory.PaletteFactory
 import com.das.tcamviewer2.services.CameraService
@@ -109,7 +108,7 @@ fun MainScreen() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(vertical = 12.dp)
+                .padding(innerPadding)
         ) {
             when (tabs[selectedTabItem]) {
                 ScreenTab.Camera -> CameraScreen()

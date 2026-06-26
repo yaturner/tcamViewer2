@@ -122,23 +122,22 @@ fun CameraScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = when {
-                            isConnected -> "Thermal Viewer (Connected)"
-                            isConnecting -> "Thermal Viewer (Connecting...)"
-                            else -> "Thermal Viewer (Disconnected)"
-                        },
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 20.sp
+            if (!isConnected) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = if (isConnecting) "Thermal Viewer (Connecting...)"
+                                   else "Thermal Viewer (Disconnected)",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 20.sp
+                        )
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            )
+            }
         }
     ) { innerPadding ->
 
