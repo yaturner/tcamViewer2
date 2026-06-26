@@ -1,13 +1,19 @@
 package com.das.tcamviewer2.ui
 
 import android.os.Environment
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,10 +50,12 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.createBitmap
 import com.das.tcamviewer2.model.ImageDto
+import com.das.tcamviewer2.settingsDataManager
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -63,7 +72,6 @@ fun LibraryScreen() {
     var menuExpanded by remember { mutableStateOf(false) }
     var browseFile by remember { mutableStateOf<File?>(null) }
 
-    // Scan on first composition
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
@@ -83,7 +91,6 @@ fun LibraryScreen() {
         }
     }
 
-    // Re-sorted view derived from fileGroups + sort direction
     val displayGroups = remember(fileGroups, sortAscending) {
         val sortedFolders = if (sortAscending) fileGroups.sortedBy { it.first }
                             else fileGroups.sortedByDescending { it.first }
@@ -97,121 +104,126 @@ fun LibraryScreen() {
         fileGroups.flatMap { it.second }.map { it.absolutePath }.toSet()
     }
 
-    // First selected file in display order — used by Browse
     val firstSelected = remember(selectedPaths, displayGroups) {
         displayGroups.flatMap { it.second }.firstOrNull { it.absolutePath in selectedPaths }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    val n = selectedPaths.size
-                    Text(if (n == 0) "Library" else "$n selected")
-                },
-                actions = {
-                    // Browse — visible when at least one item is selected
-                    if (selectedPaths.isNotEmpty()) {
-                        IconButton(onClick = { browseFile = firstSelected }) {
-                            Icon(Icons.Default.Visibility, contentDescription = "Browse")
-                        }
-                        // Delete — removes files from disk and refreshes list
-                        IconButton(onClick = {
-                            selectedPaths.forEach { File(it).delete() }
-                            fileGroups = fileGroups.mapNotNull { (folder, files) ->
-                                val remaining = files.filter { it.absolutePath !in selectedPaths }
-                                if (remaining.isNotEmpty()) folder to remaining else null
+    // Wrap in a Box so BrowseWindow can overlay as a sibling of the Scaffold
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        val n = selectedPaths.size
+                        Text(if (n == 0) "Library" else "$n selected")
+                    },
+                    actions = {
+                        if (selectedPaths.isNotEmpty()) {
+                            IconButton(onClick = { browseFile = firstSelected }) {
+                                Icon(Icons.Default.Visibility, contentDescription = "Browse")
                             }
-                            selectedPaths = emptySet()
-                        }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                            IconButton(onClick = {
+                                selectedPaths.forEach { File(it).delete() }
+                                fileGroups = fileGroups.mapNotNull { (folder, files) ->
+                                    val remaining = files.filter { it.absolutePath !in selectedPaths }
+                                    if (remaining.isNotEmpty()) folder to remaining else null
+                                }
+                                selectedPaths = emptySet()
+                            }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                            }
+                        }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Select all") },
+                                    onClick = { selectedPaths = allPaths; menuExpanded = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Clear selections") },
+                                    onClick = { selectedPaths = emptySet(); menuExpanded = false }
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Sort ascending") },
+                                    onClick = { sortAscending = true; menuExpanded = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sort descending") },
+                                    onClick = { sortAscending = false; menuExpanded = false }
+                                )
+                            }
                         }
                     }
-                    // Overflow dropdown
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Select all") },
-                                onClick = { selectedPaths = allPaths; menuExpanded = false }
+                )
+            }
+        ) { innerPadding ->
+            when {
+                isLoading -> Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) { CircularProgressIndicator() }
+
+                displayGroups.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No saved images", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                else -> LazyColumn(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                    displayGroups.forEach { (folderName, files) ->
+                        item(key = folderName) {
+                            Text(
+                                text = formatDateFolder(folderName),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(
+                                    start = 16.dp, top = 16.dp, bottom = 4.dp
+                                )
                             )
-                            DropdownMenuItem(
-                                text = { Text("Clear selections") },
-                                onClick = { selectedPaths = emptySet(); menuExpanded = false }
+                        }
+                        items(files, key = { it.absolutePath }) { file ->
+                            val isSelected = file.absolutePath in selectedPaths
+                            ThumbnailListItem(
+                                file = file,
+                                isSelected = isSelected,
+                                onClick = {
+                                    selectedPaths = if (isSelected)
+                                        selectedPaths - file.absolutePath
+                                    else
+                                        selectedPaths + file.absolutePath
+                                }
                             )
                             HorizontalDivider()
-                            DropdownMenuItem(
-                                text = { Text("Sort ascending") },
-                                onClick = { sortAscending = true; menuExpanded = false }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Sort descending") },
-                                onClick = { sortAscending = false; menuExpanded = false }
-                            )
                         }
                     }
                 }
-            )
-        }
-    ) { innerPadding ->
-        when {
-            isLoading -> Box(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
-
-            displayGroups.isEmpty() -> Box(
-                modifier = Modifier.fillMaxSize().padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No saved images", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
-            else -> LazyColumn(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                displayGroups.forEach { (folderName, files) ->
-                    item(key = folderName) {
-                        Text(
-                            text = formatDateFolder(folderName),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp)
-                        )
-                    }
-                    items(files, key = { it.absolutePath }) { file ->
-                        val isSelected = file.absolutePath in selectedPaths
-                        ThumbnailListItem(
-                            file = file,
-                            isSelected = isSelected,
-                            onClick = {
-                                selectedPaths = if (isSelected)
-                                    selectedPaths - file.absolutePath
-                                else
-                                    selectedPaths + file.absolutePath
-                            }
-                        )
-                        HorizontalDivider()
-                    }
-                }
             }
         }
-    }
 
-    // Full-screen browse window
-    browseFile?.let { file ->
-        BrowseWindow(file = file, onDismiss = { browseFile = null })
+        // Browse overlay — drawn on top of the Scaffold, fills the same area
+        browseFile?.let { file ->
+            BrowseWindow(file = file, onDismiss = { browseFile = null })
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BrowseWindow(file: File, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
+
     var dto by remember { mutableStateOf<ImageDto?>(null) }
+    val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
+    val isCelsius = tempUnit == "Celsius"
 
     LaunchedEffect(file) {
         dto = withContext(Dispatchers.Default) {
@@ -219,39 +231,123 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit) {
         }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(formatFilename(file.name)) },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
+    val imageBitmap = remember(dto?.bitmap) { dto?.bitmap?.asImageBitmap() }
+
+    val colorBarBitmap = remember(dto?.palette) {
+        val palette = dto?.palette ?: return@remember null
+        val pixels = IntArray(256) { i ->
+            val rgb = palette[255 - i]
+            val r = rgb?.get(0) ?: 0
+            val g = rgb?.get(1) ?: 0
+            val b = rgb?.get(2) ?: 0
+            (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        createBitmap(1, 256).also { it.setPixels(pixels, 0, 1, 0, 0, 1, 256) }.asImageBitmap()
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            formatFilename(file.name),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            file.name,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                dto == null -> CircularProgressIndicator()
+                imageBitmap != null -> {
+                    val currentDto = dto!!
+                    val hasThermal = currentDto.tLinearEnabled != 0
+                    val scale = if (currentDto.tLinearResolution == 0) 10f else 100f
+
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // Main image with spotmeter temp overlaid at centre
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = imageBitmap,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                            if (hasThermal) {
+                                Text(
+                                    text = formatTemp(
+                                        currentDto.spotmeterMean, scale, isCelsius
+                                    ),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+
+                        // Sidebar: max temp → color bar → min temp
+                        if (hasThermal && colorBarBitmap != null) {
+                            Column(
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .fillMaxHeight()
+                                    .padding(vertical = 16.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = formatTemp(
+                                        currentDto.maxTemperature, scale, isCelsius
+                                    ),
+                                    fontSize = 11.sp,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                                Image(
+                                    bitmap = colorBarBitmap,
+                                    contentDescription = "Color scale",
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .width(28.dp)
+                                        .padding(vertical = 4.dp),
+                                    contentScale = ContentScale.FillBounds
+                                )
+                                Text(
+                                    text = formatTemp(
+                                        currentDto.minTemperature, scale, isCelsius
+                                    ),
+                                    fontSize = 11.sp,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
-                )
-            }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                when {
-                    dto == null -> CircularProgressIndicator()
-                    dto!!.bitmap != null -> Image(
-                        bitmap = dto!!.bitmap!!.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit
-                    )
-                    else -> Text("Could not load image", color = Color.White)
                 }
+                else -> Text("Could not load image", color = Color.White)
             }
         }
     }
@@ -305,6 +401,11 @@ private fun ThumbnailListItem(file: File, isSelected: Boolean, onClick: () -> Un
         supportingContent = { Text(file.name) },
         modifier = Modifier.clickable(onClick = onClick)
     )
+}
+
+private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
+    val tempC = rawValue / scale - 273.15f
+    return if (isCelsius) "%.1f°C".format(tempC) else "%.1f°F".format(tempC * 9f / 5f + 32f)
 }
 
 /** MM_dd_yyyy → "June 25, 2026" */
