@@ -33,6 +33,9 @@ class CameraViewModel : ViewModel() {
     private val _fpsCounter = MutableStateFlow("-- fps")
     val fpsCounter: StateFlow<String> = _fpsCounter.asStateFlow()
 
+    private val _showConnectError = MutableStateFlow(false)
+    val showConnectError: StateFlow<Boolean> = _showConnectError.asStateFlow()
+
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
@@ -94,14 +97,18 @@ class CameraViewModel : ViewModel() {
     private fun connectToCamera(ip: String) {
         Timber.d("connectToCamera ip=$ip")
         _isConnecting.value = true
-        cameraService.disconnect()
-        cameraService.setIpAddress(ip)
-        val connected = cameraService.connect()
-        Timber.d("connectToCamera result=$connected")
-        _isConnecting.value = false
-        _isConnected.value = connected
-        _isStreaming.value = false
-        if (connected) cameraService.getImage()
+        try {
+            cameraService.disconnect()
+            cameraService.setIpAddress(ip)
+            val connected = cameraService.connect()
+            Timber.d("connectToCamera result=$connected")
+            _isConnected.value = connected
+            _isStreaming.value = false
+            if (connected) cameraService.getImage()
+            else _showConnectError.value = true
+        } finally {
+            _isConnecting.value = false
+        }
     }
 
     // --- Public actions called from the UI ---
@@ -120,6 +127,8 @@ class CameraViewModel : ViewModel() {
             }
         }
     }
+
+    fun dismissConnectError() { _showConnectError.value = false }
 
     fun getImage() {
         if (_isConnected.value) cameraService.getImage()

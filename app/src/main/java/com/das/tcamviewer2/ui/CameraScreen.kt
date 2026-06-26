@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -81,6 +83,7 @@ fun CameraScreen(
     val histogram by viewModel.histogram.collectAsState()
     val currentImageDto by viewModel.currentImageDto.collectAsState()
     val spotmeterRect by viewModel.spotmeterRect.collectAsState()
+    val showConnectError by viewModel.showConnectError.collectAsState()
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
@@ -125,6 +128,17 @@ fun CameraScreen(
         createBitmap(1, 256).also {
             it.setPixels(pixels, 0, 1, 0, 0, 1, 256)
         }.asImageBitmap()
+    }
+
+    if (showConnectError) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissConnectError() },
+            title = { Text("Connection Failed") },
+            text = { Text("The camera failed to connect, please verify that the IP address is correct and the camera is turned on.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.dismissConnectError() }) { Text("OK") }
+            }
+        )
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -300,12 +314,13 @@ fun CameraScreen(
                 // Connect / Disconnect
                 FeedbackButton(
                     onClick = { viewModel.toggleConnection() },
+                    enabled = !isConnecting,
                     contentPadding = btnPadding
                 ) {
                     Text(
                         when {
                             isConnected -> "Disconnect"
-                            isConnecting -> "Cancel"
+                            isConnecting -> "Connecting..."
                             else -> "Connect"
                         },
                         fontSize = 12.sp
