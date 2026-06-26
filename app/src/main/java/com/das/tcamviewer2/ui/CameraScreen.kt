@@ -244,15 +244,17 @@ fun CameraScreen(
                 }
             }
 
-            // 3. FPS counter (top-right)
-            Text(
-                text = fpsText,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            )
+            // 3. FPS counter (top-right) — only while streaming
+            if (isStreaming) {
+                Text(
+                    text = fpsText,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                )
+            }
 
             // 4. BUTTON BAR (bottom)
             Row(
