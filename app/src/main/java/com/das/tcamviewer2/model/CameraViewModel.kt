@@ -1,10 +1,12 @@
 package com.das.tcamviewer2.model
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.das.tcamviewer2.cameraService
+import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.settingsDataManager
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +53,12 @@ class CameraViewModel : ViewModel() {
 
     private val _currentImageDto = MutableStateFlow<ImageDto?>(null)
     val currentImageDto: StateFlow<ImageDto?> = _currentImageDto.asStateFlow()
+
+    private val _spotmeterRect = MutableStateFlow<Rect?>(null)
+    val spotmeterRect: StateFlow<Rect?> = _spotmeterRect.asStateFlow()
+    // Once the user manually moves the hotspot, telemetry no longer overwrites it;
+    // reset to false on disconnect so the first new frame re-initialises the rect.
+    @Volatile private var userMovedSpotmeter = false
 
     // CONFLATED: only keeps the latest frame; old frames are dropped when processing falls behind
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
@@ -104,6 +112,8 @@ class CameraViewModel : ViewModel() {
             _isConnected.value = false
             _isConnecting.value = false
             _isStreaming.value = false
+            _spotmeterRect.value = null
+            userMovedSpotmeter = false
         } else {
             viewModelScope.launch(Dispatchers.IO) {
                 connectToCamera(settingsDataManager.getCameraIp())
@@ -134,6 +144,34 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch { settingsDataManager.saveSelectedPalette(name) }
     }
 
+    fun setSpotmeter(camX: Int, camY: Int) {
+        val c1 = (camX - 2).coerceAtLeast(0)
+        val c2 = (camX + 2).coerceAtMost(Constants.IMAGE_WIDTH - 1)
+        val r1 = (camY - 2).coerceAtLeast(0)
+        val r2 = (camY + 2).coerceAtMost(Constants.IMAGE_HEIGHT - 1)
+
+        userMovedSpotmeter = true
+        _spotmeterRect.value = Rect(c1, r1, c2, r2)
+
+        // Recalculate spotmeter temperature immediately from current imageData
+        val dto = _currentImageDto.value
+        if (dto?.imageData != null && dto.tLinearEnabled != 0) {
+            viewModelScope.launch {
+                val imageData = dto.imageData!!
+                var sum = 0L; var count = 0
+                for (row in r1..r2) for (col in c1..c2) {
+                    sum += imageData[row * Constants.IMAGE_WIDTH + col]; count++
+                }
+                val mean = if (count > 0) (sum / count).toInt() else 0
+                val scale = if (dto.tLinearResolution == 0) 10f else 100f
+                _spotmeterTemp.value = formatTemp(mean, scale, settingsDataManager.isUnitsCelsius())
+            }
+        }
+
+        cameraService.setSpotmeter(c1, c2, r1, r2)
+        if (!_isStreaming.value && _isConnected.value) cameraService.getImage()
+    }
+
     // --- Frame processing ---
 
     private suspend fun processFrame(json: JSONObject) {
@@ -150,6 +188,7 @@ class CameraViewModel : ViewModel() {
                 _maxTemp.value = formatTemp(dto.maxTemperature, scale, celsius)
                 _minTemp.value = formatTemp(dto.minTemperature, scale, celsius)
             }
+            if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
             updateFps()
         } catch (e: Exception) {
             Timber.e(e, "Frame processing error")

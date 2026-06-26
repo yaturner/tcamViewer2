@@ -210,6 +210,14 @@ class CameraService : Service() {
         }
     }
 
+    fun setSpotmeter(c1: Int, c2: Int, r1: Int, r2: Int) {
+        serviceScope.launch {
+            val args = String.format(Constants.ARGS_SET_SPOTMETER, c1, c2, r1, r2)
+            val cmd = String.format(Constants.CMD_SET_SPOTMETER, args)
+            sendCmd(cmd, expectedKey = "set_spotmeter")
+        }
+    }
+
     private fun startListening() {
         running = true
         totalBytesRead = 0

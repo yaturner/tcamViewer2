@@ -1,7 +1,9 @@
 package com.das.tcamviewer2.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,9 +32,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.cameraUtils
+import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.CameraViewModel
 import com.das.tcamviewer2.paletteFactory
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +80,7 @@ fun CameraScreen(
     val currentPalette by viewModel.currentPalette.collectAsState()
     val histogram by viewModel.histogram.collectAsState()
     val currentImageDto by viewModel.currentImageDto.collectAsState()
+    val spotmeterRect by viewModel.spotmeterRect.collectAsState()
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
@@ -160,7 +168,18 @@ fun CameraScreen(
                         Image(
                             bitmap = imageBitmap,
                             contentDescription = "Thermal Camera Feed",
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(isConnected) {
+                                    if (!isConnected) return@pointerInput
+                                    detectTapGestures { offset ->
+                                        val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
+                                            .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                        val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
+                                            .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                        viewModel.setSpotmeter(camX, camY)
+                                    }
+                                },
                             contentScale = ContentScale.FillBounds
                         )
                     } else {
@@ -170,6 +189,31 @@ fun CameraScreen(
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.FillBounds
                         )
+                    }
+
+                    // Spotmeter rectangle overlay
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        spotmeterRect?.let { rect ->
+                            val sx = size.width / Constants.IMAGE_WIDTH
+                            val sy = size.height / Constants.IMAGE_HEIGHT
+                            val left = rect.left * sx
+                            val top = rect.top * sy
+                            val w = (rect.width() + 1) * sx
+                            val h = (rect.height() + 1) * sy
+                            // Black shadow for visibility on any palette
+                            drawRect(
+                                color = Color.Black,
+                                topLeft = Offset(left - 1f, top - 1f),
+                                size = Size(w + 2f, h + 2f),
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                            drawRect(
+                                color = Color.White,
+                                topLeft = Offset(left, top),
+                                size = Size(w, h),
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                        }
                     }
 
                     Text(
