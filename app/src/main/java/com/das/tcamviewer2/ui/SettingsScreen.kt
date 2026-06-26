@@ -54,8 +54,12 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.SettingsDataManager
 import com.das.tcamviewer2.constants.Constants
+import com.das.tcamviewer2.model.CameraConfig
+import com.das.tcamviewer2.model.CameraViewModel
 import java.net.Inet4Address
 import kotlin.coroutines.resume
 import kotlinx.coroutines.channels.Channel
@@ -65,12 +69,17 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onNavigateBack: () -> Unit = {}) {
+fun SettingsScreen(
+    onNavigateBack: () -> Unit = {},
+    viewModel: CameraViewModel = viewModel()
+) {
     val context = LocalContext.current
     val dataManager = remember { SettingsDataManager(context) }
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
     val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
+
+    val isConnected by viewModel.isConnected.collectAsState()
 
     var showDiscoveryDialog by remember { mutableStateOf(false) }
     val discoveredDevices = remember { mutableStateListOf<Pair<String, String>>() }
@@ -158,6 +167,11 @@ fun SettingsScreen(onNavigateBack: () -> Unit = {}) {
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
+            // Camera Settings — only shown when camera is connected
+            if (isConnected) {
+                CameraSettingsSection(viewModel)
+            }
+
             Text(
                 text = "APPLICATION SETTINGS",
                 fontSize = 12.sp,
@@ -451,7 +465,7 @@ For questions about this privacy statement, please contact the developer through
         )
     }
 
-    // Camera Discovery Dialog
+    // --- Camera Discovery Dialog ---
     if (showDiscoveryDialog) {
         LaunchedEffect(Unit) {
             isDiscovering = true
@@ -545,6 +559,211 @@ For questions about this privacy statement, please contact the developer through
             },
             dismissButton = {
                 TextButton(onClick = { showDiscoveryDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+private val EMISSIVITY_PRESETS = listOf(
+    "Human skin (98%)"    to 98,
+    "Water (96%)"         to 96,
+    "Rubber / Fabric (95%)" to 95,
+    "Painted surface (95%)" to 95,
+    "Default (94%)"       to 94,
+    "Concrete / Brick (92%)" to 92,
+    "Wood (91%)"          to 91,
+    "Plastics (85%)"      to 85,
+    "Oxidized copper (65%)" to 65,
+    "Polished metal (10%)" to 10
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CameraSettingsSection(viewModel: CameraViewModel) {
+    val cameraConfig by viewModel.cameraConfig.collectAsState()
+    val wifiInfo by viewModel.wifiInfo.collectAsState()
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    var localAgc by remember { mutableStateOf(false) }
+    var localEmissivityText by remember { mutableStateOf("94") }
+    var localGainMode by remember { mutableStateOf(Constants.GAIN_MODE_HIGH) }
+    var showEmissivityDialog by remember { mutableStateOf(false) }
+    var showWifiDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(cameraConfig) {
+        cameraConfig?.let {
+            localAgc = it.agcEnabled
+            localEmissivityText = (it.emissivity * 100 / 8192).coerceIn(1, 100).toString()
+            localGainMode = it.gainMode
+        }
+    }
+
+    fun emissivityRaw() = (localEmissivityText.toIntOrNull() ?: 94).coerceIn(1, 100) * 8192 / 100
+
+    Text(
+        text = "CAMERA SETTINGS",
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 4.dp)
+    )
+
+    // AGC
+    ListItem(
+        headlineContent = { Text("AGC") },
+        supportingContent = { Text(if (localAgc) "Enabled" else "Disabled") },
+        trailingContent = {
+            Switch(checked = localAgc, onCheckedChange = {
+                localAgc = it
+                viewModel.sendCameraConfig(it, emissivityRaw(), localGainMode)
+            })
+        }
+    )
+
+    // Emissivity
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OutlinedTextField(
+            value = localEmissivityText,
+            onValueChange = { v ->
+                if (v.all { it.isDigit() } && v.length <= 3) localEmissivityText = v
+            },
+            label = { Text("Emissivity %") },
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = {
+                keyboardController?.hide()
+                viewModel.sendCameraConfig(localAgc, emissivityRaw(), localGainMode)
+            })
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        FeedbackButton(
+            onClick = { showEmissivityDialog = true },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+        ) { Text("Choose") }
+    }
+
+    // Gain Mode
+    ListItem(
+        headlineContent = { Text("Gain Mode") },
+        supportingContent = { Text("Controls sensor sensitivity range") }
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf("High" to Constants.GAIN_MODE_HIGH, "Low" to Constants.GAIN_MODE_LOW, "Auto" to Constants.GAIN_MODE_AUTO).forEach { (label, mode) ->
+            Row(
+                modifier = Modifier
+                    .selectable(selected = localGainMode == mode, onClick = {
+                        localGainMode = mode
+                        viewModel.sendCameraConfig(localAgc, emissivityRaw(), mode)
+                    })
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = localGainMode == mode, onClick = {
+                    localGainMode = mode
+                    viewModel.sendCameraConfig(localAgc, emissivityRaw(), mode)
+                })
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(label, fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+        }
+    }
+
+    // WiFi / Network
+    ListItem(
+        headlineContent = { Text("WiFi / Network") },
+        supportingContent = { Text("View camera network status") },
+        trailingContent = {
+            FeedbackButton(
+                onClick = {
+                    viewModel.fetchWifiInfo()
+                    showWifiDialog = true
+                },
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+            ) { Text("Show", fontSize = 12.sp) }
+        }
+    )
+
+    // --- Emissivity preset dialog ---
+    if (showEmissivityDialog) {
+        var selectedPct by remember { mutableStateOf(localEmissivityText.toIntOrNull() ?: 94) }
+        AlertDialog(
+            onDismissRequest = { showEmissivityDialog = false },
+            title = { Text("Select Emissivity") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    EMISSIVITY_PRESETS.forEach { (label, pct) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(selected = selectedPct == pct, onClick = { selectedPct = pct })
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = selectedPct == pct, onClick = { selectedPct = pct })
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label, fontSize = 16.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    localEmissivityText = selectedPct.toString()
+                    viewModel.sendCameraConfig(localAgc, selectedPct * 8192 / 100, localGainMode)
+                    showEmissivityDialog = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEmissivityDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // --- WiFi info dialog ---
+    if (showWifiDialog) {
+        AlertDialog(
+            onDismissRequest = { showWifiDialog = false },
+            title = { Text("Network Status") },
+            text = {
+                when (wifiInfo) {
+                    null -> CircularProgressIndicator()
+                    emptyMap<String, String>() -> Text("Could not retrieve network information.")
+                    else -> Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        wifiInfo!!.forEach { (key, value) ->
+                            val display = if (key.contains("pw", ignoreCase = true)) "••••••" else value
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text(
+                                    text = "$key:",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(0.45f)
+                                )
+                                Text(text = display, fontSize = 13.sp, modifier = Modifier.weight(0.55f))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showWifiDialog = false }) { Text("Close") }
             }
         )
     }

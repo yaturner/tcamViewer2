@@ -214,6 +214,23 @@ class CameraService : Service() {
         }
     }
 
+    suspend fun getConfig(): JSONObject = sendCmd(Constants.CMD_GET_CONFIG, expectedKey = "config")
+
+    suspend fun getWifi(): JSONObject = sendCmd(Constants.CMD_GET_WIFI, expectedKey = "wifi")
+
+    fun setConfig(agcEnabled: Boolean, emissivity: Int, gainMode: Int) {
+        serviceScope.launch {
+            try {
+                val args = String.format(Constants.ARGS_SET_CONFIG, if (agcEnabled) 1 else 0, emissivity, gainMode)
+                val cmd = String.format(Constants.CMD_SET_CONFIG, args)
+                outToSocket?.write(cmd.toByteArray(StandardCharsets.UTF_8))
+                outToSocket?.flush()
+            } catch (e: Exception) {
+                Timber.e(e, "setConfig failed")
+            }
+        }
+    }
+
     private fun startListening() {
         running = true
         bytesRead = 0

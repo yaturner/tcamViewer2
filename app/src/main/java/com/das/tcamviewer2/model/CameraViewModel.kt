@@ -19,6 +19,12 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import timber.log.Timber
 
+data class CameraConfig(
+    val agcEnabled: Boolean = false,
+    val emissivity: Int = 7700,
+    val gainMode: Int = Constants.GAIN_MODE_HIGH
+)
+
 class CameraViewModel : ViewModel() {
 
     private val _spotmeterTemp = MutableStateFlow("--")
@@ -35,6 +41,12 @@ class CameraViewModel : ViewModel() {
 
     private val _showConnectError = MutableStateFlow(false)
     val showConnectError: StateFlow<Boolean> = _showConnectError.asStateFlow()
+
+    private val _cameraConfig = MutableStateFlow<CameraConfig?>(null)
+    val cameraConfig: StateFlow<CameraConfig?> = _cameraConfig.asStateFlow()
+
+    private val _wifiInfo = MutableStateFlow<Map<String, String>?>(null)
+    val wifiInfo: StateFlow<Map<String, String>?> = _wifiInfo.asStateFlow()
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
@@ -94,7 +106,7 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun connectToCamera(ip: String) {
+    private suspend fun connectToCamera(ip: String) {
         Timber.d("connectToCamera ip=$ip")
         _isConnecting.value = true
         try {
@@ -104,8 +116,10 @@ class CameraViewModel : ViewModel() {
             Timber.d("connectToCamera result=$connected")
             _isConnected.value = connected
             _isStreaming.value = false
-            if (connected) cameraService.getImage()
-            else _showConnectError.value = true
+            if (connected) {
+                cameraService.getImage()
+                loadCameraConfig()
+            } else _showConnectError.value = true
         } finally {
             _isConnecting.value = false
         }
@@ -120,6 +134,7 @@ class CameraViewModel : ViewModel() {
             _isConnecting.value = false
             _isStreaming.value = false
             _spotmeterRect.value = null
+            _cameraConfig.value = null
             userMovedSpotmeter = false
         } else {
             viewModelScope.launch(Dispatchers.IO) {
@@ -129,6 +144,40 @@ class CameraViewModel : ViewModel() {
     }
 
     fun dismissConnectError() { _showConnectError.value = false }
+
+    private suspend fun loadCameraConfig() {
+        try {
+            val response = cameraService.getConfig()
+            val config = response.optJSONObject("config") ?: return
+            _cameraConfig.value = CameraConfig(
+                agcEnabled = config.optInt("agc_enabled") != 0,
+                emissivity = config.optInt("emissivity", 7700),
+                gainMode = config.optInt("gain_mode", Constants.GAIN_MODE_HIGH)
+            )
+        } catch (e: Exception) {
+            Timber.e(e, "loadCameraConfig failed")
+        }
+    }
+
+    fun sendCameraConfig(agcEnabled: Boolean, emissivity: Int, gainMode: Int) {
+        cameraService.setConfig(agcEnabled, emissivity, gainMode)
+    }
+
+    fun fetchWifiInfo() {
+        _wifiInfo.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = cameraService.getWifi()
+                val wifi = response.optJSONObject("wifi") ?: run {
+                    _wifiInfo.value = emptyMap(); return@launch
+                }
+                _wifiInfo.value = wifi.keys().asSequence().associateWith { wifi.optString(it) }
+            } catch (e: Exception) {
+                Timber.e(e, "fetchWifiInfo failed")
+                _wifiInfo.value = emptyMap()
+            }
+        }
+    }
 
     fun getImage() {
         if (_isConnected.value) cameraService.getImage()
