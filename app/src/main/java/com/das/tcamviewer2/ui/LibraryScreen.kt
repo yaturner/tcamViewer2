@@ -1,5 +1,7 @@
 package com.das.tcamviewer2.ui
 
+import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +44,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,11 +57,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import com.das.tcamviewer2.model.ImageDto
 import com.das.tcamviewer2.settingsDataManager
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -211,16 +217,29 @@ fun LibraryScreen() {
 
         // Browse overlay — drawn on top of the Scaffold, fills the same area
         browseFile?.let { file ->
-            BrowseWindow(file = file, onDismiss = { browseFile = null })
+            BrowseWindow(
+                file = file,
+                onDismiss = { browseFile = null },
+                onDelete = {
+                    file.delete()
+                    fileGroups = fileGroups.mapNotNull { (folder, files) ->
+                        val remaining = files.filter { it.absolutePath != file.absolutePath }
+                        if (remaining.isNotEmpty()) folder to remaining else null
+                    }
+                    browseFile = null
+                }
+            )
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BrowseWindow(file: File, onDismiss: () -> Unit) {
+private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit) {
     BackHandler(onBack = onDismiss)
 
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var dto by remember { mutableStateOf<ImageDto?>(null) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
@@ -265,6 +284,44 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                },
+                actions = {
+                    // Share — saves bitmap as PNG to cache and fires the system share sheet
+                    IconButton(
+                        onClick = {
+                            val bitmap = dto?.bitmap ?: return@IconButton
+                            coroutineScope.launch {
+                                val shareDir = File(context.cacheDir, "share")
+                                    .also { it.mkdirs() }
+                                val shareFile = File(shareDir, "${file.nameWithoutExtension}.png")
+                                withContext(Dispatchers.IO) {
+                                    shareFile.outputStream().use {
+                                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                                    }
+                                }
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    shareFile
+                                )
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "image/png"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(
+                                    Intent.createChooser(intent, "Share thermal image")
+                                )
+                            }
+                        },
+                        enabled = dto?.bitmap != null
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share")
+                    }
+                    // Delete — removes the file and updates the library list
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
                     }
                 }
             )
