@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +30,9 @@ class SettingsDataManager(context: Context) {
         val SHUTTER_SOUND_KEY = booleanPreferencesKey("shutter_sound")
         val SPOTMETER_KEY = booleanPreferencesKey("spotmeter")
         val TEMPERATURE_UNIT_KEY = stringPreferencesKey("temperature_unit")
+        val CAMERA_AGC_KEY       = booleanPreferencesKey("camera_agc")
+        val CAMERA_EMISSIVITY_KEY = stringPreferencesKey("camera_emissivity")
+        val CAMERA_GAIN_MODE_KEY = intPreferencesKey("camera_gain_mode")
     }
 
     val cameraIpFlow: Flow<String> = appContext.dataStore.data.map { preferences ->
@@ -72,7 +76,19 @@ class SettingsDataManager(context: Context) {
     }
 
     val temperatureUnitFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
-        prefs[TEMPERATURE_UNIT_KEY] ?: "Celsius" // Default setting choice
+        prefs[TEMPERATURE_UNIT_KEY] ?: "Celsius"
+    }
+
+    val cameraAgcFlow: Flow<Boolean> = appContext.dataStore.data.map { prefs ->
+        prefs[CAMERA_AGC_KEY] == true
+    }
+
+    val cameraEmissivityFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
+        prefs[CAMERA_EMISSIVITY_KEY] ?: "94"
+    }
+
+    val cameraGainModeFlow: Flow<Int> = appContext.dataStore.data.map { prefs ->
+        prefs[CAMERA_GAIN_MODE_KEY] ?: 0
     }
 
     // Write tasks
@@ -118,6 +134,18 @@ class SettingsDataManager(context: Context) {
 
     suspend fun saveTemperatureUnit(unit: String) {
         appContext.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
+    }
+
+    suspend fun saveCameraAgc(enabled: Boolean) {
+        appContext.dataStore.edit { prefs -> prefs[CAMERA_AGC_KEY] = enabled }
+    }
+
+    suspend fun saveCameraEmissivity(value: String) {
+        appContext.dataStore.edit { prefs -> prefs[CAMERA_EMISSIVITY_KEY] = value }
+    }
+
+    suspend fun saveCameraGainMode(mode: Int) {
+        appContext.dataStore.edit { prefs -> prefs[CAMERA_GAIN_MODE_KEY] = mode }
     }
 
     // Get methods (one-shot retrieval)

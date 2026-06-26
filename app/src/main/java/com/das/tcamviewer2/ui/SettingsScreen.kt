@@ -81,16 +81,25 @@ fun SettingsScreen(
     val isConnected by viewModel.isConnected.collectAsState()
     val cameraConfig by viewModel.cameraConfig.collectAsState()
 
-    // Camera settings local state — hoisted here so values survive tab switches
-    var localAgc          by remember { mutableStateOf(false) }
-    var localEmissivity   by remember { mutableStateOf("94") }
-    var localGainMode     by remember { mutableStateOf(Constants.GAIN_MODE_HIGH) }
+    // Camera settings — persisted in DataStore, used as initial values
+    val savedCameraAgc       by dataManager.cameraAgcFlow.collectAsState(initial = false)
+    val savedCameraEmissivity by dataManager.cameraEmissivityFlow.collectAsState(initial = "94")
+    val savedCameraGainMode  by dataManager.cameraGainModeFlow.collectAsState(initial = Constants.GAIN_MODE_HIGH)
 
+    var localAgc        by remember(savedCameraAgc)        { mutableStateOf(savedCameraAgc) }
+    var localEmissivity by remember(savedCameraEmissivity) { mutableStateOf(savedCameraEmissivity) }
+    var localGainMode   by remember(savedCameraGainMode)   { mutableStateOf(savedCameraGainMode) }
+
+    // When live camera config arrives, override locals and persist
     LaunchedEffect(cameraConfig) {
         cameraConfig?.let {
+            val pct = (it.emissivity * 100 / 8192).coerceIn(1, 100).toString()
             localAgc        = it.agcEnabled
-            localEmissivity = (it.emissivity * 100 / 8192).coerceIn(1, 100).toString()
+            localEmissivity = pct
             localGainMode   = it.gainMode
+            dataManager.saveCameraAgc(it.agcEnabled)
+            dataManager.saveCameraEmissivity(pct)
+            dataManager.saveCameraGainMode(it.gainMode)
         }
     }
 
@@ -183,13 +192,22 @@ fun SettingsScreen(
             // Camera Settings — only shown when camera is connected
             if (isConnected) {
                 CameraSettingsSection(
-                    viewModel        = viewModel,
-                    localAgc         = localAgc,
-                    onAgcChange      = { localAgc = it },
-                    localEmissivity  = localEmissivity,
+                    viewModel          = viewModel,
+                    localAgc           = localAgc,
+                    onAgcChange        = {
+                        localAgc = it
+                        coroutineScope.launch { dataManager.saveCameraAgc(it) }
+                    },
+                    localEmissivity    = localEmissivity,
                     onEmissivityChange = { localEmissivity = it },
-                    localGainMode    = localGainMode,
-                    onGainModeChange = { localGainMode = it }
+                    onEmissivityConfirm = {
+                        coroutineScope.launch { dataManager.saveCameraEmissivity(localEmissivity) }
+                    },
+                    localGainMode      = localGainMode,
+                    onGainModeChange   = {
+                        localGainMode = it
+                        coroutineScope.launch { dataManager.saveCameraGainMode(it) }
+                    }
                 )
             }
 
@@ -632,6 +650,7 @@ private fun CameraSettingsSection(
     onAgcChange: (Boolean) -> Unit,
     localEmissivity: String,
     onEmissivityChange: (String) -> Unit,
+    onEmissivityConfirm: () -> Unit,
     localGainMode: Int,
     onGainModeChange: (Int) -> Unit
 ) {
@@ -685,6 +704,7 @@ private fun CameraSettingsSection(
             keyboardActions = KeyboardActions(onDone = {
                 keyboardController?.hide()
                 viewModel.sendCameraConfig(localAgc, emissivityRaw(), localGainMode)
+                onEmissivityConfirm()
             })
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -770,6 +790,7 @@ private fun CameraSettingsSection(
                 TextButton(onClick = {
                     onEmissivityChange(selectedPct.toString())
                     viewModel.sendCameraConfig(localAgc, selectedPct * 8192 / 100, localGainMode)
+                    onEmissivityConfirm()
                     showEmissivityDialog = false
                 }) { Text("OK") }
             },
