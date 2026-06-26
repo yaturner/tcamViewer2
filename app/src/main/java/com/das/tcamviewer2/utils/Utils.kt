@@ -13,29 +13,6 @@ import java.io.IOException
 class Utils(context: Context) {
     private val appContext = context.applicationContext
 
-//    @Throws(FileNotFoundException::class)
-//    fun exportImage(imageDto: ImageDto) {
-//        var imageFilename: String?
-//        val imageDirectory: String?
-//        val imageName: String?
-//        val bitmap: Bitmap? = createExportImage(imageDto)
-//        val word: Array<String?> =
-//            imageDto.filename!!.split("/".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-//        val nWords = word.size
-//        //if there is only one word, then it is the filename and take the folder from the CreationDate
-//        if (nWords == 1) {
-//            imageName = imageDto.filename!!.replace("img_", "").replace(".tjsn", "")
-//            imageDirectory = CameraUtils.simpleDateFormatFolder.format(imageDto.creationDate)
-//        } else {
-//            imageDirectory = word[nWords - 2]
-//            imageName = word[nWords - 1]!!.replace("img_", "").replace(".tjsn", "")
-//        }
-//        val widths: IntArray = appContext.getResources().getIntArray(R.array.resolution_widths)
-//        val heights: IntArray = appContext.getResources().getIntArray(R.array.resolution_heights)
-//        saveBitmap(bitmap!!, imageDirectory!!, imageName)
-//        Toast.makeText(appContext, "Image exported as " + imageName, Toast.LENGTH_LONG).show()
-//    }
-
     fun saveBitmap(
     bitmap: Bitmap,
     imageDirectory: String,

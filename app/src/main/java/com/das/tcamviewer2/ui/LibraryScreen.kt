@@ -3,6 +3,7 @@ package com.das.tcamviewer2.ui
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Environment
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,6 +63,7 @@ import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import com.das.tcamviewer2.model.ImageDto
 import com.das.tcamviewer2.settingsDataManager
+import com.das.tcamviewer2.utils as globalUtils
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -322,6 +325,30 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
                     ) {
                         Icon(Icons.Default.Share, contentDescription = "Share")
                     }
+                    // Export — saves composite image (bitmap + colorbar + temps) to gallery
+                    IconButton(
+                        onClick = {
+                            val currentDto = dto ?: return@IconButton
+                            coroutineScope.launch {
+                                val exportBitmap = withContext(Dispatchers.Default) {
+                                    buildShareBitmap(currentDto, file, isCelsius)
+                                }
+                                val folder = file.parentFile?.name ?: "tCam"
+                                val name = file.nameWithoutExtension.removePrefix("img_")
+                                val saved = withContext(Dispatchers.IO) {
+                                    globalUtils.saveBitmap(exportBitmap, folder, name) != null
+                                }
+                                Toast.makeText(
+                                    context,
+                                    if (saved) "Saved to gallery: $name" else "Export failed",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        },
+                        enabled = dto?.bitmap != null
+                    ) {
+                        Icon(Icons.Default.SaveAlt, contentDescription = "Export to gallery")
+                    }
                     // Delete — removes the file and updates the library list
                     IconButton(onClick = onDelete) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
@@ -495,19 +522,20 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
     val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
     val hasThermal = dto.tLinearEnabled != 0
 
-    // Layout constants (all in px — this is an off-screen bitmap, not dp)
-    val imgW = 640          // 160 × 4
-    val imgH = 480          // 120 × 4
-    val headerH = 72
-    val sidebarW = if (hasThermal) 110 else 0
-    val totalW = imgW + sidebarW
-    val totalH = imgH + headerH
+    // All dimensions in px (off-screen bitmap — not dp)
+    val imgW     = 640          // 160 × 4
+    val imgH     = 480          // 120 × 4
+    val headerH  = 72
+    val bottomPad = 28          // keeps image/colorbar bottom away from the bitmap edge
+    val sidebarW = if (hasThermal) 120 else 0
+    val totalW   = imgW + sidebarW
+    val totalH   = headerH + imgH + bottomPad   // 580
 
     val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(result)
     canvas.drawColor(android.graphics.Color.BLACK)
 
-    // ── Header ────────────────────────────────────────────────────────────────
+    // ── Header ───────────────────────────────────────────────────────────────
     val titlePaint = android.graphics.Paint().apply {
         color = android.graphics.Color.WHITE
         textSize = 44f
@@ -528,7 +556,7 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
         subPaint
     )
 
-    // ── Thermal image (scaled 4×) ─────────────────────────────────────────────
+    // ── Thermal image (scaled 4×, starts at y = headerH) ────────────────────
     dto.bitmap?.let { src ->
         val scaled = Bitmap.createScaledBitmap(src, imgW, imgH, true)
         canvas.drawBitmap(scaled, 0f, headerH.toFloat(), null)
@@ -536,7 +564,7 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
     }
 
     if (hasThermal) {
-        // ── Spotmeter temp (centred on image, stroke + fill for readability) ──
+        // ── Spotmeter temp (centred on image, stroke + fill for contrast) ────
         val spotText = formatTemp(dto.spotmeterMean, tempScale, isCelsius)
         val spotStroke = android.graphics.Paint().apply {
             color = android.graphics.Color.BLACK
@@ -556,12 +584,13 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
         canvas.drawText(spotText, cx, cy, spotStroke)
         canvas.drawText(spotText, cx, cy, spotFill)
 
-        // ── Colour bar (40 px wide, leaving room for temp labels above/below) ─
-        val cbPad = 40               // vertical padding inside sidebar for labels
-        val cbW = 40
-        val cbH = imgH - cbPad * 2
-        val cbX = imgW + (sidebarW - cbW) / 2
-        val cbY = headerH + cbPad
+        // ── Colour bar: centred in sidebar, padded so labels fit above/below ─
+        // cbPad is the gap reserved above and below the bar for the temp labels
+        val cbPad = 50
+        val cbW   = 44
+        val cbH   = imgH - cbPad * 2         // 380 px tall
+        val cbX   = imgW + (sidebarW - cbW) / 2
+        val cbY   = headerH + cbPad          // 122
 
         val cbPixels = IntArray(256) { i ->
             val rgb = dto.palette?.get(255 - i)
@@ -574,7 +603,7 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
         canvas.drawBitmap(cbScaled, cbX.toFloat(), cbY.toFloat(), null)
         cbSrc.recycle(); cbScaled.recycle()
 
-        // ── Max / min labels ──────────────────────────────────────────────────
+        // ── Max / min labels (above and below the colour bar) ────────────────
         val tempPaint = android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
             textSize = 30f
@@ -582,13 +611,19 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
             textAlign = android.graphics.Paint.Align.CENTER
         }
         val sidebarCx = imgW + sidebarW / 2f
+        // Max: baseline sits cbPad-10 px below the image top → above the bar
         canvas.drawText(
             formatTemp(dto.maxTemperature, tempScale, isCelsius),
-            sidebarCx, (headerH + cbPad - 8).toFloat(), tempPaint
+            sidebarCx,
+            (headerH + cbPad - 12).toFloat(),   // y ≈ 110
+            tempPaint
         )
+        // Min: baseline sits cbPad-12 px above the bottom of the image area
         canvas.drawText(
             formatTemp(dto.minTemperature, tempScale, isCelsius),
-            sidebarCx, (headerH + imgH - 8).toFloat(), tempPaint
+            sidebarCx,
+            (headerH + imgH - cbPad + 34).toFloat(),  // y ≈ 504
+            tempPaint
         )
     }
 
