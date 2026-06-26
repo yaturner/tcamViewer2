@@ -4,7 +4,6 @@ import android.app.Service
 import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
-import android.os.SystemClock
 import com.das.tcamviewer2.constants.Constants
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.subjects.PublishSubject
@@ -44,7 +43,6 @@ class CameraService : Service() {
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
 
     private var running = false
-    private var totalBytesRead = 0
     private var bytesRead = 0
     private var responsePos = 0
 
@@ -52,10 +50,8 @@ class CameraService : Service() {
     private var outToSocket: OutputStream? = null
 
     private var readBuffer = ByteArray(Constants.BUFFER_LENGTH)
-    private var response = CharArray(Constants.BUFFER_LENGTH)
+    private var response = ByteArray(Constants.BUFFER_LENGTH)
     private var startFound = false
-    private var endFound = false
-    private var prevTime = 0L
     // Create the private pipeline where the socket loop dumps raw data
     private val imageChannel = PublishSubject.create<JSONObject>()
     // Binder setup that gives the ViewModel access to this service instance
@@ -78,7 +74,7 @@ class CameraService : Service() {
         super.onCreate()
 
         readBuffer = ByteArray(Constants.BUFFER_LENGTH)
-        response = CharArray(Constants.BUFFER_LENGTH)
+        response = ByteArray(Constants.BUFFER_LENGTH)
         cameraSocket = Socket()
         resetBuffers()
     }
@@ -220,59 +216,41 @@ class CameraService : Service() {
 
     private fun startListening() {
         running = true
-        totalBytesRead = 0
         bytesRead = 0
 
         listeningJob = serviceScope.launch {
+            val input = inFromSocket ?: return@launch
             while (isConnected && running) {
-                prevTime = SystemClock.elapsedRealtime()
                 try {
-                    bytesRead = inFromSocket?.read(readBuffer) ?: -1
+                    bytesRead = input.read(readBuffer)
                 } catch (e: java.io.IOException) {
-                    if (e.toString().contains("Socket closed", ignoreCase = true)) {
-                        running = false
-                    }
-                    val jsonString = String.format(Constants.ERROR_RESPONSE, e.toString())
-                    imageChannel.onNext(parseResponse(jsonString))
-                    continue
+                    Timber.e(e, "Socket read error — stopping listener")
+                    running = false
+                    try { cameraSocket?.close() } catch (_: Exception) {}
+                    cameraSocket = null
+                    break
                 }
-
-                if (bytesRead <= 0) {
-                    delay(100)
-                    continue
+                when {
+                    bytesRead < 0 -> { running = false; break }
+                    bytesRead == 0 -> { delay(100); continue }
                 }
-
                 for (index in 0 until bytesRead) {
-                    val c = readBuffer[index].toInt().toChar()
-                    if (c == '\u0002') {
-                        if (startFound) responsePos = 0 else startFound = true
-                    } else if (startFound && !endFound && c == '\u0003') {
-                        endFound = true
-                        if (responsePos < response.size) response[responsePos] = '\u0000'
-
-                        val rawResponseText = String(response, 0, responsePos)
-                        val parsedJson = parseResponse(rawResponseText)
-
-                        // --- NEW: ROUTING THE RECEIVED RESPONSE ---
-                        // Inspect the JSON keys to match the pending request handler
-                        val routed = routeToPendingRequest(parsedJson)
-
-                        if (!routed) {
-                            // Fallback: If it's a generic frame or unrequested telemetry, route to Rx image stream
-                            imageChannel.onNext(parsedJson)
+                    val b = readBuffer[index]
+                    when {
+                        b == 0x02.toByte() -> {
+                            if (startFound) responsePos = 0 else startFound = true
                         }
-
-                        resetBuffers()
-                    } else {
-                        if (startFound && !endFound) {
-                            if (responsePos < response.size) {
-                                response[responsePos] = c
-                                responsePos += 1
-                            } else {
-                                resetBuffers()
-                            }
+                        startFound && b == 0x03.toByte() -> {
+                            val parsedJson = parseResponse(
+                                String(response, 0, responsePos, StandardCharsets.UTF_8)
+                            )
+                            if (!routeToPendingRequest(parsedJson)) imageChannel.onNext(parsedJson)
+                            resetBuffers()
                         }
-                        totalBytesRead++
+                        startFound -> {
+                            if (responsePos < response.size) response[responsePos++] = b
+                            else resetBuffers()
+                        }
                     }
                 }
             }
@@ -302,9 +280,7 @@ class CameraService : Service() {
 
     private fun resetBuffers() {
         responsePos = 0
-        endFound = false
         startFound = false
-        totalBytesRead = 0
     }
 
     private fun parseResponse(responseString: String?): JSONObject {
