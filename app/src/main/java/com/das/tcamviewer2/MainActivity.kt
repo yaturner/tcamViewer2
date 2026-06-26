@@ -33,6 +33,7 @@ import com.das.tcamviewer2.ui.SettingsScreen
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
 import com.das.tcamviewer2.utils.CameraUtils
 import com.das.tcamviewer2.utils.Utils
+import timber.log.Timber
 
 lateinit var cameraService: CameraService
 lateinit var settingsDataManager: SettingsDataManager
@@ -45,10 +46,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        cameraService = CameraService()
-        settingsDataManager = SettingsDataManager(this)
-        cameraUtils = CameraUtils(this)
-        paletteFactory = PaletteFactory()
+        Timber.plant(Timber.DebugTree())
+        if (!::cameraService.isInitialized) cameraService = CameraService()
+        if (!::settingsDataManager.isInitialized) settingsDataManager = SettingsDataManager(this)
+        if (!::cameraUtils.isInitialized) cameraUtils = CameraUtils(this)
+        if (!::paletteFactory.isInitialized) paletteFactory = PaletteFactory()
         setContent {
             TcamViewer2Theme {
                 MainScreen()

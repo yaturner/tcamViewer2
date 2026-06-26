@@ -12,8 +12,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -35,6 +33,9 @@ class CameraViewModel : ViewModel() {
 
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
+
+    private val _isConnecting = MutableStateFlow(false)
+    val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
@@ -71,7 +72,6 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.Default) {
             for (json in frameChannel) processFrame(json)
         }
-        connectAndStream()
     }
 
     private fun observeSettings() {
@@ -83,22 +83,14 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun connectAndStream() {
-        viewModelScope.launch(Dispatchers.IO) {
-            connectToCamera(settingsDataManager.getCameraIp())
-        }
-        viewModelScope.launch {
-            settingsDataManager.cameraIpFlow
-                .drop(1)
-                .distinctUntilChanged()
-                .collect { ip -> withContext(Dispatchers.IO) { connectToCamera(ip) } }
-        }
-    }
-
     private fun connectToCamera(ip: String) {
+        Timber.d("connectToCamera ip=$ip")
+        _isConnecting.value = true
         cameraService.disconnect()
         cameraService.setIpAddress(ip)
         val connected = cameraService.connect()
+        Timber.d("connectToCamera result=$connected")
+        _isConnecting.value = false
         _isConnected.value = connected
         _isStreaming.value = false
         if (connected) cameraService.getImage()
@@ -107,9 +99,10 @@ class CameraViewModel : ViewModel() {
     // --- Public actions called from the UI ---
 
     fun toggleConnection() {
-        if (_isConnected.value) {
+        if (_isConnected.value || _isConnecting.value) {
             cameraService.disconnect()
             _isConnected.value = false
+            _isConnecting.value = false
             _isStreaming.value = false
         } else {
             viewModelScope.launch(Dispatchers.IO) {

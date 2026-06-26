@@ -1,7 +1,5 @@
 package com.das.tcamviewer2.ui
 
-import android.app.Activity
-import android.content.pm.ActivityInfo
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +23,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,7 +35,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -62,15 +58,6 @@ private val PALETTE_OPTIONS = listOf(
 fun CameraScreen(
     viewModel: CameraViewModel = viewModel()
 ) {
-    val activity = LocalContext.current as? Activity
-    DisposableEffect(Unit) {
-        val original = activity?.requestedOrientation
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        onDispose {
-            activity?.requestedOrientation = original ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
     val displayImageWidth = 320.dp
     val displayImageHeight = 240.dp
     val colorBarWidth = 32.dp
@@ -81,6 +68,7 @@ fun CameraScreen(
     val minTempText by viewModel.minTemp.collectAsState()
     val fpsText by viewModel.fpsCounter.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
+    val isConnecting by viewModel.isConnecting.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
     val bitmap by viewModel.currentBitmap.collectAsState()
     val currentPalette by viewModel.currentPalette.collectAsState()
@@ -137,7 +125,11 @@ fun CameraScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isConnected) "Thermal Viewer (Connected)" else "Thermal Viewer (Connecting...)",
+                        text = when {
+                            isConnected -> "Thermal Viewer (Connected)"
+                            isConnecting -> "Thermal Viewer (Connecting...)"
+                            else -> "Thermal Viewer (Disconnected)"
+                        },
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp
                     )
@@ -272,7 +264,14 @@ fun CameraScreen(
                     onClick = { viewModel.toggleConnection() },
                     contentPadding = btnPadding
                 ) {
-                    Text(if (isConnected) "Disconnect" else "Connect", fontSize = 12.sp)
+                    Text(
+                        when {
+                            isConnected -> "Disconnect"
+                            isConnecting -> "Cancel"
+                            else -> "Connect"
+                        },
+                        fontSize = 12.sp
+                    )
                 }
 
                 // Get — single frame capture; only meaningful when connected but not streaming

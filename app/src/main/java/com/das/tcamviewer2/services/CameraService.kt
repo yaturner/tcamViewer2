@@ -103,7 +103,8 @@ class CameraService : Service() {
         running = true
         val connected = withContext(Dispatchers.IO) {
             try {
-                cameraSocket = Socket(ipAddress, 5001).apply {
+                cameraSocket = Socket().apply {
+                    connect(java.net.InetSocketAddress(ipAddress, 5001), 5000)
                     inFromSocket = getInputStream()
                     outToSocket = getOutputStream()
                 }
