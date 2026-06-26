@@ -18,7 +18,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -120,31 +119,27 @@ fun CameraScreen(
         }.asImageBitmap()
     }
 
-    Scaffold(
-        topBar = {
-            if (!isConnected) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = if (isConnecting) "Thermal Viewer (Connecting...)"
-                                   else "Thermal Viewer (Disconnected)",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 20.sp
-                        )
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (!isConnected) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = if (isConnecting) "Thermal Viewer (Connecting...)"
+                               else "Thermal Viewer (Disconnected)",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 20.sp
                     )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            }
+            )
         }
-    ) { innerPadding ->
 
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .background(Color(0xFF80C0FF))
         ) {
             // --- Image + sidebar row ---
