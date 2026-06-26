@@ -4,6 +4,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,18 +55,16 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.SettingsDataManager
 import com.das.tcamviewer2.constants.Constants
-import com.das.tcamviewer2.model.CameraConfig
 import com.das.tcamviewer2.model.CameraViewModel
-import java.net.Inet4Address
-import kotlin.coroutines.resume
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import java.net.Inet4Address
+import kotlin.coroutines.resume
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -565,16 +564,42 @@ For questions about this privacy statement, please contact the developer through
 }
 
 private val EMISSIVITY_PRESETS = listOf(
-    "Human skin (98%)"    to 98,
-    "Water (96%)"         to 96,
-    "Rubber / Fabric (95%)" to 95,
-    "Painted surface (95%)" to 95,
-    "Default (94%)"       to 94,
-    "Concrete / Brick (92%)" to 92,
-    "Wood (91%)"          to 91,
-    "Plastics (85%)"      to 85,
-    "Oxidized copper (65%)" to 65,
-    "Polished metal (10%)" to 10
+"Aluminum, polished........5" to 5,
+"Aluminum, oxidized........25" to 25,
+"Brass, tarnished..........22" to 22,
+"Brass, polished...........3" to 3,
+"Brick, common.............85" to 85,
+"Brick, plastered..........94" to 94,
+"Carbon....................96" to 96,
+"Chipboard, untreated......90" to 90,
+"Clay, fired...............91" to 91,
+"Concrete..................95" to 95,
+"Elec Tape, Black..........96" to 96,
+"Enamel....................90" to 90,
+"Formica.................. 93" to 93,
+"Soil......................93" to 93,
+"Glass Pane................97" to 97,
+"Granite.................. 86" to 86,
+"Iron, hot rolled..........77" to 77,
+"Iron sheet, galvanized....28" to 28,
+"Lacquer, black............97" to 97,
+"Lacquer, white............87" to 87,
+"Lead, oxidized............63" to 63,
+"Leather, tanned...........77" to 77,
+"Oil, thick................82" to 82,
+"Paint, oil, avg.......... 94" to 94,
+"Paper, white..............90" to 90,
+"Plasterboard..............90" to 90,
+"Plastic, PCB..............91" to 91,
+"Plastic, PVC..............93" to 93,
+"Porcelain, glazed.........92" to 92,
+"Rubber....................94" to 94,
+"Snow......................80" to 80,
+"Steel, rolled............ 50" to 50,
+"Tar Paper................ 92" to 92,
+"Varnish, oak floor........92" to 92,
+"Water.....................98" to 98,
+"Wood, plywood.............82" to 82
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -662,7 +687,9 @@ private fun CameraSettingsSection(viewModel: CameraViewModel) {
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        listOf("High" to Constants.GAIN_MODE_HIGH, "Low" to Constants.GAIN_MODE_LOW, "Auto" to Constants.GAIN_MODE_AUTO).forEach { (label, mode) ->
+        listOf("High" to Constants.GAIN_MODE_HIGH,
+            "Low" to Constants.GAIN_MODE_LOW,
+            "Auto" to Constants.GAIN_MODE_AUTO).forEach { (label, mode) ->
             Row(
                 modifier = Modifier
                     .selectable(selected = localGainMode == mode, onClick = {
