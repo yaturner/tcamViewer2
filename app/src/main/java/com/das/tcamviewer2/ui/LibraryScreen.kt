@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -74,6 +75,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,19 +91,25 @@ fun LibraryScreen() {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+            val picturesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
                 ?: context.filesDir
-            val groups = rootDir.listFiles()
-                ?.filter { it.isDirectory }
-                ?.sortedByDescending { it.name }
-                ?.mapNotNull { dateDir ->
-                    val files = dateDir.listFiles { f -> f.extension == "tjsn" }
-                        ?.sortedByDescending { it.name }
-                        ?: emptyList()
-                    if (files.isNotEmpty()) dateDir.name to files else null
-                }
-                ?: emptyList()
-            fileGroups = groups
+            val moviesDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                ?: context.filesDir
+            val folderMap = mutableMapOf<String, MutableList<File>>()
+            for (rootDir in listOf(picturesDir, moviesDir)) {
+                rootDir.listFiles()
+                    ?.filter { it.isDirectory }
+                    ?.forEach { dateDir ->
+                        val files = dateDir.listFiles { f ->
+                            f.extension == "tjsn" || f.extension == "mtjsn"
+                        } ?: return@forEach
+                        if (files.isNotEmpty())
+                            folderMap.getOrPut(dateDir.name) { mutableListOf() }.addAll(files)
+                    }
+            }
+            fileGroups = folderMap.entries
+                .sortedByDescending { it.key }
+                .map { (folder, files) -> folder to files.sortedByDescending { it.name } }
             isLoading = false
         }
     }
@@ -189,7 +197,7 @@ fun LibraryScreen() {
                     modifier = Modifier.fillMaxSize().padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("No saved images", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("No saved files", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 else -> LazyVerticalGrid(
@@ -272,7 +280,14 @@ private fun BrowseWindow(
     LaunchedEffect(file) {
         dto = null   // show spinner while loading the new image
         dto = withContext(Dispatchers.Default) {
-            runCatching { ImageDto.create(file.absolutePath, null) }.getOrNull()
+            runCatching {
+                if (file.extension == "mtjsn") {
+                    val json = readFirstMtjsnFrame(file) ?: return@runCatching null
+                    ImageDto.create(json, null)
+                } else {
+                    ImageDto.create(file.absolutePath, null)
+                }
+            }.getOrNull()
         }
     }
 
@@ -515,7 +530,12 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
     LaunchedEffect(file) {
         thumbnail = withContext(Dispatchers.Default) {
             runCatching {
-                ImageDto.create(file.absolutePath, null).bitmap?.asImageBitmap()
+                if (file.extension == "mtjsn") {
+                    val json = readFirstMtjsnFrame(file) ?: return@runCatching null
+                    ImageDto.create(json, null).bitmap?.asImageBitmap()
+                } else {
+                    ImageDto.create(file.absolutePath, null).bitmap?.asImageBitmap()
+                }
             }.getOrNull()
         }
     }
@@ -563,6 +583,17 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
                         .size(20.dp)
                 )
             }
+            if (file.extension == "mtjsn") {
+                Icon(
+                    imageVector = Icons.Default.Videocam,
+                    contentDescription = "Video recording",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp)
+                        .size(20.dp)
+                )
+            }
         }
         Text(
             text = formatFilename(file.name),
@@ -592,12 +623,26 @@ private fun formatDateFolder(name: String): String {
     return "$month ${parts[1]}, ${parts[2]}"
 }
 
-/** img_HH_mm_ss.tjsn → "HH:mm:ss" */
+/** img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.mtjsn → "HH:mm:ss" */
 private fun formatFilename(name: String): String {
-    val base = name.removeSuffix(".tjsn").removePrefix("img_")
+    val base = when {
+        name.endsWith(".mtjsn") -> name.removeSuffix(".mtjsn").removePrefix("vid_")
+        else -> name.removeSuffix(".tjsn").removePrefix("img_")
+    }
     val parts = base.split("_")
     return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name
 }
+
+private suspend fun readFirstMtjsnFrame(file: File): JSONObject? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val bytes = file.readBytes()
+            val etxIdx = bytes.indexOf(0x03.toByte())
+            val jsonStr = if (etxIdx >= 0) String(bytes, 0, etxIdx, Charsets.US_ASCII)
+                          else String(bytes, Charsets.US_ASCII)
+            JSONObject(jsonStr)
+        }.getOrNull()
+    }
 
 /**
  * Builds a composite share image: scaled thermal image + colour bar sidebar + temperature labels
