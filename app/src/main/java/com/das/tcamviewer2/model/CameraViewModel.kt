@@ -59,6 +59,9 @@ class CameraViewModel : ViewModel() {
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
 
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
     val currentBitmap: StateFlow<Bitmap?> = _currentBitmap.asStateFlow()
 
@@ -203,6 +206,7 @@ class CameraViewModel : ViewModel() {
         if (_isStreaming.value) {
             cameraService.stopStreaming()
             _isStreaming.value = false
+            _isRecording.value = false
             frameCount = 0
             fpsWindowStart = -1L
             _fpsCounter.value = "-- fps"
@@ -212,6 +216,11 @@ class CameraViewModel : ViewModel() {
             cameraService.startStreaming()
             _isStreaming.value = true
         }
+    }
+
+    fun toggleRecording() {
+        if (!_isStreaming.value) return
+        _isRecording.value = !_isRecording.value
     }
 
     fun setPalette(name: String) {

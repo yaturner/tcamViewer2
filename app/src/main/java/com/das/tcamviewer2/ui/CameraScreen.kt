@@ -78,6 +78,7 @@ fun CameraScreen(
     val isConnected by viewModel.isConnected.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
+    val isRecording by viewModel.isRecording.collectAsState()
     val bitmap by viewModel.currentBitmap.collectAsState()
     val currentPalette by viewModel.currentPalette.collectAsState()
     val histogram by viewModel.histogram.collectAsState()
@@ -87,6 +88,7 @@ fun CameraScreen(
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
+    var streamMenuExpanded by remember { mutableStateOf(false) }
 
     // Histogram bitmap: built off-thread whenever frame data or palette changes
     var histogramBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -356,13 +358,42 @@ fun CameraScreen(
                     Text("Save", fontSize = 12.sp)
                 }
 
-                // Stream / Stop
-                FeedbackButton(
-                    onClick = { viewModel.toggleStreaming() },
-                    enabled = isConnected,
-                    contentPadding = btnPadding
-                ) {
-                    Text(if (isStreaming) "Stop" else "Stream", fontSize = 12.sp)
+                // Stream dropdown: Start/Stop + Record
+                Box {
+                    FeedbackButton(
+                        onClick = { streamMenuExpanded = true },
+                        enabled = isConnected,
+                        contentPadding = btnPadding
+                    ) {
+                        Text(
+                            when {
+                                isRecording -> "● Rec"
+                                isStreaming -> "Stop"
+                                else        -> "Stream"
+                            },
+                            fontSize = 12.sp
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = streamMenuExpanded,
+                        onDismissRequest = { streamMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (isStreaming) "Stop" else "Start") },
+                            onClick = {
+                                viewModel.toggleStreaming()
+                                streamMenuExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (isRecording) "Stop Recording" else "Record") },
+                            enabled = isStreaming,
+                            onClick = {
+                                viewModel.toggleRecording()
+                                streamMenuExpanded = false
+                            }
+                        )
+                    }
                 }
 
                 // Palette dropdown
