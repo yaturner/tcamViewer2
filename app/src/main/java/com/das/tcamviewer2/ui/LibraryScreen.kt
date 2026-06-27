@@ -12,13 +12,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -34,8 +38,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -186,9 +188,12 @@ fun LibraryScreen() {
                     Text("No saved images", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                else -> LazyColumn(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize().padding(innerPadding)
+                ) {
                     displayGroups.forEach { (folderName, files) ->
-                        item(key = folderName) {
+                        item(key = "header_$folderName", span = { GridItemSpan(2) }) {
                             Text(
                                 text = formatDateFolder(folderName),
                                 style = MaterialTheme.typography.labelMedium,
@@ -201,7 +206,7 @@ fun LibraryScreen() {
                         }
                         items(files, key = { it.absolutePath }) { file ->
                             val isSelected = file.absolutePath in selectedPaths
-                            ThumbnailListItem(
+                            ThumbnailGridCell(
                                 file = file,
                                 isSelected = isSelected,
                                 onClick = {
@@ -211,7 +216,6 @@ fun LibraryScreen() {
                                         selectedPaths + file.absolutePath
                                 }
                             )
-                            HorizontalDivider()
                         }
                     }
                 }
@@ -441,7 +445,7 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
 }
 
 @Composable
-private fun ThumbnailListItem(file: File, isSelected: Boolean, onClick: () -> Unit) {
+private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Unit) {
     var thumbnail by remember(file) { mutableStateOf<ImageBitmap?>(null) }
 
     LaunchedEffect(file) {
@@ -452,42 +456,59 @@ private fun ThumbnailListItem(file: File, isSelected: Boolean, onClick: () -> Un
         }
     }
 
-    val containerColor = if (isSelected)
+    val bgColor = if (isSelected)
         MaterialTheme.colorScheme.primaryContainer
     else
         MaterialTheme.colorScheme.surface
 
-    ListItem(
-        colors = ListItemDefaults.colors(containerColor = containerColor),
-        leadingContent = {
-            Box(modifier = Modifier.size(width = 80.dp, height = 60.dp)) {
-                if (thumbnail != null) {
-                    Image(
-                        bitmap = thumbnail!!,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.FillBounds
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray))
-                }
-                if (isSelected) {
-                    Icon(
-                        imageVector = Icons.Filled.CheckCircle,
-                        contentDescription = "Selected",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(20.dp)
-                    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .padding(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(4f / 3f)
+        ) {
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail!!,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.DarkGray),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
                 }
             }
-        },
-        headlineContent = { Text(formatFilename(file.name)) },
-        supportingContent = { Text(file.name) },
-        modifier = Modifier.clickable(onClick = onClick)
-    )
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(20.dp)
+                )
+            }
+        }
+        Text(
+            text = formatFilename(file.name),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp)
+        )
+    }
 }
 
 private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
