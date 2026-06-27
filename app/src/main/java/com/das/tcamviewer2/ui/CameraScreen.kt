@@ -262,7 +262,18 @@ fun CameraScreen(
                             modifier = Modifier
                                 .width(colorBarWidth)
                                 .fillMaxHeight()
-                                .padding(end = 5.dp),
+                                .padding(end = 5.dp)
+                                .pointerInput(currentPalette) {
+                                    detectTapGestures { offset ->
+                                        val idx = PALETTE_OPTIONS.indexOf(currentPalette)
+                                        when {
+                                            offset.y < size.height / 3f ->
+                                                viewModel.setPalette(PALETTE_OPTIONS[(idx - 1 + PALETTE_OPTIONS.size) % PALETTE_OPTIONS.size])
+                                            offset.y > size.height * 2f / 3f ->
+                                                viewModel.setPalette(PALETTE_OPTIONS[(idx + 1) % PALETTE_OPTIONS.size])
+                                        }
+                                    }
+                                },
                             contentScale = ContentScale.FillBounds
                         )
 
