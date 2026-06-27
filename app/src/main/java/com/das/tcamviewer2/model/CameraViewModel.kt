@@ -6,7 +6,9 @@ import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.das.tcamviewer2.cameraService
+import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
+import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.Dispatchers
@@ -99,11 +101,25 @@ class CameraViewModel : ViewModel() {
 
     private fun observeSettings() {
         viewModelScope.launch {
-            settingsDataManager.selectedPaletteFlow.collect {
-                selectedPalette = it
-                _currentPalette.value = it
+            settingsDataManager.selectedPaletteFlow.collect { palette ->
+                selectedPalette = palette
+                _currentPalette.value = palette
+                remapCurrentFrame(palette)
             }
         }
+    }
+
+    private suspend fun remapCurrentFrame(paletteName: String) {
+        val dto = _currentImageDto.value ?: return
+        val palette = paletteFactory.getPaletteByName(paletteName)
+        val isManualRange = settingsDataManager.isManualRange()
+        val manualMin = if (isManualRange) settingsDataManager.getManualMinTemperature() else 0f
+        val manualMax = if (isManualRange) settingsDataManager.getManualMaxTemperature() else 0f
+        val isCelsius = settingsDataManager.isUnitsCelsius()
+        val bmp = withContext(Dispatchers.Default) {
+            cameraUtils.remapWithPalette(dto, palette, isManualRange, manualMin, manualMax, isCelsius)
+        }
+        if (bmp != null) _currentBitmap.value = bmp
     }
 
     private suspend fun connectToCamera(ip: String) {

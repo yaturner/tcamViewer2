@@ -158,6 +158,35 @@ class CameraUtils @Inject constructor(
         }
     }
 
+    fun remapWithPalette(
+        dto: ImageDto,
+        palette: Array<IntArray?>?,
+        isManualRange: Boolean,
+        manualMin: Float,
+        manualMax: Float,
+        isCelsius: Boolean
+    ): Bitmap? {
+        val data = dto.imageData?.copyOf() ?: return null
+        val out = IntArray(data.size)
+        if (dto.isAGC) {
+            for (i in out.indices) {
+                val idx = data[i].coerceIn(0, 255)
+                out[i] = rgbToPixel(palette?.get(idx))
+            }
+        } else {
+            val (rangeMin, rangeMax) = getRadiometricTemperatures(dto, isManualRange, manualMin, manualMax, isCelsius)
+            val diff = if (rangeMax > rangeMin) rangeMax - rangeMin else 1
+            for (i in out.indices) {
+                val v = if (isManualRange) data[i].coerceIn(rangeMin, rangeMax) else data[i]
+                val idx = (((v - rangeMin) * 255) / diff).coerceIn(0, 255)
+                out[i] = rgbToPixel(palette?.get(idx))
+            }
+        }
+        val bmp = Bitmap.createBitmap(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, Bitmap.Config.ARGB_8888)
+        bmp.setPixels(out, 0, Constants.IMAGE_WIDTH, 0, 0, Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT)
+        return bmp
+    }
+
     fun getRadiometricTemperatures(
         imageDto: ImageDto,
         isManualRange: Boolean,
