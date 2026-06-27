@@ -650,7 +650,7 @@ private fun formatFilename(name: String): String {
     return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name
 }
 
-private data class VideoFrame(val bitmap: ImageBitmap, val dto: ImageDto)
+private data class VideoFrame(val bitmap: ImageBitmap, val dto: ImageDto, val timestampMs: Long)
 private data class MtjsnContent(val frames: List<JSONObject>, val videoInfo: JSONObject?)
 
 private suspend fun readMtjsnContent(file: File): MtjsnContent =
@@ -700,16 +700,23 @@ private fun parseVideoTimeMs(t: String): Long? = runCatching {
     p[0].toLong() * 3_600_000L + p[1].toLong() * 60_000L + p[2].split(".")[0].toLong() * 1_000L + ms
 }.getOrNull()
 
+private fun parseFrameTimestampMs(json: JSONObject): Long =
+    runCatching {
+        val timeStr = json.getJSONObject("metadata").optString("Time", "")
+        parseVideoTimeMs(timeStr) ?: 0L
+    }.getOrElse { 0L }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     BackHandler(onBack = onDismiss)
 
     var videoFrames by remember { mutableStateOf<List<VideoFrame>>(emptyList()) }
+    var frameIntervals by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var fallbackIntervalMs by remember { mutableStateOf(125L) }
     var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentIndex by remember { mutableIntStateOf(0) }
-    var frameIntervalMs by remember { mutableStateOf(125L) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
 
@@ -718,23 +725,33 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
         isPlaying = false
         currentIndex = 0
         val content = withContext(Dispatchers.IO) { readMtjsnContent(file) }
-        frameIntervalMs = calculateFrameInterval(content.videoInfo, content.frames.size)
+        fallbackIntervalMs = calculateFrameInterval(content.videoInfo, content.frames.size)
         val loaded = ArrayList<VideoFrame>(content.frames.size)
         withContext(Dispatchers.Default) {
             for (json in content.frames) {
                 val dto = runCatching { ImageDto.create(json, null) }.getOrNull() ?: continue
                 val bmp = dto.bitmap?.asImageBitmap() ?: continue
-                loaded.add(VideoFrame(bmp, dto))
+                loaded.add(VideoFrame(bmp, dto, parseFrameTimestampMs(json)))
             }
         }
+        // Compute per-frame display durations from consecutive metadata timestamps.
+        // Fall back to the average interval for any gap that looks wrong (<10ms or >5s).
+        val fb = fallbackIntervalMs
+        val intervals = ArrayList<Long>(loaded.size)
+        for (i in 0 until loaded.size - 1) {
+            val dt = loaded[i + 1].timestampMs - loaded[i].timestampMs
+            intervals.add(if (dt in 10L..5_000L) dt else fb)
+        }
+        intervals.add(intervals.lastOrNull() ?: fb)  // last frame: same duration as preceding
         videoFrames = loaded
+        frameIntervals = intervals
         isLoading = false
     }
 
     LaunchedEffect(isPlaying) {
         if (!isPlaying || videoFrames.isEmpty()) return@LaunchedEffect
         while (isPlaying) {
-            delay(frameIntervalMs)
+            delay(frameIntervals.getOrElse(currentIndex) { fallbackIntervalMs })
             val next = currentIndex + 1
             if (next >= videoFrames.size) {
                 isPlaying = false
