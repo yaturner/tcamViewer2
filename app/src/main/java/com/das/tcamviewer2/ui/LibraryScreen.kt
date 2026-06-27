@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NavigateBefore
+import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
@@ -46,6 +48,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,7 +85,7 @@ fun LibraryScreen() {
     var selectedPaths by remember { mutableStateOf(emptySet<String>()) }
     var sortAscending by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var browseFile by remember { mutableStateOf<File?>(null) }
+    var browseFiles by remember { mutableStateOf<List<File>>(emptyList()) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -116,10 +119,6 @@ fun LibraryScreen() {
         fileGroups.flatMap { it.second }.map { it.absolutePath }.toSet()
     }
 
-    val firstSelected = remember(selectedPaths, displayGroups) {
-        displayGroups.flatMap { it.second }.firstOrNull { it.absolutePath in selectedPaths }
-    }
-
     // Wrap in a Box so BrowseWindow can overlay as a sibling of the Scaffold
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -131,7 +130,11 @@ fun LibraryScreen() {
                     },
                     actions = {
                         if (selectedPaths.isNotEmpty()) {
-                            IconButton(onClick = { browseFile = firstSelected }) {
+                            IconButton(onClick = {
+                                browseFiles = displayGroups
+                                    .flatMap { it.second }
+                                    .filter { it.absolutePath in selectedPaths }
+                            }) {
                                 Icon(Icons.Default.Visibility, contentDescription = "Browse")
                             }
                             IconButton(onClick = {
@@ -224,17 +227,17 @@ fun LibraryScreen() {
         }
 
         // Browse overlay — drawn on top of the Scaffold, fills the same area
-        browseFile?.let { file ->
+        if (browseFiles.isNotEmpty()) {
             BrowseWindow(
-                file = file,
-                onDismiss = { browseFile = null },
-                onDelete = {
-                    file.delete()
+                files = browseFiles,
+                onDismiss = { browseFiles = emptyList() },
+                onDelete = { deletedFile ->
+                    deletedFile.delete()
                     fileGroups = fileGroups.mapNotNull { (folder, files) ->
-                        val remaining = files.filter { it.absolutePath != file.absolutePath }
+                        val remaining = files.filter { it.absolutePath != deletedFile.absolutePath }
                         if (remaining.isNotEmpty()) folder to remaining else null
                     }
-                    browseFile = null
+                    browseFiles = browseFiles.filter { it.absolutePath != deletedFile.absolutePath }
                 }
             )
         }
@@ -243,8 +246,22 @@ fun LibraryScreen() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit) {
+private fun BrowseWindow(
+    files: List<File>,
+    onDismiss: () -> Unit,
+    onDelete: (File) -> Unit
+) {
     BackHandler(onBack = onDismiss)
+
+    var currentIndex by remember { mutableIntStateOf(0) }
+
+    // Keep index in bounds when the list shrinks after a delete
+    LaunchedEffect(files.size) {
+        if (files.isEmpty()) onDismiss()
+        else currentIndex = currentIndex.coerceAtMost(files.size - 1)
+    }
+
+    val file = files.getOrNull(currentIndex) ?: return
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -253,6 +270,7 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
     val isCelsius = tempUnit == "Celsius"
 
     LaunchedEffect(file) {
+        dto = null   // show spinner while loading the new image
         dto = withContext(Dispatchers.Default) {
             runCatching { ImageDto.create(file.absolutePath, null) }.getOrNull()
         }
@@ -356,19 +374,24 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
                     ) {
                         Icon(Icons.Default.SaveAlt, contentDescription = "Export to gallery")
                     }
-                    // Delete — removes the file and updates the library list
-                    IconButton(onClick = onDelete) {
+                    // Delete — removes the current file from the list
+                    IconButton(onClick = { onDelete(file) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                     }
                 }
             )
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color.Black),
+                .background(Color.Black)
+        ) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             when {
@@ -443,7 +466,45 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
                 }
                 else -> Text("Could not load image", color = Color.White)
             }
+        } // end image Box
+
+        // Prev / Next navigation — only shown when browsing multiple selected images
+        if (files.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { currentIndex-- },
+                    enabled = currentIndex > 0
+                ) {
+                    Icon(
+                        Icons.Default.NavigateBefore,
+                        contentDescription = "Previous",
+                        tint = Color.White
+                    )
+                }
+                Text(
+                    text = "${currentIndex + 1} / ${files.size}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                IconButton(
+                    onClick = { currentIndex++ },
+                    enabled = currentIndex < files.size - 1
+                ) {
+                    Icon(
+                        Icons.Default.NavigateNext,
+                        contentDescription = "Next",
+                        tint = Color.White
+                    )
+                }
+            }
         }
+        } // end Column
     }
 }
 
