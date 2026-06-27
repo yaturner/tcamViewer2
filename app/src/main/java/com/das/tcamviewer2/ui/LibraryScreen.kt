@@ -30,10 +30,14 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -73,6 +77,7 @@ import com.das.tcamviewer2.settingsDataManager
 import com.das.tcamviewer2.utils as globalUtils
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -262,6 +267,7 @@ private fun BrowseWindow(
     BackHandler(onBack = onDismiss)
 
     var currentIndex by remember { mutableIntStateOf(0) }
+    var showVideoPlayer by remember { mutableStateOf(false) }
 
     // Keep index in bounds when the list shrinks after a delete
     LaunchedEffect(files.size) {
@@ -307,6 +313,7 @@ private fun BrowseWindow(
         createBitmap(1, 256).also { it.setPixels(pixels, 0, 1, 0, 0, 1, 256) }.asImageBitmap()
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
@@ -330,6 +337,12 @@ private fun BrowseWindow(
                     }
                 },
                 actions = {
+                    // Play — opens video player for .mtjsn recordings
+                    if (file.extension == "mtjsn") {
+                        IconButton(onClick = { showVideoPlayer = true }) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Play video")
+                        }
+                    }
                     // Share — composites the full screen (image + colorbar + temps) and shares as PNG
                     IconButton(
                         onClick = {
@@ -521,6 +534,10 @@ private fun BrowseWindow(
         }
         } // end Column
     }
+    if (showVideoPlayer) {
+        VideoPlayerWindow(file = file, onDismiss = { showVideoPlayer = false })
+    }
+    } // end Box
 }
 
 @Composable
@@ -631,6 +648,232 @@ private fun formatFilename(name: String): String {
     }
     val parts = base.split("_")
     return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name
+}
+
+private data class VideoFrame(val bitmap: ImageBitmap, val dto: ImageDto)
+private data class MtjsnContent(val frames: List<JSONObject>, val videoInfo: JSONObject?)
+
+private suspend fun readMtjsnContent(file: File): MtjsnContent =
+    withContext(Dispatchers.IO) {
+        val frames = mutableListOf<JSONObject>()
+        val sb = StringBuilder()
+        file.inputStream().use { stream ->
+            val buf = ByteArray(8192)
+            while (true) {
+                val n = stream.read(buf)
+                if (n < 0) break
+                for (i in 0 until n) {
+                    val b = buf[i].toInt() and 0xFF
+                    if (b == 0x03) {
+                        if (sb.isNotEmpty()) {
+                            runCatching {
+                                val json = JSONObject(sb.toString())
+                                if (json.has("radiometric")) frames.add(json)
+                            }
+                            sb.clear()
+                        }
+                    } else {
+                        sb.append(b.toChar())
+                    }
+                }
+            }
+        }
+        // Content remaining after the last ETX (no trailing ETX) is the footer JSON
+        val footer = if (sb.isNotEmpty())
+            runCatching { JSONObject(sb.toString()).optJSONObject("video_info") }.getOrNull()
+        else null
+        MtjsnContent(frames, footer)
+    }
+
+private fun calculateFrameInterval(videoInfo: JSONObject?, numFrames: Int): Long {
+    if (videoInfo == null || numFrames <= 1) return 125L
+    return runCatching {
+        val startMs = parseVideoTimeMs(videoInfo.getString("start_time")) ?: return@runCatching 125L
+        val endMs   = parseVideoTimeMs(videoInfo.getString("end_time"))   ?: return@runCatching 125L
+        if (endMs > startMs) (endMs - startMs) / numFrames else 125L
+    }.getOrElse { 125L }
+}
+
+private fun parseVideoTimeMs(t: String): Long? = runCatching {
+    val p = t.split(":")
+    val ms = p[2].split(".").let { it.getOrNull(1)?.padEnd(3,'0')?.take(3)?.toLong() ?: 0L }
+    p[0].toLong() * 3_600_000L + p[1].toLong() * 60_000L + p[2].split(".")[0].toLong() * 1_000L + ms
+}.getOrNull()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
+
+    var videoFrames by remember { mutableStateOf<List<VideoFrame>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentIndex by remember { mutableIntStateOf(0) }
+    var frameIntervalMs by remember { mutableStateOf(125L) }
+    val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
+    val isCelsius = tempUnit == "Celsius"
+
+    LaunchedEffect(file) {
+        isLoading = true
+        isPlaying = false
+        currentIndex = 0
+        val content = withContext(Dispatchers.IO) { readMtjsnContent(file) }
+        frameIntervalMs = calculateFrameInterval(content.videoInfo, content.frames.size)
+        val loaded = ArrayList<VideoFrame>(content.frames.size)
+        withContext(Dispatchers.Default) {
+            for (json in content.frames) {
+                val dto = runCatching { ImageDto.create(json, null) }.getOrNull() ?: continue
+                val bmp = dto.bitmap?.asImageBitmap() ?: continue
+                loaded.add(VideoFrame(bmp, dto))
+            }
+        }
+        videoFrames = loaded
+        isLoading = false
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying || videoFrames.isEmpty()) return@LaunchedEffect
+        while (isPlaying) {
+            delay(frameIntervalMs)
+            val next = currentIndex + 1
+            if (next >= videoFrames.size) {
+                isPlaying = false
+            } else {
+                currentIndex = next
+            }
+        }
+    }
+
+    val currentFrame = videoFrames.getOrNull(currentIndex)
+    val hasThermal = currentFrame?.dto?.tLinearEnabled != 0
+    val tempScale = if (currentFrame?.dto?.tLinearResolution == 0) 10f else 100f
+
+    val colorBarBitmap = remember(currentFrame?.dto?.paletteName) {
+        val palette = paletteFactory.getPaletteByName(currentFrame?.dto?.paletteName)
+            ?: return@remember null
+        val pix = IntArray(256) { i ->
+            val rgb = palette[255 - i]
+            (0xFF shl 24) or ((rgb?.get(0) ?: 0) shl 16) or ((rgb?.get(1) ?: 0) shl 8) or (rgb?.get(2) ?: 0)
+        }
+        createBitmap(1, 256).also { it.setPixels(pix, 0, 1, 0, 0, 1, 256) }.asImageBitmap()
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                },
+                title = {
+                    Column {
+                        Text(formatFilename(file.name), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (isLoading) "Loading…" else "${videoFrames.size} frames",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color.Black)
+        ) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    isLoading -> CircularProgressIndicator()
+                    videoFrames.isEmpty() -> Text("No frames to display", color = Color.White)
+                    currentFrame != null -> Row(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                bitmap = currentFrame.bitmap,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                            if (hasThermal) {
+                                Text(
+                                    text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                        if (hasThermal && colorBarBitmap != null) {
+                            Column(
+                                modifier = Modifier
+                                    .width(64.dp)
+                                    .fillMaxHeight()
+                                    .padding(vertical = 16.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
+                                    fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                                Image(bitmap = colorBarBitmap, contentDescription = null,
+                                    modifier = Modifier.weight(1f).width(28.dp).padding(vertical = 4.dp),
+                                    contentScale = ContentScale.FillBounds)
+                                Text(formatTemp(currentFrame.dto.minTemperature, tempScale, isCelsius),
+                                    fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!isLoading && videoFrames.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF222222))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { isPlaying = !isPlaying }) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White
+                        )
+                    }
+                    Slider(
+                        value = currentIndex.toFloat(),
+                        onValueChange = {
+                            isPlaying = false
+                            currentIndex = it.toInt().coerceIn(0, videoFrames.size - 1)
+                        },
+                        valueRange = 0f..maxOf(videoFrames.size - 1, 0).toFloat(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.Gray
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "${currentIndex + 1}/${videoFrames.size}",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        modifier = androidx.compose.ui.Modifier.width(52.dp).padding(start = 4.dp)
+                    )
+                }
+            }
+        }
+    }
 }
 
 private suspend fun readFirstMtjsnFrame(file: File): JSONObject? =
