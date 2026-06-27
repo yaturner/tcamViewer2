@@ -20,6 +20,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import timber.log.Timber
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class CameraConfig(
     val agcEnabled: Boolean = false,
@@ -61,6 +65,11 @@ class CameraViewModel : ViewModel() {
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    @Volatile private var recordingStream: FileOutputStream? = null
+    @Volatile private var recordingFrameCount: Int = 0
+    private var recordingStartMs: Long = 0L
+    private var startedStreamingForRecord = false
 
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
     val currentBitmap: StateFlow<Bitmap?> = _currentBitmap.asStateFlow()
@@ -209,9 +218,9 @@ class CameraViewModel : ViewModel() {
 
     fun toggleStreaming() {
         if (_isStreaming.value) {
+            if (_isRecording.value) finishRecording(stopStreamIfAutoStarted = false)
             cameraService.stopStreaming()
             _isStreaming.value = false
-            _isRecording.value = false
             frameCount = 0
             fpsWindowStart = -1L
             _fpsCounter.value = "-- fps"
@@ -224,8 +233,69 @@ class CameraViewModel : ViewModel() {
     }
 
     fun toggleRecording() {
-        if (!_isStreaming.value) return
-        _isRecording.value = !_isRecording.value
+        if (_isRecording.value) {
+            finishRecording()
+            return
+        }
+        if (!_isConnected.value) return
+        if (!_isStreaming.value) {
+            startedStreamingForRecord = true
+            frameCount = 0
+            fpsWindowStart = -1L
+            cameraService.startStreaming()
+            _isStreaming.value = true
+        } else {
+            startedStreamingForRecord = false
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                recordingStream = cameraUtils.openRecordingFile()
+                recordingStartMs = System.currentTimeMillis()
+                recordingFrameCount = 0
+                _isRecording.value = true
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to open recording file")
+                if (startedStreamingForRecord) {
+                    cameraService.stopStreaming()
+                    _isStreaming.value = false
+                    startedStreamingForRecord = false
+                }
+            }
+        }
+    }
+
+    private fun finishRecording(stopStreamIfAutoStarted: Boolean = true) {
+        val stream = recordingStream
+        recordingStream = null
+        val count = recordingFrameCount
+        val endMs = System.currentTimeMillis()
+        _isRecording.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            if (stream != null) {
+                try {
+                    stream.write(buildFooterJson(recordingStartMs, endMs, count).toByteArray(Charsets.US_ASCII))
+                    stream.close()
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to write recording footer")
+                }
+            }
+            if (stopStreamIfAutoStarted && startedStreamingForRecord) {
+                startedStreamingForRecord = false
+                cameraService.stopStreaming()
+                _isStreaming.value = false
+                frameCount = 0
+                fpsWindowStart = -1L
+                _fpsCounter.value = "-- fps"
+            }
+        }
+    }
+
+    private fun buildFooterJson(startMs: Long, endMs: Long, numFrames: Int): String {
+        val timeFmt = SimpleDateFormat("H:mm:ss.SSS", Locale.US)
+        val dateFmt = SimpleDateFormat("M/d/yy", Locale.US)
+        val start = Date(startMs)
+        val end = Date(endMs)
+        return """{"video_info":{"start_time":"${timeFmt.format(start)}","start_date":"${dateFmt.format(start)}","end_time":"${timeFmt.format(end)}","end_date":"${dateFmt.format(end)}","num_frames":$numFrames,"version":1}}"""
     }
 
     fun setPalette(name: String) {
@@ -261,6 +331,14 @@ class CameraViewModel : ViewModel() {
     private suspend fun processFrame(json: JSONObject) {
         if (!json.has("radiometric")) return
         try {
+            val stream = recordingStream
+            if (stream != null) {
+                withContext(Dispatchers.IO) {
+                    stream.write(json.toString().toByteArray(Charsets.US_ASCII))
+                    stream.write(0x03)
+                }
+                recordingFrameCount++
+            }
             val dto = ImageDto.create(json, selectedPalette)
             val celsius = settingsDataManager.isUnitsCelsius()
             _currentImageDto.value = dto

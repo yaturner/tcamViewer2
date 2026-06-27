@@ -387,7 +387,7 @@ fun CameraScreen(
                         )
                         DropdownMenuItem(
                             text = { Text(if (isRecording) "Stop Recording" else "Record") },
-                            enabled = isStreaming,
+                            enabled = isConnected,
                             onClick = {
                                 viewModel.toggleRecording()
                                 streamMenuExpanded = false

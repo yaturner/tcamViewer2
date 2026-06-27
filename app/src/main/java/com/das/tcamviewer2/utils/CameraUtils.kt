@@ -244,6 +244,15 @@ class CameraUtils @Inject constructor(
         return simpleDateFormatFolder.format(now)
     }
 
+    @Throws(IOException::class)
+    fun openRecordingFile(): FileOutputStream {
+        val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+        val dir = File(rootDir, generateNewPath())
+        if (!dir.exists()) dir.mkdirs()
+        val filename = "vid_" + simpleDateFormatFile.format(Date()) + ".mtjsn"
+        return FileOutputStream(File(dir, filename))
+    }
+
     fun readTjsnFile(path: String): String {
         var json = ""
         var line: String?
