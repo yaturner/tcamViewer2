@@ -636,11 +636,21 @@ private fun formatFilename(name: String): String {
 private suspend fun readFirstMtjsnFrame(file: File): JSONObject? =
     withContext(Dispatchers.IO) {
         runCatching {
-            val bytes = file.readBytes()
-            val etxIdx = bytes.indexOf(0x03.toByte())
-            val jsonStr = if (etxIdx >= 0) String(bytes, 0, etxIdx, Charsets.US_ASCII)
-                          else String(bytes, Charsets.US_ASCII)
-            JSONObject(jsonStr)
+            val sb = StringBuilder()
+            file.inputStream().use { stream ->
+                val buf = ByteArray(8192)
+                var done = false
+                while (!done) {
+                    val n = stream.read(buf)
+                    if (n < 0) break
+                    for (i in 0 until n) {
+                        val b = buf[i].toInt() and 0xFF
+                        if (b == 0x03) { done = true; break }
+                        sb.append(b.toChar())
+                    }
+                }
+            }
+            if (sb.isEmpty()) null else JSONObject(sb.toString())
         }.getOrNull()
     }
 
