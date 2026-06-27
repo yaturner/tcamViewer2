@@ -84,12 +84,11 @@ class ImageDto {
     private suspend fun init(paletteName: String?) {
         try {
             metadata = jsonObject!!.getJSONObject("metadata")
-            if (!metadata!!.has("palette")) {
-                metadata!!.put("palette", paletteName)
-                this.paletteName = paletteName
-            } else {
-                this.paletteName = metadata!!.getString("palette")
-            }
+            // Prefer the explicitly passed palette; fall back to what's stored in metadata; default Rainbow
+            val resolved = paletteName
+                ?: metadata!!.optString("palette", null)?.takeIf { paletteFactory.getPaletteByName(it) != null }
+                ?: "Rainbow"
+            this.paletteName = resolved   // setter also writes resolved name into metadata["palette"]
             palette = paletteFactory.getPaletteByName(this.paletteName)
             if (bitmap != null) {
                 bitmap!!.recycle()

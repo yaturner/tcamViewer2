@@ -85,7 +85,8 @@ class CameraViewModel : ViewModel() {
     private var frameDisposable: Disposable? = null
 
     // selectedPalette drives currentPalette StateFlow and is passed as a hint to ImageDto.create
-    private var selectedPalette = "Rainbow"
+    // @Volatile ensures writes on Main are immediately visible to processFrame on Dispatchers.Default
+    @Volatile private var selectedPalette = "Rainbow"
 
     private var frameCount = 0
     private var fpsWindowStart = -1L   // -1 = not yet started; initialised on first frame
@@ -122,7 +123,11 @@ class CameraViewModel : ViewModel() {
         val bmp = withContext(Dispatchers.Default) {
             cameraUtils.remapWithPalette(dto, palette, isManualRange, manualMin, manualMax, isCelsius)
         }
-        if (bmp != null) _currentBitmap.value = bmp
+        if (bmp != null) {
+            // Write palette name into dto so saveTjsn (which saves dto.getJsonObject()) captures it
+            dto.paletteName = paletteName
+            _currentBitmap.value = bmp
+        }
     }
 
     private suspend fun connectToCamera(ip: String) {

@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import com.das.tcamviewer2.model.ImageDto
+import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
 import com.das.tcamviewer2.utils as globalUtils
 import java.io.File
@@ -257,10 +258,12 @@ private fun BrowseWindow(file: File, onDismiss: () -> Unit, onDelete: () -> Unit
         }
     }
 
-    val imageBitmap = remember(dto?.bitmap) { dto?.bitmap?.asImageBitmap() }
+    // dto.bitmap is already colour-mapped by processImageResponse using the palette from metadata
+    val imageBitmap = remember(dto?.paletteName, dto?.bitmap) { dto?.bitmap?.asImageBitmap() }
 
-    val colorBarBitmap = remember(dto?.palette) {
-        val palette = dto?.palette ?: return@remember null
+    // Build the colour bar from the same palette name stored in the dto metadata
+    val colorBarBitmap = remember(dto?.paletteName) {
+        val palette = paletteFactory.getPaletteByName(dto?.paletteName) ?: return@remember null
         val pixels = IntArray(256) { i ->
             val rgb = palette[255 - i]
             val r = rgb?.get(0) ?: 0
