@@ -366,11 +366,7 @@ fun CameraScreen(
                         contentPadding = btnPadding
                     ) {
                         Text(
-                            when {
-                                isRecording -> "● Rec"
-                                isStreaming -> "Stop"
-                                else        -> "Stream"
-                            },
+                            if (isStreaming || isRecording) "Stop" else "Stream",
                             fontSize = 12.sp
                         )
                     }
