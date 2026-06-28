@@ -66,6 +66,7 @@ class CameraUtils @Inject constructor(
         val simpleDateFormatFile: SimpleDateFormat = SimpleDateFormat("HH_mm_ss", Locale.getDefault())
     }
 
+    @Synchronized
     @Throws(JSONException::class)
     fun processImageResponse(imageDto: ImageDto) {
         val palette: Array<IntArray?>? = imageDto.palette
