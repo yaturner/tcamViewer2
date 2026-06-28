@@ -16,11 +16,6 @@ An Android app for viewing and managing imagery from a [tCam](https://github.com
 
 When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
 
-**Settings (camera disconnected):**
-
-![Settings disconnected](screenshots/settings_disconnected.png)
-
-When disconnected the Camera Settings section is hidden — only the local app settings are shown.
 
 | Library |
 |---|
