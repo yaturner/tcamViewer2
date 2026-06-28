@@ -40,8 +40,11 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - Live colour histogram and colour bar scale
 - Frame-rate counter shown while streaming
 - 10 colour palettes selectable from a drop-down: Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia
-- Single-frame capture (Get) and continuous streaming (Stream / Stop)
-- Save current frame as a `.tjsn` file (raw radiometric data + metadata) to app-private storage
+- **Get** — captures a single frame from the camera
+- **Save** — saves the current frame to disk as a `.tjsn` file
+- **Stream → Start** — starts continuous streaming (frames displayed, not saved)
+- **Stream → Record** — starts streaming and simultaneously records every frame to a `.mtjsn` file
+- **Stop** — stops both streaming and any active recording
 
 ### Library screen
 - Browses all saved `.tjsn` (image) and `.mtjsn` (video) files grouped by date
@@ -111,9 +114,48 @@ Camera devices are discovered via mDNS service type `_tcam-socket._tcp.`
 4. If radiometric: normalise 0–255 using min/max (or manual range from settings), then map through palette
 5. Build ARGB bitmap and per-palette histogram
 
-### File storage
+### File formats
 
-Saved frames are written to `getExternalFilesDir(DIRECTORY_PICTURES)/<MM_dd_yyyy>/img_<HH_mm_ss>.tjsn` as raw JSON. No storage permission is required; files are app-private. Exported gallery images use the MediaStore API.
+#### `.tjsn` — single thermal frame
+
+A single JSON object written verbatim from the camera frame:
+
+```json
+{
+  "radiometric": "<base64 16-bit LE pixels, 160×120>",
+  "telemetry":   "<base64 16-bit LE words>",
+  "metadata":    { "date": "M/d/yy", "Time": "H:mm:ss.SSS", "Palette": "Ironblack", ... }
+}
+```
+
+Saved to `<externalFilesDir>/Pictures/<MM_dd_yyyy>/img_<HH_mm_ss>.tjsn`. No storage permission required (app-private external storage).
+
+#### `.mtjsn` — multi-frame thermal video
+
+A sequence of raw frame JSON objects delimited by ETX bytes (`0x03`), followed by a footer JSON object:
+
+```
+<frame1_json> 0x03 <frame2_json> 0x03 … <frameN_json> 0x03 <video_info_json>
+```
+
+Each `<frameN_json>` is the same structure as a `.tjsn` file. The footer carries session-level metadata:
+
+```json
+{
+  "video_info": {
+    "start_time": "H:mm:ss.SSS",
+    "start_date": "M/d/yy",
+    "end_time":   "H:mm:ss.SSS",
+    "end_date":   "M/d/yy",
+    "num_frames": 123,
+    "version":    1
+  }
+}
+```
+
+Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/vid_<HH_mm_ss>.mtjsn`. Playback uses the per-frame `metadata` timestamps to reconstruct accurate inter-frame timing regardless of the recording frame rate.
+
+Exported gallery images (PNG composites) use the MediaStore API and require no storage permission on Android 10+.
 
 ### Key classes
 
