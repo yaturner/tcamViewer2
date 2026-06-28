@@ -8,9 +8,23 @@ An Android app for viewing and managing imagery from a [tCam](https://github.com
 |---|---|
 | ![Camera disconnected](screenshots/camera_disconnected.png) | ![Camera live](screenshots/camera_live.png) |
 
-| Settings | Library |
+**Settings (camera connected) — top and bottom:**
+
+| Connected — top | Connected — bottom |
 |---|---|
-| ![Settings](screenshots/settings.png) | ![Library](screenshots/library.png) |
+| ![Settings connected top](screenshots/settings_connected_top.png) | ![Settings connected bottom](screenshots/settings_connected_bottom.png) |
+
+When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
+
+**Settings (camera disconnected):**
+
+![Settings disconnected](screenshots/settings_disconnected.png)
+
+When disconnected the Camera Settings section is hidden — only the local app settings are shown.
+
+| Library |
+|---|
+| ![Library](screenshots/library.png) |
 
 **Camera live view** shows a thermal image of electronics using the Ironblack palette (21.6 °C – 33.4 °C range). The spotmeter temperature (23.1 °C) is overlaid at the measurement point, with a live histogram beside the color bar.
 
