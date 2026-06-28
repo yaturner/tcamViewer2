@@ -82,6 +82,7 @@ fun CameraScreen(
     val isStreaming by viewModel.isStreaming.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val isTimeLapsing by viewModel.isTimeLapsing.collectAsState()
+    val isTimeLapseCapturing by viewModel.isTimeLapseCapturing.collectAsState()
     val bitmap by viewModel.currentBitmap.collectAsState()
     val currentPalette by viewModel.currentPalette.collectAsState()
     val histogram by viewModel.histogram.collectAsState()
@@ -361,7 +362,12 @@ fun CameraScreen(
                         },
                         contentPadding = btnPadding
                     ) {
-                        Text("Stop", fontSize = 12.sp)
+                        val label = when {
+                            isTimeLapsing && isTimeLapseCapturing -> "Rec"
+                            isTimeLapsing -> "Stream"
+                            else -> "Stop"
+                        }
+                        Text(label, fontSize = 12.sp)
                     }
                 } else {
                     Box {

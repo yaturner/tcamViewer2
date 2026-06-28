@@ -77,6 +77,9 @@ class CameraViewModel : ViewModel() {
     private val _isTimeLapsing = MutableStateFlow(false)
     val isTimeLapsing: StateFlow<Boolean> = _isTimeLapsing.asStateFlow()
 
+    private val _isTimeLapseCapturing = MutableStateFlow(false)
+    val isTimeLapseCapturing: StateFlow<Boolean> = _isTimeLapseCapturing.asStateFlow()
+
     private var timeLapseJob: Job? = null
 
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
@@ -258,7 +261,9 @@ class CameraViewModel : ViewModel() {
                 val endTime = startMs + durationMs
                 while (isActive && System.currentTimeMillis() < endTime) {
                     val frameStart = System.currentTimeMillis()
+                    _isTimeLapseCapturing.value = true
                     val json = cameraService.getImageOnce() ?: break
+                    _isTimeLapseCapturing.value = false
                     stream.write(json.toString().toByteArray(Charsets.US_ASCII))
                     stream.write(0x03)
                     frameCount++
@@ -275,6 +280,7 @@ class CameraViewModel : ViewModel() {
                     stream?.write(buildFooterJson(startMs, endMs, frameCount).toByteArray(Charsets.US_ASCII))
                     stream?.close()
                 }
+                _isTimeLapseCapturing.value = false
                 _isTimeLapsing.value = false
             }
         }
