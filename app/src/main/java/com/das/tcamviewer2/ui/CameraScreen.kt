@@ -358,37 +358,43 @@ fun CameraScreen(
                     Text("Save", fontSize = 12.sp)
                 }
 
-                // Stream dropdown: Start/Stop + Record
-                Box {
+                // Stop button (active) or Stream dropdown (idle)
+                if (isStreaming || isRecording) {
                     FeedbackButton(
-                        onClick = { streamMenuExpanded = true },
-                        enabled = isConnected,
+                        onClick = { viewModel.toggleStreaming() },
                         contentPadding = btnPadding
                     ) {
-                        Text(
-                            if (isStreaming || isRecording) "Stop" else "Stream",
-                            fontSize = 12.sp
-                        )
+                        Text("Stop", fontSize = 12.sp)
                     }
-                    DropdownMenu(
-                        expanded = streamMenuExpanded,
-                        onDismissRequest = { streamMenuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(if (isStreaming) "Stop" else "Start") },
-                            onClick = {
-                                viewModel.toggleStreaming()
-                                streamMenuExpanded = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(if (isRecording) "Stop Recording" else "Record") },
+                } else {
+                    Box {
+                        FeedbackButton(
+                            onClick = { streamMenuExpanded = true },
                             enabled = isConnected,
-                            onClick = {
-                                viewModel.toggleRecording()
-                                streamMenuExpanded = false
-                            }
-                        )
+                            contentPadding = btnPadding
+                        ) {
+                            Text("Stream", fontSize = 12.sp)
+                        }
+                        DropdownMenu(
+                            expanded = streamMenuExpanded,
+                            onDismissRequest = { streamMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Start") },
+                                onClick = {
+                                    viewModel.toggleStreaming()
+                                    streamMenuExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Record") },
+                                enabled = isConnected,
+                                onClick = {
+                                    viewModel.toggleRecording()
+                                    streamMenuExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
 
