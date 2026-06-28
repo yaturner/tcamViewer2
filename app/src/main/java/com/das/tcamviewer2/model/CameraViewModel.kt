@@ -120,15 +120,35 @@ class CameraViewModel : ViewModel() {
                 remapCurrentFrame(palette)
             }
         }
+        viewModelScope.launch {
+            settingsDataManager.manualRangeFlow.collect { v ->
+                cameraUtils.settingIsManualRange = v
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.minValueFlow.collect { v ->
+                cameraUtils.settingManualMin = v.toFloatOrNull() ?: 0f
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.maxValueFlow.collect { v ->
+                cameraUtils.settingManualMax = v.toFloatOrNull() ?: 100f
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.temperatureUnitFlow.collect { v ->
+                cameraUtils.settingIsCelsius = (v == "Celsius")
+            }
+        }
     }
 
     private suspend fun remapCurrentFrame(paletteName: String) {
         val dto = _currentImageDto.value ?: return
         val palette = paletteFactory.getPaletteByName(paletteName)
-        val isManualRange = settingsDataManager.isManualRange()
-        val manualMin = if (isManualRange) settingsDataManager.getManualMinTemperature() else 0f
-        val manualMax = if (isManualRange) settingsDataManager.getManualMaxTemperature() else 0f
-        val isCelsius = settingsDataManager.isUnitsCelsius()
+        val isManualRange = cameraUtils.settingIsManualRange
+        val manualMin = if (isManualRange) cameraUtils.settingManualMin else 0f
+        val manualMax = if (isManualRange) cameraUtils.settingManualMax else 0f
+        val isCelsius = cameraUtils.settingIsCelsius
         val bmp = withContext(Dispatchers.Default) {
             cameraUtils.remapWithPalette(dto, palette, isManualRange, manualMin, manualMax, isCelsius)
         }
@@ -340,7 +360,7 @@ class CameraViewModel : ViewModel() {
                 recordingFrameCount++
             }
             val dto = ImageDto.create(json, selectedPalette)
-            val celsius = settingsDataManager.isUnitsCelsius()
+            val celsius = cameraUtils.settingIsCelsius
             _currentImageDto.value = dto
             _currentBitmap.value = dto.bitmap
             _histogram.value = dto.histogram

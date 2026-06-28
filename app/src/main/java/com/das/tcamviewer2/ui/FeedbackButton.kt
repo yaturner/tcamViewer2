@@ -26,7 +26,8 @@ fun FeedbackButton(
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     content: @Composable RowScope.() -> Unit
 ) {
-    val audioManager = LocalContext.current.getSystemService(AudioManager::class.java)
+    val context = LocalContext.current
+    val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -57,7 +58,8 @@ fun FeedbackTextButton(
     enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
-    val audioManager = LocalContext.current.getSystemService(AudioManager::class.java)
+    val context = LocalContext.current
+    val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(

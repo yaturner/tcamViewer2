@@ -8,7 +8,6 @@ import android.graphics.Rect
 import android.os.Environment
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.ImageDto
-import com.das.tcamviewer2.settingsDataManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONException
 import org.json.JSONObject
@@ -37,6 +36,13 @@ class CameraUtils @Inject constructor(
     private val imageBytes = ByteArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT * 2)
     private val telData  = IntArray(3 * 80) // 3 Lepton telemetry rows × 80 words
 
+    // Cached settings — updated by CameraViewModel via flow observation to avoid
+    // DataStore reads on the per-frame hot path.
+    @Volatile var settingIsManualRange: Boolean = false
+    @Volatile var settingManualMin: Float = 0f
+    @Volatile var settingManualMax: Float = 100f
+    @Volatile var settingIsCelsius: Boolean = true
+
     companion object {
         private const val offsetA: Int = 0
         private const val offsetB: Int = 80
@@ -61,13 +67,12 @@ class CameraUtils @Inject constructor(
     }
 
     @Throws(JSONException::class)
-    suspend fun processImageResponse(
-        imageDto: ImageDto) {
+    fun processImageResponse(imageDto: ImageDto) {
         val palette: Array<IntArray?>? = imageDto.palette
-        val isManualRange: Boolean = settingsDataManager.isManualRange()
-        val manualMin: Float = settingsDataManager.getManualMinTemperature()
-        val manualMax: Float = settingsDataManager.getManualMaxTemperature()
-        val isCelsius: Boolean = settingsDataManager.isUnitsCelsius()
+        val isManualRange = settingIsManualRange
+        val manualMin = settingManualMin
+        val manualMax = settingManualMax
+        val isCelsius = settingIsCelsius
         val metadata: JSONObject = imageDto.getJsonObject().getJSONObject("metadata")
         val radiometricString: String = imageDto.getJsonObject().getString("radiometric")
         val telemetryString: String = imageDto.getJsonObject().getString("telemetry")

@@ -26,7 +26,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,8 +51,6 @@ import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.CameraViewModel
 import com.das.tcamviewer2.paletteFactory
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
@@ -89,33 +85,6 @@ fun CameraScreen(
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var streamMenuExpanded by remember { mutableStateOf(false) }
-
-    // Histogram bitmap: built off-thread whenever frame data or palette changes
-    var histogramBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(histogram, currentPalette) {
-        val hist = histogram ?: return@LaunchedEffect
-        histogramBitmap = withContext(Dispatchers.Default) {
-            val palette = paletteFactory.getPaletteByName(currentPalette)
-            val bmpWidth = 128
-            val maxCount = hist.max().coerceAtLeast(1)
-            val pixels = IntArray(bmpWidth * 256)
-            for (row in 0 until 256) {
-                val idx = 255 - row          // index 255 (hottest) at top, 0 at bottom
-                val barWidth = (hist[idx].toLong() * bmpWidth / maxCount).toInt()
-                val rgb = palette?.get(idx)
-                val color = if (rgb != null)
-                    (0xFF shl 24) or (rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2]
-                else
-                    0xFF000000.toInt()
-                for (col in 0 until bmpWidth) {
-                    pixels[row * bmpWidth + col] = if (col < barWidth) color else 0xFF000000.toInt()
-                }
-            }
-            createBitmap(bmpWidth, 256).also {
-                it.setPixels(pixels, 0, bmpWidth, 0, 0, bmpWidth, 256)
-            }.asImageBitmap()
-        }
-    }
 
     // Build a 1×256 bitmap from palette entries: index 255 at top, index 0 at bottom
     val colorBarBitmap = remember(currentPalette) {
@@ -279,16 +248,33 @@ fun CameraScreen(
                             contentScale = ContentScale.FillBounds
                         )
 
-                        if (histogramBitmap != null) {
-                            Image(
-                                bitmap = histogramBitmap!!,
-                                contentDescription = "Histogram Chart",
+                        if (histogram != null) {
+                            val hist = histogram!!
+                            val histPalette = paletteFactory.getPaletteByName(currentPalette)
+                            Canvas(
                                 modifier = Modifier
                                     .width(histogramWidth)
                                     .fillMaxHeight()
-                                    .padding(horizontal = 5.dp, vertical = 2.dp),
-                                contentScale = ContentScale.FillBounds
-                            )
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
+                                val rowHeight = size.height / 256f
+                                for (row in 0 until 256) {
+                                    val idx = 255 - row
+                                    val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
+                                    if (barWidth > 0f) {
+                                        val rgb = histPalette?.get(idx)
+                                        val color = if (rgb != null)
+                                            Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
+                                        else Color.Black
+                                        drawRect(
+                                            color = color,
+                                            topLeft = Offset(0f, row * rowHeight),
+                                            size = Size(barWidth, rowHeight)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
