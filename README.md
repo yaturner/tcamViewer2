@@ -2,6 +2,18 @@
 
 An Android app for viewing and managing imagery from a [tCam](https://github.com/danjulio/tCam) thermal imaging camera over Wi-Fi.
 
+## Screenshots
+
+| Camera (disconnected) | Camera (live) |
+|---|---|
+| ![Camera disconnected](screenshots/camera_disconnected.png) | ![Camera live](screenshots/camera_live.png) |
+
+| Settings | Library |
+|---|---|
+| ![Settings](screenshots/settings.png) | ![Library](screenshots/library.png) |
+
+**Camera live view** shows a thermal image of electronics using the Ironblack palette (21.6 °C – 33.4 °C range). The spotmeter temperature (23.1 °C) is overlaid at the measurement point, with a live histogram beside the color bar.
+
 ## Overview
 
 tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radiometric data, applies colour palettes, and renders a live thermal video feed. Captured frames can be saved, browsed, shared, and exported directly from the device.
@@ -23,20 +35,28 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - Save current frame as a `.tjsn` file (raw radiometric data + metadata) to app-private storage
 
 ### Library screen
-- Browses all saved `.tjsn` files grouped by date
-- Thumbnail preview loaded lazily per visible row
+- Browses all saved `.tjsn` (image) and `.mtjsn` (video) files grouped by date
+- Thumbnail preview loaded lazily per visible row; video files show a camera badge
 - Multi-select with visual highlight and checkmark badge
 - Ascending / descending sort and Select All / Clear via overflow menu
 - Delete selected files from disk
-- Browse button opens a full-screen image viewer for the first selected file
+- Browse button opens a full-screen image viewer for selected files
 
 ### Browse / image viewer
 - Full-screen thermal image with colour bar sidebar
 - Max temperature (top of bar), min temperature (bottom of bar), and spotmeter temperature overlaid on the image
 - Image time and filename shown in the title bar
+- Previous / next navigation when multiple files are selected
 - **Share** – composites the full image (scaled 4×), colour bar, and all temperature labels into a single PNG and fires the system share sheet
-- **Export** – saves the same composite PNG to the device gallery (DCIM folder) via MediaStore; no storage permission required on Android 10+
-- **Delete** – removes the `.tjsn` file from disk and returns to the library
+- **Export** – saves the same composite PNG to the device gallery via MediaStore; no storage permission required on Android 10+
+- **Delete** – removes the file from disk and returns to the library
+- **Play** (`.mtjsn` recordings) – opens the video player
+
+### Video player
+- Plays back `.mtjsn` recordings with accurate per-frame timing derived from metadata timestamps
+- **Skip back / forward** 5 frames with fast-rewind / fast-forward buttons
+- Scrub slider with frame counter
+- **Fullscreen mode** – hides the title bar and system bars; tap the video or the fullscreen button to toggle; Back exits fullscreen before closing the player
 
 ### Settings screen
 - Camera IP address
