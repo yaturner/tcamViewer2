@@ -1,5 +1,6 @@
 package com.das.tcamviewer2.ui
 
+import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Environment
@@ -28,6 +29,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.Pause
@@ -50,6 +55,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -65,12 +71,16 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.das.tcamviewer2.model.ImageDto
 import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
@@ -706,6 +716,8 @@ private fun parseFrameTimestampMs(json: JSONObject): Long =
         parseVideoTimeMs(timeStr) ?: 0L
     }.getOrElse { 0L }
 
+private const val SKIP_FRAMES = 5
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
@@ -717,8 +729,27 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentIndex by remember { mutableIntStateOf(0) }
+    var isFullscreen by remember { mutableStateOf(false) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
+
+    // Exit fullscreen with back button before closing the player
+    BackHandler(enabled = isFullscreen) { isFullscreen = false }
+
+    // Hide/restore system bars when entering/exiting fullscreen
+    val view = LocalView.current
+    val window = remember { (view.context as Activity).window }
+    DisposableEffect(isFullscreen) {
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (isFullscreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
+    }
 
     LaunchedEffect(file) {
         isLoading = true
@@ -778,23 +809,25 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+            if (!isFullscreen) {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    title = {
+                        Column {
+                            Text(formatFilename(file.name), style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (isLoading) "Loading…" else "${videoFrames.size} frames",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                },
-                title = {
-                    Column {
-                        Text(formatFilename(file.name), style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (isLoading) "Loading…" else "${videoFrames.size} frames",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         Column(
@@ -804,7 +837,10 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                 .background(Color.Black)
         ) {
             Box(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clickable { isFullscreen = !isFullscreen },
                 contentAlignment = Alignment.Center
             ) {
                 when {
@@ -860,12 +896,24 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    IconButton(
+                        onClick = { currentIndex = (currentIndex - SKIP_FRAMES).coerceAtLeast(0) },
+                        enabled = currentIndex > 0
+                    ) {
+                        Icon(Icons.Default.FastRewind, contentDescription = "Skip back", tint = Color.White)
+                    }
                     IconButton(onClick = { isPlaying = !isPlaying }) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = Color.White
                         )
+                    }
+                    IconButton(
+                        onClick = { currentIndex = (currentIndex + SKIP_FRAMES).coerceAtMost(videoFrames.size - 1) },
+                        enabled = currentIndex < videoFrames.size - 1
+                    ) {
+                        Icon(Icons.Default.FastForward, contentDescription = "Skip forward", tint = Color.White)
                     }
                     Slider(
                         value = currentIndex.toFloat(),
@@ -887,6 +935,13 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                         fontSize = 12.sp,
                         modifier = androidx.compose.ui.Modifier.width(52.dp).padding(start = 4.dp)
                     )
+                    IconButton(onClick = { isFullscreen = !isFullscreen }) {
+                        Icon(
+                            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
         }
