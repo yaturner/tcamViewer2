@@ -17,11 +17,15 @@ An Android app for viewing and managing imagery from a [tCam](https://github.com
 When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
 
 
-| Library |
-|---|
-| ![Library](screenshots/library.png) |
+**Library, browse window, and video player:**
 
-**Camera live view** shows a thermal image of electronics using the Ironblack palette (21.6 °C – 33.4 °C range). The spotmeter temperature (23.1 °C) is overlaid at the measurement point, with a live histogram beside the color bar.
+| Library | Browse window | Video player |
+|---|---|---|
+| ![Library](screenshots/library.png) | ![Browse window](screenshots/browse_window.png) | ![Video player](screenshots/video_player.png) |
+
+The **Library** groups saved files by date. Video recordings show a camera badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the **browse window** showing the full thermal image with colour bar, temperature labels, and spotmeter. For `.mtjsn` recordings, tap the play button (▶) in the browse window to open the **video player**, which shows skip ±5 frame controls, a scrub slider, and a frame counter (1/81 shown).
+
+**Camera live view** shows a thermal image of electronics using the Ironblack palette (21.6 °C – 33.4 °C range). The spotmeter temperature (23.1 °C) is overlaid at the measurement point, with a live histogram beside the colour bar.
 
 ## Overview
 
