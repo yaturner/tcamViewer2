@@ -4,6 +4,10 @@ An Android app for viewing and managing imagery from a [tCam](https://github.com
 
 ## Screenshots
 
+**App icon:**
+
+![App icon](screenshots/app_icon.png)
+
 | Camera (disconnected) | Camera (live) |
 |---|---|
 | ![Camera disconnected](screenshots/camera_disconnected.png) | ![Camera live](screenshots/camera_live.png) |
