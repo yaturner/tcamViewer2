@@ -11,11 +11,14 @@ import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
 import io.reactivex.rxjava3.disposables.Disposable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -70,6 +73,11 @@ class CameraViewModel : ViewModel() {
     @Volatile private var recordingFrameCount: Int = 0
     private var recordingStartMs: Long = 0L
     private var startedStreamingForRecord = false
+
+    private val _isTimeLapsing = MutableStateFlow(false)
+    val isTimeLapsing: StateFlow<Boolean> = _isTimeLapsing.asStateFlow()
+
+    private var timeLapseJob: Job? = null
 
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
     val currentBitmap: StateFlow<Bitmap?> = _currentBitmap.asStateFlow()
@@ -234,6 +242,46 @@ class CameraViewModel : ViewModel() {
 
     fun getImage() {
         if (_isConnected.value) cameraService.getImage()
+    }
+
+    fun startTimeLapse(intervalSec: Int, durationSec: Int) {
+        if (!_isConnected.value || _isTimeLapsing.value) return
+        val intervalMs = intervalSec * 1000L
+        val durationMs = durationSec * 1000L
+        _isTimeLapsing.value = true
+        timeLapseJob = viewModelScope.launch(Dispatchers.IO) {
+            var stream: FileOutputStream? = null
+            var frameCount = 0
+            val startMs = System.currentTimeMillis()
+            try {
+                stream = cameraUtils.openTimeLapseFile()
+                val endTime = startMs + durationMs
+                while (isActive && System.currentTimeMillis() < endTime) {
+                    val frameStart = System.currentTimeMillis()
+                    val json = cameraService.getImageOnce() ?: break
+                    stream.write(json.toString().toByteArray(Charsets.US_ASCII))
+                    stream.write(0x03)
+                    frameCount++
+                    val remaining = intervalMs - (System.currentTimeMillis() - frameStart)
+                    if (remaining > 0 && isActive) kotlinx.coroutines.delay(remaining)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Time lapse error")
+            } finally {
+                val endMs = System.currentTimeMillis()
+                runCatching {
+                    stream?.write(buildFooterJson(startMs, endMs, frameCount).toByteArray(Charsets.US_ASCII))
+                    stream?.close()
+                }
+                _isTimeLapsing.value = false
+            }
+        }
+    }
+
+    fun stopTimeLapse() {
+        timeLapseJob?.cancel()
     }
 
     fun toggleStreaming() {

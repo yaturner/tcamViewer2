@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -41,6 +42,9 @@ class CameraService : Service() {
     // --- NEW: A thread-safe map tracking pending requests awaiting responses ---
     // Key: Command Type/ID string, Value: The deferred handler wrapper returning a JSONObject
     private val pendingRequests = ConcurrentHashMap<String, CompletableDeferred<JSONObject>>()
+
+    // Resolved with the next radiometric frame; used by getImageOnce() for time lapse capture
+    @Volatile private var singleImageDeferred: CompletableDeferred<JSONObject>? = null
 
     private var running = false
     private var bytesRead = 0
@@ -206,6 +210,22 @@ class CameraService : Service() {
         }
     }
 
+    suspend fun getImageOnce(timeoutMs: Long = 15_000L): JSONObject? {
+        if (!isConnected) return null
+        val deferred = CompletableDeferred<JSONObject>()
+        singleImageDeferred = deferred
+        return try {
+            withContext(Dispatchers.IO) {
+                outToSocket?.write(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
+                outToSocket?.flush()
+            }
+            withTimeoutOrNull(timeoutMs) { deferred.await() }
+        } catch (e: Exception) {
+            singleImageDeferred = null
+            null
+        }
+    }
+
     fun setSpotmeter(c1: Int, c2: Int, r1: Int, r2: Int) {
         serviceScope.launch {
             val args = String.format(Constants.ARGS_SET_SPOTMETER, c1, c2, r1, r2)
@@ -261,7 +281,15 @@ class CameraService : Service() {
                             val parsedJson = parseResponse(
                                 String(response, 0, responsePos, StandardCharsets.UTF_8)
                             )
-                            if (!routeToPendingRequest(parsedJson)) imageChannel.onNext(parsedJson)
+                            if (!routeToPendingRequest(parsedJson)) {
+                                // Resolve a pending single-image capture (time lapse) if waiting
+                                val deferred = singleImageDeferred
+                                if (deferred != null && !deferred.isCompleted && parsedJson.has("radiometric")) {
+                                    singleImageDeferred = null
+                                    deferred.complete(parsedJson)
+                                }
+                                imageChannel.onNext(parsedJson)
+                            }
                             resetBuffers()
                         }
                         startFound -> {

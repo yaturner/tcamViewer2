@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Slider
@@ -116,7 +117,7 @@ fun LibraryScreen() {
                     ?.filter { it.isDirectory }
                     ?.forEach { dateDir ->
                         val files = dateDir.listFiles { f ->
-                            f.extension == "tjsn" || f.extension == "mtjsn"
+                            f.extension == "tjsn" || f.extension == "mtjsn" || f.extension == "tltjsn"
                         } ?: return@forEach
                         if (files.isNotEmpty())
                             folderMap.getOrPut(dateDir.name) { mutableListOf() }.addAll(files)
@@ -297,7 +298,7 @@ private fun BrowseWindow(
         dto = null   // show spinner while loading the new image
         dto = withContext(Dispatchers.Default) {
             runCatching {
-                if (file.extension == "mtjsn") {
+                if (file.extension == "mtjsn" || file.extension == "tltjsn") {
                     val json = readFirstMtjsnFrame(file) ?: return@runCatching null
                     ImageDto.create(json, null)
                 } else {
@@ -347,8 +348,8 @@ private fun BrowseWindow(
                     }
                 },
                 actions = {
-                    // Play — opens video player for .mtjsn recordings
-                    if (file.extension == "mtjsn") {
+                    // Play — opens video player for .mtjsn recordings and .tltjsn time lapses
+                    if (file.extension == "mtjsn" || file.extension == "tltjsn") {
                         IconButton(onClick = { showVideoPlayer = true }) {
                             Icon(Icons.Default.PlayArrow, contentDescription = "Play video")
                         }
@@ -557,7 +558,7 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
     LaunchedEffect(file) {
         thumbnail = withContext(Dispatchers.Default) {
             runCatching {
-                if (file.extension == "mtjsn") {
+                if (file.extension == "mtjsn" || file.extension == "tltjsn") {
                     val json = readFirstMtjsnFrame(file) ?: return@runCatching null
                     ImageDto.create(json, null).bitmap?.asImageBitmap()
                 } else {
@@ -621,6 +622,17 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
                         .size(20.dp)
                 )
             }
+            if (file.extension == "tltjsn") {
+                Icon(
+                    imageVector = Icons.Default.Timelapse,
+                    contentDescription = "Time lapse",
+                    tint = Color.Yellow,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp)
+                        .size(20.dp)
+                )
+            }
         }
         Text(
             text = formatFilename(file.name),
@@ -650,11 +662,12 @@ private fun formatDateFolder(name: String): String {
     return "$month ${parts[1]}, ${parts[2]}"
 }
 
-/** img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.mtjsn → "HH:mm:ss" */
+/** img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.mtjsn → "HH:mm:ss",  tl_HH_mm_ss.tltjsn → "HH:mm:ss" */
 private fun formatFilename(name: String): String {
     val base = when {
-        name.endsWith(".mtjsn") -> name.removeSuffix(".mtjsn").removePrefix("vid_")
-        else -> name.removeSuffix(".tjsn").removePrefix("img_")
+        name.endsWith(".mtjsn")  -> name.removeSuffix(".mtjsn").removePrefix("vid_")
+        name.endsWith(".tltjsn") -> name.removeSuffix(".tltjsn").removePrefix("tl_")
+        else                     -> name.removeSuffix(".tjsn").removePrefix("img_")
     }
     val parts = base.split("_")
     return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name
@@ -765,15 +778,20 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                 loaded.add(VideoFrame(bmp, dto, parseFrameTimestampMs(json)))
             }
         }
-        // Compute per-frame display durations from consecutive metadata timestamps.
-        // Fall back to the average interval for any gap that looks wrong (<10ms or >5s).
-        val fb = fallbackIntervalMs
         val intervals = ArrayList<Long>(loaded.size)
-        for (i in 0 until loaded.size - 1) {
-            val dt = loaded[i + 1].timestampMs - loaded[i].timestampMs
-            intervals.add(if (dt in 10L..5_000L) dt else fb)
+        if (file.extension == "tltjsn") {
+            // Time lapse: ignore capture timestamps, play at smooth 8 fps
+            repeat(loaded.size) { intervals.add(125L) }
+        } else {
+            // Compute per-frame display durations from consecutive metadata timestamps.
+            // Fall back to the average interval for any gap that looks wrong (<10ms or >5s).
+            val fb = fallbackIntervalMs
+            for (i in 0 until loaded.size - 1) {
+                val dt = loaded[i + 1].timestampMs - loaded[i].timestampMs
+                intervals.add(if (dt in 10L..5_000L) dt else fb)
+            }
+            intervals.add(intervals.lastOrNull() ?: fb)  // last frame: same duration as preceding
         }
-        intervals.add(intervals.lastOrNull() ?: fb)  // last frame: same duration as preceding
         videoFrames = loaded
         frameIntervals = intervals
         isLoading = false

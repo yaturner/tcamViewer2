@@ -1,0 +1,5 @@
+when record is selected, start streaming from the camera. Save the json objects recieved from the camera into a file. seperate each json string with a crtl-c as a delimeter. keep a count of the number of frames saved, the date and time of the first and last frames saved. When recording is stopped append a footer to ther file in form:
+
+'{"video_info":{"start_time":"6:39:48.498","start_date":"6/27/26","end_time":"6:40:03.198","end_date":"6/27/26","num_frames":93,"version":1}}' 
+
+

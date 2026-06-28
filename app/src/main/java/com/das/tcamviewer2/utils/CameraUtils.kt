@@ -259,6 +259,15 @@ class CameraUtils @Inject constructor(
         return FileOutputStream(File(dir, filename))
     }
 
+    @Throws(IOException::class)
+    fun openTimeLapseFile(): FileOutputStream {
+        val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+        val dir = File(rootDir, generateNewPath())
+        if (!dir.exists()) dir.mkdirs()
+        val filename = "tl_" + simpleDateFormatFile.format(Date()) + ".tltjsn"
+        return FileOutputStream(File(dir, filename))
+    }
+
     fun readTjsnFile(path: String): String {
         var json = ""
         var line: String?

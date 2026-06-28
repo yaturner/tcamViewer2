@@ -16,11 +16,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -28,6 +33,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -75,6 +81,7 @@ fun CameraScreen(
     val isConnecting by viewModel.isConnecting.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
+    val isTimeLapsing by viewModel.isTimeLapsing.collectAsState()
     val bitmap by viewModel.currentBitmap.collectAsState()
     val currentPalette by viewModel.currentPalette.collectAsState()
     val histogram by viewModel.histogram.collectAsState()
@@ -85,6 +92,7 @@ fun CameraScreen(
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var streamMenuExpanded by remember { mutableStateOf(false) }
+    var showTimeLapseDialog by remember { mutableStateOf(false) }
 
     // Build a 1×256 bitmap from palette entries: index 255 at top, index 0 at bottom
     val colorBarBitmap = remember(currentPalette) {
@@ -345,9 +353,12 @@ fun CameraScreen(
                 }
 
                 // Stop button (active) or Stream dropdown (idle)
-                if (isStreaming || isRecording) {
+                if (isStreaming || isRecording || isTimeLapsing) {
                     FeedbackButton(
-                        onClick = { viewModel.toggleStreaming() },
+                        onClick = {
+                            if (isTimeLapsing) viewModel.stopTimeLapse()
+                            else viewModel.toggleStreaming()
+                        },
                         contentPadding = btnPadding
                     ) {
                         Text("Stop", fontSize = 12.sp)
@@ -380,8 +391,26 @@ fun CameraScreen(
                                     streamMenuExpanded = false
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text("Time Lapse") },
+                                enabled = isConnected,
+                                onClick = {
+                                    streamMenuExpanded = false
+                                    showTimeLapseDialog = true
+                                }
+                            )
                         }
                     }
+                }
+
+                if (showTimeLapseDialog) {
+                    TimeLapseDialog(
+                        onConfirm = { intervalSec, durationSec ->
+                            showTimeLapseDialog = false
+                            viewModel.startTimeLapse(intervalSec, durationSec)
+                        },
+                        onDismiss = { showTimeLapseDialog = false }
+                    )
                 }
 
                 // Palette dropdown
@@ -410,4 +439,100 @@ fun CameraScreen(
             }
         }
     }
+}
+
+private val TIMELAPSE_INTERVALS = listOf(
+    1 to "1 second", 2 to "2 seconds", 5 to "5 seconds", 10 to "10 seconds",
+    30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes", 300 to "5 minutes"
+)
+
+private val TIMELAPSE_DURATIONS = listOf(
+    30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes", 300 to "5 minutes",
+    600 to "10 minutes", 1800 to "30 minutes", 3600 to "1 hour", 7200 to "2 hours"
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimeLapseDialog(
+    onConfirm: (intervalSec: Int, durationSec: Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var intervalIndex by remember { mutableIntStateOf(2) }  // default: 5 seconds
+    var durationIndex by remember { mutableIntStateOf(4) }  // default: 10 minutes
+    var intervalExpanded by remember { mutableStateOf(false) }
+    var durationExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Time Lapse") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Capture one frame from the camera at the selected interval for the selected duration.")
+
+                ExposedDropdownMenuBox(
+                    expanded = intervalExpanded,
+                    onExpandedChange = { intervalExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = TIMELAPSE_INTERVALS[intervalIndex].second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Interval") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded) },
+                        modifier = Modifier.menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = intervalExpanded,
+                        onDismissRequest = { intervalExpanded = false }
+                    ) {
+                        TIMELAPSE_INTERVALS.forEachIndexed { i, (_, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = { intervalIndex = i; intervalExpanded = false }
+                            )
+                        }
+                    }
+                }
+
+                ExposedDropdownMenuBox(
+                    expanded = durationExpanded,
+                    onExpandedChange = { durationExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = TIMELAPSE_DURATIONS[durationIndex].second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Duration") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = durationExpanded) },
+                        modifier = Modifier.menuAnchor()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = durationExpanded,
+                        onDismissRequest = { durationExpanded = false }
+                    ) {
+                        TIMELAPSE_DURATIONS.forEachIndexed { i, (_, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = { durationIndex = i; durationExpanded = false }
+                            )
+                        }
+                    }
+                }
+
+                val frames = TIMELAPSE_DURATIONS[durationIndex].first / TIMELAPSE_INTERVALS[intervalIndex].first
+                Text("$frames frames total", style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm(
+                    TIMELAPSE_INTERVALS[intervalIndex].first,
+                    TIMELAPSE_DURATIONS[durationIndex].first
+                )
+            }) { Text("Start") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
