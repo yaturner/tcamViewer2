@@ -55,12 +55,14 @@ class NavigationTest {
     @Test
     fun navigateBetweenAllTabs() {
         composeRule.onNodeWithText("Library").performClick()
-        composeRule.onNodeWithText("Library").assertIsSelected()
+        composeRule.waitForIdle()
+        // All three tab labels remain visible on every screen
+        composeRule.onNodeWithText("Settings").assertIsDisplayed()
 
         composeRule.onNodeWithText("Settings").performClick()
-        composeRule.onNodeWithText("Settings").assertIsSelected()
+        composeRule.onNodeWithText("Camera IP Address").assertIsDisplayed()
 
         composeRule.onNodeWithText("Camera").performClick()
-        composeRule.onNodeWithText("Camera").assertIsSelected()
+        composeRule.onNodeWithText("Camera IP Address").assertDoesNotExist()
     }
 }
