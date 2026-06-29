@@ -6,9 +6,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -28,8 +28,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
@@ -133,33 +131,48 @@ fun CameraScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (!isConnected) {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (isConnecting) "Thermal Viewer (Connecting...)"
-                               else "Thermal Viewer (Disconnected)",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 20.sp
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (isConnecting) "Thermal Viewer (Connecting...)"
+                           else "Thermal Viewer (Disconnected)",
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 16.sp
                 )
-            )
+            }
         }
 
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
-                .fillMaxSize()
+                .weight(1f)
+                .fillMaxWidth()
                 .background(Color(0xFF80C0FF))
         ) {
+            // Scale image to fit available space (important in landscape / windowed mode)
+            val btnBarH = 56.dp
+            val sidebarW = colorBarWidth + histogramWidth + 30.dp
+            val availW = maxWidth - sidebarW - 32.dp
+            val availH = maxHeight - btnBarH - 16.dp
+            val scale = minOf(
+                availW.value / displayImageWidth.value,
+                availH.value / displayImageHeight.value,
+                1f
+            ).coerceAtLeast(0.25f)
+            val imgW = displayImageWidth * scale
+            val imgH = displayImageHeight * scale
+
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
-            // --- Image + sidebar row ---
-            Row(
+            // --- Image + sidebar row (only when a frame is available) ---
+            if (imageBitmap != null) Row(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(start = 16.dp, end = 5.dp),
@@ -169,7 +182,7 @@ fun CameraScreen(
                 // 1. MAIN PREVIEW AREA
                 Box(
                     modifier = Modifier
-                        .size(width = displayImageWidth, height = displayImageHeight)
+                        .size(width = imgW, height = imgH)
                         .padding(end = 10.dp)
                 ) {
                     if (imageBitmap != null) {
@@ -236,7 +249,7 @@ fun CameraScreen(
 
                 // 2. DIAGNOSTICS & TEMPERATURE SIDEBAR
                 Column(
-                    modifier = Modifier.height(displayImageHeight),
+                    modifier = Modifier.height(imgH),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -308,7 +321,7 @@ fun CameraScreen(
                         modifier = Modifier.padding(start = 5.dp)
                     )
                 }
-            }
+            }  // end if (imageBitmap != null)
 
             // 3. FPS counter (top-right) — only while streaming
             if (isStreaming) {
