@@ -15,8 +15,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -79,6 +82,9 @@ class CameraViewModel : ViewModel() {
 
     private val _isTimeLapseCapturing = MutableStateFlow(false)
     val isTimeLapseCapturing: StateFlow<Boolean> = _isTimeLapseCapturing.asStateFlow()
+
+    private val _timeLapseMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val timeLapseMessage: SharedFlow<String> = _timeLapseMessage.asSharedFlow()
 
     private var timeLapseJob: Job? = null
 
@@ -255,6 +261,7 @@ class CameraViewModel : ViewModel() {
         timeLapseJob = viewModelScope.launch(Dispatchers.IO) {
             var stream: FileOutputStream? = null
             var frameCount = 0
+            var naturalCompletion = false
             val startMs = System.currentTimeMillis()
             try {
                 stream = cameraUtils.openTimeLapseFile()
@@ -270,6 +277,7 @@ class CameraViewModel : ViewModel() {
                     val remaining = intervalMs - (System.currentTimeMillis() - frameStart)
                     if (remaining > 0 && isActive) kotlinx.coroutines.delay(remaining)
                 }
+                naturalCompletion = isActive
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -282,6 +290,9 @@ class CameraViewModel : ViewModel() {
                 }
                 _isTimeLapseCapturing.value = false
                 _isTimeLapsing.value = false
+                if (naturalCompletion) {
+                    _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured")
+                }
             }
         }
     }

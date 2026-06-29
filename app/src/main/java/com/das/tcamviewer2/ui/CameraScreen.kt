@@ -30,7 +30,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -94,6 +97,13 @@ fun CameraScreen(
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var streamMenuExpanded by remember { mutableStateOf(false) }
     var showTimeLapseDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.timeLapseMessage.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
 
     // Build a 1×256 bitmap from palette entries: index 255 at top, index 0 at bottom
     val colorBarBitmap = remember(currentPalette) {
@@ -144,6 +154,10 @@ fun CameraScreen(
                 .fillMaxSize()
                 .background(Color(0xFF80C0FF))
         ) {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
             // --- Image + sidebar row ---
             Row(
                 modifier = Modifier
