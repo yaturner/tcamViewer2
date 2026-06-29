@@ -27,7 +27,7 @@ When connected, a **Camera Settings** section appears at the top with AGC, emiss
 |---|---|---|
 | ![Library](screenshots/library.png) | ![Browse window](screenshots/browse_window.png) | ![Video player](screenshots/video_player.png) |
 
-The **Library** groups saved files by date. Video recordings show a camera badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the **browse window** showing the full thermal image with colour bar, temperature labels, and spotmeter. For `.mtjsn` recordings, tap the play button (▶) in the browse window to open the **video player**, which shows skip ±5 frame controls, a scrub slider, and a frame counter (1/81 shown).
+The **Library** groups saved files by date. Video recordings show a white camera badge and time lapse files show a yellow timer badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the **browse window** showing the full thermal image with colour bar, temperature labels, and spotmeter. For `.mtjsn` recordings and `.tltjsn` time lapses, tap the play button (▶) in the browse window to open the **video player**, which shows skip ±5 frame controls, a scrub slider, and a frame counter.
 
 **Camera live view** shows a thermal image of electronics using the Ironblack palette (21.6 °C – 33.4 °C range). The spotmeter temperature (23.1 °C) is overlaid at the measurement point, with a live histogram beside the colour bar.
 
@@ -52,11 +52,12 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - **Save** — saves the current frame to disk as a `.tjsn` file
 - **Stream → Start** — starts continuous streaming (frames displayed, not saved)
 - **Stream → Record** — starts streaming and simultaneously records every frame to a `.mtjsn` file
-- **Stop** — stops both streaming and any active recording
+- **Stream → Time Lapse** — opens a dialog to select capture interval (1 second – 5 minutes) and total duration (30 seconds – 2 hours); sends a `get_image` command at each interval and saves the frames to a `.tltjsn` file. The button shows **Rec** while each frame is being captured and **Stream** while waiting for the next interval. A notification appears when the duration expires.
+- **Stop** — stops streaming, recording, or an in-progress time lapse
 
 ### Library screen
-- Browses all saved `.tjsn` (image) and `.mtjsn` (video) files grouped by date
-- Thumbnail preview loaded lazily per visible row; video files show a camera badge
+- Browses all saved `.tjsn` (image), `.mtjsn` (video), and `.tltjsn` (time lapse) files grouped by date
+- Thumbnail preview loaded lazily per visible row; video recordings show a white camera badge; time lapse files show a yellow timer badge
 - Multi-select with visual highlight and checkmark badge
 - Ascending / descending sort and Select All / Clear via overflow menu
 - Delete selected files from disk
@@ -70,10 +71,11 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - **Share** – composites the full image (scaled 4×), colour bar, and all temperature labels into a single PNG and fires the system share sheet
 - **Export** – saves the same composite PNG to the device gallery via MediaStore; no storage permission required on Android 10+
 - **Delete** – removes the file from disk and returns to the library
-- **Play** (`.mtjsn` recordings) – opens the video player
+- **Play** (`.mtjsn` recordings and `.tltjsn` time lapses) – opens the video player
 
 ### Video player
 - Plays back `.mtjsn` recordings with accurate per-frame timing derived from metadata timestamps
+- Plays back `.tltjsn` time lapses at a smooth 8 fps (125 ms/frame), ignoring the original capture interval
 - **Skip back / forward** 5 frames with fast-rewind / fast-forward buttons
 - Scrub slider with frame counter
 - **Fullscreen mode** – hides the title bar and system bars; tap the video or the fullscreen button to toggle; Back exits fullscreen before closing the player
@@ -162,6 +164,16 @@ Each `<frameN_json>` is the same structure as a `.tjsn` file. The footer carries
 ```
 
 Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/vid_<HH_mm_ss>.mtjsn`. Playback uses the per-frame `metadata` timestamps to reconstruct accurate inter-frame timing regardless of the recording frame rate.
+
+#### `.tltjsn` — time lapse
+
+Identical byte structure to `.mtjsn`. Each frame is captured on demand via a `get_image` command at the selected interval rather than from a continuous stream. The footer is the same `video_info` structure.
+
+```
+<frame1_json> 0x03 <frame2_json> 0x03 … <frameN_json> 0x03 <video_info_json>
+```
+
+Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/tl_<HH_mm_ss>.tltjsn`. Playback ignores the large inter-frame timestamps and renders at a fixed 8 fps.
 
 Exported gallery images (PNG composites) use the MediaStore API and require no storage permission on Android 10+.
 
