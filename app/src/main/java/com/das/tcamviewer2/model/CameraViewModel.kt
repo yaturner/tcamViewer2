@@ -442,6 +442,10 @@ class CameraViewModel : ViewModel() {
                 }
                 _maxTemp.value = formatTemp(dto.maxTemperature, scale, celsius)
                 _minTemp.value = formatTemp(dto.minTemperature, scale, celsius)
+            } else {
+                _spotmeterTemp.value = "--"
+                _maxTemp.value = "--"
+                _minTemp.value = "--"
             }
             updateFps()
         } catch (e: Exception) {
