@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.Pause
@@ -95,7 +96,7 @@ import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LibraryScreen() {
+fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
     val context = LocalContext.current
 
     var fileGroups by remember { mutableStateOf<List<Pair<String, List<File>>>>(emptyList()) }
@@ -151,6 +152,11 @@ fun LibraryScreen() {
                     title = {
                         val n = selectedPaths.size
                         Text(if (n == 0) "Library" else "$n selected")
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Open menu")
+                        }
                     },
                     actions = {
                         if (selectedPaths.isNotEmpty()) {
