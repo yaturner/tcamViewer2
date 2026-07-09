@@ -1,5 +1,6 @@
 package com.das.tcamviewer2.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -49,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -83,6 +85,12 @@ fun CameraScreen(
     val displayImageHeight = 240.dp
     val colorBarWidth = 32.dp
     val histogramWidth = 192.dp
+
+    // Small phones in portrait are tight on width — drop the histogram to give the image more room.
+    // Tablets/foldables (smallestScreenWidthDp >= 600, the Material breakpoint) keep it.
+    val configuration = LocalConfiguration.current
+    val isPhonePortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT &&
+        configuration.smallestScreenWidthDp < 600
 
     val spotmeterText by viewModel.spotmeterTemp.collectAsState()
     val maxTempText by viewModel.maxTemp.collectAsState()
@@ -178,7 +186,7 @@ fun CameraScreen(
             // Scale image to fit available space (important in landscape / windowed mode)
             val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val btnBarH = 56.dp + navBarInset
-            val sidebarW = colorBarWidth + histogramWidth + 30.dp
+            val sidebarW = colorBarWidth + (if (isPhonePortrait) 0.dp else histogramWidth) + 30.dp
             val availW = maxWidth - sidebarW - 32.dp
             val availH = maxHeight - btnBarH - 16.dp
             val scale = minOf(
@@ -306,7 +314,7 @@ fun CameraScreen(
                             contentScale = ContentScale.FillBounds
                         )
 
-                        if (histogram != null) {
+                        if (histogram != null && !isPhonePortrait) {
                             val hist = histogram!!
                             val histPalette = paletteFactory.getPaletteByName(currentPalette)
                             Canvas(
