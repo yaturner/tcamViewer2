@@ -33,7 +33,7 @@ import java.util.Locale
 
 data class CameraConfig(
     val agcEnabled: Boolean = false,
-    val emissivity: Int = 7700,
+    val emissivity: Int = 90, // percentage 1-100, per tCam's set_config/get_config API
     val gainMode: Int = Constants.GAIN_MODE_HIGH
 )
 
@@ -220,15 +220,17 @@ class CameraViewModel : ViewModel() {
             val response = cameraService.getConfig()
             val config = response.optJSONObject("config") ?: return
             val agcEnabled = config.optInt("agc_enabled") != 0
-            val emissivity = config.optInt("emissivity", 7700)
+            // The set_config/get_config API takes emissivity as a plain 1-100 percentage
+            // (see tCam firmware json_utilities.c: json_parse_set_config clamps to 1..100) —
+            // distinct from the 0-8192 scale used by Lepton telemetry elsewhere in the app.
+            val emissivity = config.optInt("emissivity", 90).coerceIn(1, 100)
             val gainMode = config.optInt("gain_mode", Constants.GAIN_MODE_HIGH)
             _cameraConfig.value = CameraConfig(agcEnabled, emissivity, gainMode)
 
             // Persist the camera's actual reported config once per connect — the Settings
             // screen reads these as its source of truth and shouldn't re-sync on every visit.
-            val pct = (emissivity * 100 / 8192).coerceIn(1, 100).toString()
             settingsDataManager.saveCameraAgc(agcEnabled)
-            settingsDataManager.saveCameraEmissivity(pct)
+            settingsDataManager.saveCameraEmissivity(emissivity.toString())
             settingsDataManager.saveCameraGainMode(gainMode)
         } catch (e: Exception) {
             Timber.e(e, "loadCameraConfig failed")

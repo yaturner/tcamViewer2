@@ -179,9 +179,8 @@ fun SettingsScreen(
                         dataManager.saveCameraEmissivity(localEmissivity)
                         dataManager.saveCameraGainMode(localGainMode)
                         if (isConnected) {
-                            val emissivityRaw = (localEmissivity.toIntOrNull() ?: 90)
-                                .coerceIn(1, 100) * 8192 / 100
-                            viewModel.sendCameraConfig(localAgc, emissivityRaw, localGainMode)
+                            val emissivityPct = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
+                            viewModel.sendCameraConfig(localAgc, emissivityPct, localGainMode)
                         }
                         onNavigateBack()
                     }
@@ -668,7 +667,7 @@ private fun CameraSettingsSection(
     var showEmissivityDialog by remember { mutableStateOf(false) }
     var showWifiDialog by remember { mutableStateOf(false) }
 
-    fun emissivityRaw() = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100) * 8192 / 100
+    fun emissivityPct() = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
 
     Text(
         text = "CAMERA SETTINGS",
@@ -685,7 +684,7 @@ private fun CameraSettingsSection(
         trailingContent = {
             Switch(checked = localAgc, onCheckedChange = {
                 onAgcChange(it)
-                viewModel.sendCameraConfig(it, emissivityRaw(), localGainMode)
+                viewModel.sendCameraConfig(it, emissivityPct(), localGainMode)
             })
         }
     )
@@ -711,7 +710,7 @@ private fun CameraSettingsSection(
             ),
             keyboardActions = KeyboardActions(onDone = {
                 keyboardController?.hide()
-                viewModel.sendCameraConfig(localAgc, emissivityRaw(), localGainMode)
+                viewModel.sendCameraConfig(localAgc, emissivityPct(), localGainMode)
                 onEmissivityConfirm()
             })
         )
@@ -740,14 +739,14 @@ private fun CameraSettingsSection(
                 modifier = Modifier
                     .selectable(selected = localGainMode == mode, onClick = {
                         onGainModeChange(mode)
-                        viewModel.sendCameraConfig(localAgc, emissivityRaw(), mode)
+                        viewModel.sendCameraConfig(localAgc, emissivityPct(), mode)
                     })
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 RadioButton(selected = localGainMode == mode, onClick = {
                     onGainModeChange(mode)
-                    viewModel.sendCameraConfig(localAgc, emissivityRaw(), mode)
+                    viewModel.sendCameraConfig(localAgc, emissivityPct(), mode)
                 })
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(label, fontSize = 16.sp)
@@ -803,7 +802,7 @@ private fun CameraSettingsSection(
                 TextButton(onClick = {
                     val selectedPct = EMISSIVITY_PRESETS[selectedIndex].second
                     onEmissivityChange(selectedPct.toString())
-                    viewModel.sendCameraConfig(localAgc, selectedPct * 8192 / 100, localGainMode)
+                    viewModel.sendCameraConfig(localAgc, selectedPct, localGainMode)
                     onEmissivityConfirm()
                     showEmissivityDialog = false
                 }) { Text("OK") }
