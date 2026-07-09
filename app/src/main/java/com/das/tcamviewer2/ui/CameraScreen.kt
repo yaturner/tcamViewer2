@@ -224,82 +224,85 @@ fun CameraScreen(
                 horizontalArrangement = Arrangement.Start
             ) {
                 // 1. MAIN PREVIEW AREA
-                Box(
-                    modifier = Modifier
-                        .size(width = imgW, height = imgH)
-                        .padding(end = 10.dp)
+                Column(
+                    modifier = Modifier.padding(end = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (imageBitmap != null) {
-                        Image(
-                            bitmap = imageBitmap,
-                            contentDescription = "Thermal Camera Feed",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(isConnected) {
-                                    if (!isConnected) return@pointerInput
-                                    detectTapGestures { offset ->
-                                        val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
-                                            .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
-                                        val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
-                                            .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-                                        viewModel.setSpotmeter(camX, camY)
-                                    }
-                                },
-                            contentScale = ContentScale.FillBounds
-                        )
-                    } else {
-                        Image(
-                            painter = painterResource(id = android.R.drawable.ic_menu_camera),
-                            contentDescription = "Waiting for camera",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.FillBounds
-                        )
-                    }
-
-                    // Spotmeter rectangle overlay
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        spotmeterRect?.let { rect ->
-                            val sx = size.width / Constants.IMAGE_WIDTH
-                            val sy = size.height / Constants.IMAGE_HEIGHT
-                            val left = rect.left * sx
-                            val top = rect.top * sy
-                            val w = (rect.width() + 1) * sx
-                            val h = (rect.height() + 1) * sy
-                            // Black shadow for visibility on any palette
-                            drawRect(
-                                color = Color.Black,
-                                topLeft = Offset(left - 1f, top - 1f),
-                                size = Size(w + 2f, h + 2f),
-                                style = Stroke(width = 1.dp.toPx())
-                            )
-                            drawRect(
-                                color = Color.White,
-                                topLeft = Offset(left, top),
-                                size = Size(w, h),
-                                style = Stroke(width = 1.dp.toPx())
-                            )
-                        }
-                    }
-
                     Text(
                         text = spotmeterText,
                         fontSize = 12.sp,
-                        color = Color.White,
                         modifier = Modifier
-                            .align(Alignment.Center)
-                            .padding(5.dp)
+                            .width(imgW)
+                            .padding(bottom = 2.dp),
+                        textAlign = TextAlign.Center
                     )
 
-                    if (showAgcHint) {
-                        Text(
-                            text = "AGC on — temps unavailable",
-                            fontSize = 11.sp,
-                            color = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .background(Color.Black.copy(alpha = 0.5f))
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
-                        )
+                    Box(
+                        modifier = Modifier.size(width = imgW, height = imgH)
+                    ) {
+                        if (imageBitmap != null) {
+                            Image(
+                                bitmap = imageBitmap,
+                                contentDescription = "Thermal Camera Feed",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(isConnected) {
+                                        if (!isConnected) return@pointerInput
+                                        detectTapGestures { offset ->
+                                            val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
+                                                .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                            val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
+                                                .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                            viewModel.setSpotmeter(camX, camY)
+                                        }
+                                    },
+                                contentScale = ContentScale.FillBounds
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = android.R.drawable.ic_menu_camera),
+                                contentDescription = "Waiting for camera",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.FillBounds
+                            )
+                        }
+
+                        // Spotmeter rectangle overlay
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            spotmeterRect?.let { rect ->
+                                val sx = size.width / Constants.IMAGE_WIDTH
+                                val sy = size.height / Constants.IMAGE_HEIGHT
+                                val left = rect.left * sx
+                                val top = rect.top * sy
+                                val w = (rect.width() + 1) * sx
+                                val h = (rect.height() + 1) * sy
+                                // Black shadow for visibility on any palette
+                                drawRect(
+                                    color = Color.Black,
+                                    topLeft = Offset(left - 1f, top - 1f),
+                                    size = Size(w + 2f, h + 2f),
+                                    style = Stroke(width = 1.dp.toPx())
+                                )
+                                drawRect(
+                                    color = Color.White,
+                                    topLeft = Offset(left, top),
+                                    size = Size(w, h),
+                                    style = Stroke(width = 1.dp.toPx())
+                                )
+                            }
+                        }
+
+                        if (showAgcHint) {
+                            Text(
+                                text = "AGC on — temps unavailable",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .background(Color.Black.copy(alpha = 0.5f))
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
                     }
                 }
 
