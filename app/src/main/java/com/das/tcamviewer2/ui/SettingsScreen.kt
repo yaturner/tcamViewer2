@@ -773,21 +773,26 @@ private fun CameraSettingsSection(
 
     // --- Emissivity preset dialog ---
     if (showEmissivityDialog) {
-        var selectedPct by remember { mutableStateOf(localEmissivity.toIntOrNull() ?: 90) }
+        var selectedIndex by remember {
+            mutableStateOf(
+                EMISSIVITY_PRESETS.indexOfFirst { it.second == (localEmissivity.toIntOrNull() ?: 90) }
+                    .coerceAtLeast(0)
+            )
+        }
         AlertDialog(
             onDismissRequest = { showEmissivityDialog = false },
             title = { Text("Select Emissivity") },
             text = {
                 Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                    EMISSIVITY_PRESETS.forEach { (label, pct) ->
+                    EMISSIVITY_PRESETS.forEachIndexed { index, (label, _) ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .selectable(selected = selectedPct == pct, onClick = { selectedPct = pct })
+                                .selectable(selected = selectedIndex == index, onClick = { selectedIndex = index })
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(selected = selectedPct == pct, onClick = { selectedPct = pct })
+                            RadioButton(selected = selectedIndex == index, onClick = { selectedIndex = index })
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(label, fontSize = 16.sp)
                         }
@@ -796,6 +801,7 @@ private fun CameraSettingsSection(
             },
             confirmButton = {
                 TextButton(onClick = {
+                    val selectedPct = EMISSIVITY_PRESETS[selectedIndex].second
                     onEmissivityChange(selectedPct.toString())
                     viewModel.sendCameraConfig(localAgc, selectedPct * 8192 / 100, localGainMode)
                     onEmissivityConfirm()
