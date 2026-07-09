@@ -84,7 +84,7 @@ class SettingsDataManager(context: Context) {
     }
 
     val cameraEmissivityFlow: Flow<String> = appContext.dataStore.data.map { prefs ->
-        prefs[CAMERA_EMISSIVITY_KEY] ?: "94"
+        prefs[CAMERA_EMISSIVITY_KEY] ?: "90"
     }
 
     val cameraGainModeFlow: Flow<Int> = appContext.dataStore.data.map { prefs ->

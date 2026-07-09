@@ -82,29 +82,16 @@ fun SettingsScreen(
     val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
 
     val isConnected by viewModel.isConnected.collectAsState()
-    val cameraConfig by viewModel.cameraConfig.collectAsState()
 
-    // Camera settings — persisted in DataStore, used as initial values
+    // Camera settings — persisted in DataStore. The ViewModel writes the camera's actual
+    // reported config here once per connect, so these flows are always the source of truth.
     val savedCameraAgc       by dataManager.cameraAgcFlow.collectAsState(initial = false)
-    val savedCameraEmissivity by dataManager.cameraEmissivityFlow.collectAsState(initial = "94")
+    val savedCameraEmissivity by dataManager.cameraEmissivityFlow.collectAsState(initial = "90")
     val savedCameraGainMode  by dataManager.cameraGainModeFlow.collectAsState(initial = Constants.GAIN_MODE_HIGH)
 
     var localAgc        by remember(savedCameraAgc)        { mutableStateOf(savedCameraAgc) }
     var localEmissivity by remember(savedCameraEmissivity) { mutableStateOf(savedCameraEmissivity) }
     var localGainMode   by remember(savedCameraGainMode)   { mutableStateOf(savedCameraGainMode) }
-
-    // When live camera config arrives, override locals and persist
-    LaunchedEffect(cameraConfig) {
-        cameraConfig?.let {
-            val pct = (it.emissivity * 100 / 8192).coerceIn(1, 100).toString()
-            localAgc        = it.agcEnabled
-            localEmissivity = pct
-            localGainMode   = it.gainMode
-            dataManager.saveCameraAgc(it.agcEnabled)
-            dataManager.saveCameraEmissivity(pct)
-            dataManager.saveCameraGainMode(it.gainMode)
-        }
-    }
 
     var showDiscoveryDialog by remember { mutableStateOf(false) }
     val discoveredDevices = remember { mutableStateListOf<Pair<String, String>>() }
@@ -188,6 +175,14 @@ fun SettingsScreen(
                         dataManager.saveSpotmeter(localSpotmeter)
                         dataManager.saveTemperatureUnit(localUnit)
                         dataManager.saveSelectedPalette(localPalette)
+                        dataManager.saveCameraAgc(localAgc)
+                        dataManager.saveCameraEmissivity(localEmissivity)
+                        dataManager.saveCameraGainMode(localGainMode)
+                        if (isConnected) {
+                            val emissivityRaw = (localEmissivity.toIntOrNull() ?: 90)
+                                .coerceIn(1, 100) * 8192 / 100
+                            viewModel.sendCameraConfig(localAgc, emissivityRaw, localGainMode)
+                        }
                         onNavigateBack()
                     }
                 }) {
@@ -673,7 +668,7 @@ private fun CameraSettingsSection(
     var showEmissivityDialog by remember { mutableStateOf(false) }
     var showWifiDialog by remember { mutableStateOf(false) }
 
-    fun emissivityRaw() = (localEmissivity.toIntOrNull() ?: 94).coerceIn(1, 100) * 8192 / 100
+    fun emissivityRaw() = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100) * 8192 / 100
 
     Text(
         text = "CAMERA SETTINGS",
@@ -778,7 +773,7 @@ private fun CameraSettingsSection(
 
     // --- Emissivity preset dialog ---
     if (showEmissivityDialog) {
-        var selectedPct by remember { mutableStateOf(localEmissivity.toIntOrNull() ?: 94) }
+        var selectedPct by remember { mutableStateOf(localEmissivity.toIntOrNull() ?: 90) }
         AlertDialog(
             onDismissRequest = { showEmissivityDialog = false },
             title = { Text("Select Emissivity") },

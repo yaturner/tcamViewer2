@@ -219,11 +219,17 @@ class CameraViewModel : ViewModel() {
         try {
             val response = cameraService.getConfig()
             val config = response.optJSONObject("config") ?: return
-            _cameraConfig.value = CameraConfig(
-                agcEnabled = config.optInt("agc_enabled") != 0,
-                emissivity = config.optInt("emissivity", 7700),
-                gainMode = config.optInt("gain_mode", Constants.GAIN_MODE_HIGH)
-            )
+            val agcEnabled = config.optInt("agc_enabled") != 0
+            val emissivity = config.optInt("emissivity", 7700)
+            val gainMode = config.optInt("gain_mode", Constants.GAIN_MODE_HIGH)
+            _cameraConfig.value = CameraConfig(agcEnabled, emissivity, gainMode)
+
+            // Persist the camera's actual reported config once per connect — the Settings
+            // screen reads these as its source of truth and shouldn't re-sync on every visit.
+            val pct = (emissivity * 100 / 8192).coerceIn(1, 100).toString()
+            settingsDataManager.saveCameraAgc(agcEnabled)
+            settingsDataManager.saveCameraEmissivity(pct)
+            settingsDataManager.saveCameraGainMode(gainMode)
         } catch (e: Exception) {
             Timber.e(e, "loadCameraConfig failed")
         }
