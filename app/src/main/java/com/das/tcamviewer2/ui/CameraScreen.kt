@@ -14,16 +14,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -67,6 +76,7 @@ private val PALETTE_OPTIONS = listOf(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
+    onOpenDrawer: () -> Unit = {},
     viewModel: CameraViewModel = viewModel()
 ) {
     val displayImageWidth = 320.dp
@@ -129,15 +139,26 @@ fun CameraScreen(
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+    ) {
         if (!isConnected) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.primaryContainer)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                IconButton(onClick = onOpenDrawer) {
+                    Icon(
+                        imageVector = Icons.Filled.Menu,
+                        contentDescription = "Open menu",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
                 Text(
                     text = if (isConnecting) "Thermal Viewer (Connecting...)"
                            else "Thermal Viewer (Disconnected)",
@@ -155,7 +176,8 @@ fun CameraScreen(
                 .background(Color(0xFF80C0FF))
         ) {
             // Scale image to fit available space (important in landscape / windowed mode)
-            val btnBarH = 56.dp
+            val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val btnBarH = 56.dp + navBarInset
             val sidebarW = colorBarWidth + histogramWidth + 30.dp
             val availW = maxWidth - sidebarW - 32.dp
             val availH = maxHeight - btnBarH - 16.dp
@@ -323,7 +345,17 @@ fun CameraScreen(
                 }
             }  // end if (imageBitmap != null)
 
-            // 3. FPS counter (top-right) — only while streaming
+            // 3. Menu button (top-left) — header row above is hidden once connected
+            if (isConnected) {
+                IconButton(
+                    onClick = onOpenDrawer,
+                    modifier = Modifier.align(Alignment.TopStart)
+                ) {
+                    Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open menu")
+                }
+            }
+
+            // 3b. FPS counter (top-right) — only while streaming
             if (isStreaming) {
                 Text(
                     text = fpsText,
@@ -340,6 +372,7 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
