@@ -307,27 +307,30 @@ fun CameraScreen(
                 }
 
                 // 2. DIAGNOSTICS & TEMPERATURE SIDEBAR
-                Column(
+                Row(
                     modifier = Modifier.height(imgH),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = maxTempText,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 5.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Color bar + its own max/min labels, grouped so the labels stay
+                    // centered over the bar itself even when the histogram (much wider)
+                    // sits alongside it.
+                    Column(
+                        modifier = Modifier.fillMaxHeight(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween
                     ) {
+                        Text(
+                            text = maxTempText,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 5.dp)
+                        )
+
                         Image(
                             bitmap = colorBarBitmap,
                             contentDescription = "Color Bar Scale",
                             modifier = Modifier
                                 .width(colorBarWidth)
-                                .fillMaxHeight()
+                                .weight(1f)
                                 .padding(end = 5.dp)
                                 .pointerInput(currentPalette) {
                                     detectTapGestures { offset ->
@@ -343,42 +346,42 @@ fun CameraScreen(
                             contentScale = ContentScale.FillBounds
                         )
 
-                        if (histogram != null && !isPhonePortrait) {
-                            val hist = histogram!!
-                            val histPalette = paletteFactory.getPaletteByName(currentPalette)
-                            Canvas(
-                                modifier = Modifier
-                                    .width(histogramWidth)
-                                    .fillMaxHeight()
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
-                            ) {
-                                val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
-                                val rowHeight = size.height / 256f
-                                for (row in 0 until 256) {
-                                    val idx = 255 - row
-                                    val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
-                                    if (barWidth > 0f) {
-                                        val rgb = histPalette?.get(idx)
-                                        val color = if (rgb != null)
-                                            Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
-                                        else Color.Black
-                                        drawRect(
-                                            color = color,
-                                            topLeft = Offset(0f, row * rowHeight),
-                                            size = Size(barWidth, rowHeight)
-                                        )
-                                    }
+                        Text(
+                            text = minTempText,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(start = 5.dp)
+                        )
+                    }
+
+                    if (histogram != null && !isPhonePortrait) {
+                        val hist = histogram!!
+                        val histPalette = paletteFactory.getPaletteByName(currentPalette)
+                        Canvas(
+                            modifier = Modifier
+                                .width(histogramWidth)
+                                .fillMaxHeight()
+                                .padding(horizontal = 5.dp, vertical = 2.dp)
+                        ) {
+                            val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
+                            val rowHeight = size.height / 256f
+                            for (row in 0 until 256) {
+                                val idx = 255 - row
+                                val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
+                                if (barWidth > 0f) {
+                                    val rgb = histPalette?.get(idx)
+                                    val color = if (rgb != null)
+                                        Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
+                                    else Color.Black
+                                    drawRect(
+                                        color = color,
+                                        topLeft = Offset(0f, row * rowHeight),
+                                        size = Size(barWidth, rowHeight)
+                                    )
                                 }
                             }
                         }
                     }
-
-                    Text(
-                        text = minTempText,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(start = 5.dp)
-                    )
                 }
             }  // end if (imageBitmap != null)
 
