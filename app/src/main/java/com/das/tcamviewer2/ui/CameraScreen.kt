@@ -231,10 +231,13 @@ fun CameraScreen(
             val sidebarW = colorBarWidth + (if (isPhonePortrait) 0.dp else histogramWidth) + 30.dp
             val availW = maxWidth - sidebarW - 32.dp
             val availH = maxHeight - btnBarH - 16.dp
+            // Fullscreen is meant to maximize the image, so let it scale up past its
+            // native 320x240dp size there; otherwise cap at 1x to avoid upscaling normally.
+            val maxScale = if (isFullscreen) Float.MAX_VALUE else 1f
             val scale = minOf(
                 availW.value / displayImageWidth.value,
                 availH.value / displayImageHeight.value,
-                1f
+                maxScale
             ).coerceAtLeast(0.25f)
             val imgW = displayImageWidth * scale
             val imgH = displayImageHeight * scale
