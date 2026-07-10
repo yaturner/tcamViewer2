@@ -426,31 +426,31 @@ fun CameraScreen(
                 }
             }
 
-            // 3c. Fullscreen toggle (bottom-right) — hides title bar and buttons, maximizes image
-            if (imageBitmap != null) {
-                IconButton(
-                    onClick = { isFullscreen = !isFullscreen },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                ) {
-                    Icon(
-                        imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                        contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen"
+            // 3b/3c. FPS counter + fullscreen toggle (top-right), stacked so neither
+            // overlaps the bottom button bar (BottomEnd collided with it in portrait).
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .navigationBarsPadding(),
+                horizontalAlignment = Alignment.End
+            ) {
+                if (isStreaming) {
+                    Text(
+                        text = fpsText,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
-            }
 
-            // 3b. FPS counter (top-right) — only while streaming
-            if (isStreaming) {
-                Text(
-                    text = fpsText,
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp)
-                )
+                if (imageBitmap != null) {
+                    IconButton(onClick = { isFullscreen = !isFullscreen }) {
+                        Icon(
+                            imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen"
+                        )
+                    }
+                }
             }
 
             // 4. BUTTON BAR (bottom) — hidden in fullscreen
