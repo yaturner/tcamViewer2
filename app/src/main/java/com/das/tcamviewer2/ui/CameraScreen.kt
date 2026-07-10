@@ -101,6 +101,7 @@ fun CameraScreen(
     val configuration = LocalConfiguration.current
     val isPhonePortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT &&
         configuration.smallestScreenWidthDp < 600
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     val spotmeterText by viewModel.spotmeterTemp.collectAsState()
     val maxTempText by viewModel.maxTemp.collectAsState()
@@ -224,6 +225,7 @@ fun CameraScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .background(Color(0xFF80C0FF))
+                .then(if (isFullscreen && isLandscape) Modifier.padding(bottom = 24.dp) else Modifier)
         ) {
             // Scale image to fit available space (important in landscape / windowed mode)
             val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
