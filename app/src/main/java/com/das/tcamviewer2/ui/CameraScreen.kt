@@ -1,6 +1,8 @@
 package com.das.tcamviewer2.ui
 
+import android.app.Activity
 import android.content.res.Configuration
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -25,6 +27,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -64,6 +70,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.createBitmap
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
@@ -114,7 +123,26 @@ fun CameraScreen(
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var streamMenuExpanded by remember { mutableStateOf(false) }
     var showTimeLapseDialog by remember { mutableStateOf(false) }
+    var isFullscreen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Exit fullscreen with back button before leaving the screen
+    BackHandler(enabled = isFullscreen) { isFullscreen = false }
+
+    // Hide/restore system bars when entering/exiting fullscreen
+    val view = LocalView.current
+    val window = remember { (view.context as Activity).window }
+    DisposableEffect(isFullscreen) {
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (isFullscreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.timeLapseMessage.collect { msg ->
@@ -166,7 +194,7 @@ fun CameraScreen(
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        if (!isConnected) {
+        if (!isConnected && !isFullscreen) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -199,7 +227,7 @@ fun CameraScreen(
         ) {
             // Scale image to fit available space (important in landscape / windowed mode)
             val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            val btnBarH = 56.dp + navBarInset
+            val btnBarH = if (isFullscreen) 0.dp else 56.dp + navBarInset
             val sidebarW = colorBarWidth + (if (isPhonePortrait) 0.dp else histogramWidth) + 30.dp
             val availW = maxWidth - sidebarW - 32.dp
             val availH = maxHeight - btnBarH - 16.dp
@@ -386,12 +414,27 @@ fun CameraScreen(
             }  // end if (imageBitmap != null)
 
             // 3. Menu button (top-left) — header row above is hidden once connected
-            if (isConnected) {
+            if (isConnected && !isFullscreen) {
                 IconButton(
                     onClick = onOpenDrawer,
                     modifier = Modifier.align(Alignment.TopStart)
                 ) {
                     Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open menu")
+                }
+            }
+
+            // 3c. Fullscreen toggle (bottom-right) — hides title bar and buttons, maximizes image
+            if (imageBitmap != null) {
+                IconButton(
+                    onClick = { isFullscreen = !isFullscreen },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                ) {
+                    Icon(
+                        imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                        contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen"
+                    )
                 }
             }
 
@@ -407,8 +450,8 @@ fun CameraScreen(
                 )
             }
 
-            // 4. BUTTON BAR (bottom)
-            Row(
+            // 4. BUTTON BAR (bottom) — hidden in fullscreen
+            if (!isFullscreen) Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
