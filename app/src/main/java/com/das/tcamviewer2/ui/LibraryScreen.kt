@@ -517,12 +517,13 @@ private fun BrowseWindow(
                                 }
                             }
 
-                            // Sidebar: max temp → color bar → min temp, matched to image height
+                            // Sidebar: max temp → color bar → min temp. The bar itself is
+                            // exactly imgH tall; the labels add extra height above/below
+                            // rather than shrinking it.
                             if (hasThermal && colorBar != null) {
                                 Column(
                                     modifier = Modifier
                                         .width(64.dp)
-                                        .height(imgH)
                                         .padding(horizontal = 4.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
@@ -538,7 +539,7 @@ private fun BrowseWindow(
                                         bitmap = colorBar,
                                         contentDescription = "Color scale",
                                         modifier = Modifier
-                                            .weight(1f)
+                                            .height(imgH)
                                             .width(28.dp)
                                             .padding(vertical = 4.dp),
                                         contentScale = ContentScale.FillBounds
@@ -1052,17 +1053,17 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                     }
                                 }
                                 if (hasThermal && colorBar != null) {
+                                    // Bar itself is exactly imgH tall; labels add extra height.
                                     Column(
                                         modifier = Modifier
                                             .width(64.dp)
-                                            .height(imgH)
                                             .padding(horizontal = 4.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
                                         Text(formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
                                             fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
                                         Image(bitmap = colorBar, contentDescription = null,
-                                            modifier = Modifier.weight(1f).width(28.dp).padding(vertical = 4.dp),
+                                            modifier = Modifier.height(imgH).width(28.dp).padding(vertical = 4.dp),
                                             contentScale = ContentScale.FillBounds)
                                         Text(formatTemp(currentFrame.dto.minTemperature, tempScale, isCelsius),
                                             fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)

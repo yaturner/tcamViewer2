@@ -317,16 +317,14 @@ fun CameraScreen(
 
                 // 2. DIAGNOSTICS & TEMPERATURE SIDEBAR
                 Row(
-                    modifier = Modifier.height(imgH),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Color bar + its own max/min labels, grouped so the labels stay
                     // centered over the bar itself even when the histogram (much wider)
-                    // sits alongside it.
+                    // sits alongside it. The bar itself is exactly imgH tall; the labels
+                    // are allowed to add extra height above/below rather than shrink it.
                     Column(
-                        modifier = Modifier.fillMaxHeight(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.SpaceBetween
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = maxTempText,
@@ -339,7 +337,7 @@ fun CameraScreen(
                             contentDescription = "Color Bar Scale",
                             modifier = Modifier
                                 .width(colorBarWidth)
-                                .weight(1f)
+                                .height(imgH)
                                 .padding(end = 5.dp)
                                 .pointerInput(currentPalette) {
                                     detectTapGestures { offset ->
@@ -369,7 +367,7 @@ fun CameraScreen(
                         Canvas(
                             modifier = Modifier
                                 .width(histogramWidth)
-                                .fillMaxHeight()
+                                .height(imgH)
                                 .padding(horizontal = 5.dp, vertical = 2.dp)
                         ) {
                             val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
