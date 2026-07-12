@@ -11,12 +11,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,6 +87,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.ImageDto
 import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
@@ -465,77 +468,89 @@ private fun BrowseWindow(
                     val currentDto = dto!!
                     val hasThermal = currentDto.tLinearEnabled != 0
                     val scale = if (currentDto.tLinearResolution == 0) 10f else 100f
+                    val colorBar = colorBarBitmap
 
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        // Main image: spotmeter temp above, hotspot square drawn on the image
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    val hasSidebar = hasThermal && colorBar != null
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val sidebarW = if (hasSidebar) 64.dp else 0.dp
+                        val labelH = if (hasThermal) 26.dp else 0.dp
+                        val availW = (maxWidth - sidebarW).coerceAtLeast(1.dp)
+                        val availH = (maxHeight - labelH).coerceAtLeast(1.dp)
+                        val fitScale = minOf(
+                            availW.value / Constants.IMAGE_WIDTH,
+                            availH.value / Constants.IMAGE_HEIGHT
+                        )
+                        val imgW = (Constants.IMAGE_WIDTH * fitScale).dp
+                        val imgH = (Constants.IMAGE_HEIGHT * fitScale).dp
+
+                        Row(
+                            modifier = Modifier.align(Alignment.Center),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            if (hasThermal) {
-                                Text(
-                                    text = formatTemp(
-                                        currentDto.spotmeterMean, scale, isCelsius
-                                    ),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 2.dp)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    bitmap = imageBitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
+                            // Main image: spotmeter temp above, hotspot square drawn on the image
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 if (hasThermal) {
-                                    SpotmeterOverlay(currentDto.spotmeterLocation)
+                                    Text(
+                                        text = formatTemp(
+                                            currentDto.spotmeterMean, scale, isCelsius
+                                        ),
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier
+                                            .width(imgW)
+                                            .padding(bottom = 2.dp)
+                                    )
+                                }
+                                Box(modifier = Modifier.size(width = imgW, height = imgH)) {
+                                    Image(
+                                        bitmap = imageBitmap,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.FillBounds
+                                    )
+                                    if (hasThermal) {
+                                        SpotmeterOverlay(currentDto.spotmeterLocation)
+                                    }
                                 }
                             }
-                        }
 
-                        // Sidebar: max temp → color bar → min temp
-                        if (hasThermal && colorBarBitmap != null) {
-                            Column(
-                                modifier = Modifier
-                                    .width(64.dp)
-                                    .fillMaxHeight()
-                                    .padding(vertical = 16.dp, horizontal = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = formatTemp(
-                                        currentDto.maxTemperature, scale, isCelsius
-                                    ),
-                                    fontSize = 11.sp,
-                                    color = Color.White,
-                                    textAlign = TextAlign.Center
-                                )
-                                Image(
-                                    bitmap = colorBarBitmap,
-                                    contentDescription = "Color scale",
+                            // Sidebar: max temp → color bar → min temp, matched to image height
+                            if (hasThermal && colorBar != null) {
+                                Column(
                                     modifier = Modifier
-                                        .weight(1f)
-                                        .width(28.dp)
-                                        .padding(vertical = 4.dp),
-                                    contentScale = ContentScale.FillBounds
-                                )
-                                Text(
-                                    text = formatTemp(
-                                        currentDto.minTemperature, scale, isCelsius
-                                    ),
-                                    fontSize = 11.sp,
-                                    color = Color.White,
-                                    textAlign = TextAlign.Center
-                                )
+                                        .width(64.dp)
+                                        .height(imgH)
+                                        .padding(horizontal = 4.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = formatTemp(
+                                            currentDto.maxTemperature, scale, isCelsius
+                                        ),
+                                        fontSize = 11.sp,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Image(
+                                        bitmap = colorBar,
+                                        contentDescription = "Color scale",
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .width(28.dp)
+                                            .padding(vertical = 4.dp),
+                                        contentScale = ContentScale.FillBounds
+                                    )
+                                    Text(
+                                        text = formatTemp(
+                                            currentDto.minTemperature, scale, isCelsius
+                                        ),
+                                        fontSize = 11.sp,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -917,53 +932,67 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                 when {
                     isLoading -> CircularProgressIndicator()
                     videoFrames.isEmpty() -> Text("No frames to display", color = Color.White)
-                    currentFrame != null -> Row(modifier = Modifier.fillMaxSize()) {
-                        Column(
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            if (hasThermal) {
-                                Text(
-                                    text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 2.dp)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier.weight(1f).fillMaxWidth(),
-                                contentAlignment = Alignment.Center
+                    currentFrame != null -> {
+                        val colorBar = colorBarBitmap
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            val hasSidebar = hasThermal && colorBar != null
+                            val sidebarW = if (hasSidebar) 64.dp else 0.dp
+                            val labelH = if (hasThermal) 26.dp else 0.dp
+                            val availW = (maxWidth - sidebarW).coerceAtLeast(1.dp)
+                            val availH = (maxHeight - labelH).coerceAtLeast(1.dp)
+                            val fitScale = minOf(
+                                availW.value / Constants.IMAGE_WIDTH,
+                                availH.value / Constants.IMAGE_HEIGHT
+                            )
+                            val imgW = (Constants.IMAGE_WIDTH * fitScale).dp
+                            val imgH = (Constants.IMAGE_HEIGHT * fitScale).dp
+
+                            Row(
+                                modifier = Modifier.align(Alignment.Center),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Image(
-                                    bitmap = currentFrame.bitmap,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Fit
-                                )
-                                if (hasThermal) {
-                                    SpotmeterOverlay(currentFrame.dto.spotmeterLocation)
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    if (hasThermal) {
+                                        Text(
+                                            text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier
+                                                .width(imgW)
+                                                .padding(bottom = 2.dp)
+                                        )
+                                    }
+                                    Box(modifier = Modifier.size(width = imgW, height = imgH)) {
+                                        Image(
+                                            bitmap = currentFrame.bitmap,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.FillBounds
+                                        )
+                                        if (hasThermal) {
+                                            SpotmeterOverlay(currentFrame.dto.spotmeterLocation)
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                        if (hasThermal && colorBarBitmap != null) {
-                            Column(
-                                modifier = Modifier
-                                    .width(64.dp)
-                                    .fillMaxHeight()
-                                    .padding(vertical = 16.dp, horizontal = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
-                                    fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
-                                Image(bitmap = colorBarBitmap, contentDescription = null,
-                                    modifier = Modifier.weight(1f).width(28.dp).padding(vertical = 4.dp),
-                                    contentScale = ContentScale.FillBounds)
-                                Text(formatTemp(currentFrame.dto.minTemperature, tempScale, isCelsius),
-                                    fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                                if (hasThermal && colorBar != null) {
+                                    Column(
+                                        modifier = Modifier
+                                            .width(64.dp)
+                                            .height(imgH)
+                                            .padding(horizontal = 4.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
+                                            fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                                        Image(bitmap = colorBar, contentDescription = null,
+                                            modifier = Modifier.weight(1f).width(28.dp).padding(vertical = 4.dp),
+                                            contentScale = ContentScale.FillBounds)
+                                        Text(formatTemp(currentFrame.dto.minTemperature, tempScale, isCelsius),
+                                            fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                                    }
+                                }
                             }
                         }
                     }
