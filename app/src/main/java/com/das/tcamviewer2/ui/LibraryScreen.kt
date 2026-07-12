@@ -92,6 +92,7 @@ import com.das.tcamviewer2.model.ImageDto
 import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
 import com.das.tcamviewer2.utils as globalUtils
+import com.das.tcamviewer2.utils.VideoExporter
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -811,8 +812,11 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     var isPlaying by remember { mutableStateOf(false) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var isFullscreen by remember { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     // Exit fullscreen with back button before closing the player
     BackHandler(enabled = isFullscreen) { isFullscreen = false }
@@ -910,6 +914,77 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                    },
+                    actions = {
+                        if (isExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .padding(end = 16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            // Share — encodes the frames to MP4 (correct per-frame timing) and shares it
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isExporting = true
+                                        val mp4 = runCatching {
+                                            exportVideoAsMp4(context, file, videoFrames, frameIntervals)
+                                        }.getOrNull()
+                                        isExporting = false
+                                        if (mp4 == null) {
+                                            Toast.makeText(context, "Export failed", Toast.LENGTH_LONG).show()
+                                            return@launch
+                                        }
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            mp4
+                                        )
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "video/mp4"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(
+                                            Intent.createChooser(intent, "Share thermal video")
+                                        )
+                                    }
+                                },
+                                enabled = videoFrames.isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = "Share")
+                            }
+                            // Export — encodes the frames to MP4 (correct per-frame timing) and saves to gallery
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isExporting = true
+                                        val mp4 = runCatching {
+                                            exportVideoAsMp4(context, file, videoFrames, frameIntervals)
+                                        }.getOrNull()
+                                        val saved = mp4?.let {
+                                            val folder = file.parentFile?.name ?: "tCam"
+                                            val name = file.nameWithoutExtension
+                                                .removePrefix("vid_").removePrefix("tl_")
+                                            withContext(Dispatchers.IO) {
+                                                globalUtils.saveVideo(it, folder, name) != null
+                                            }
+                                        } ?: false
+                                        isExporting = false
+                                        Toast.makeText(
+                                            context,
+                                            if (saved) "Saved to gallery" else "Export failed",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
+                                enabled = videoFrames.isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.SaveAlt, contentDescription = "Export to gallery")
+                            }
                         }
                     }
                 )
@@ -1057,6 +1132,31 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+/** Encodes [frames] to an MP4 in the app's share cache dir, using [intervals] for per-frame timing. */
+private suspend fun exportVideoAsMp4(
+    context: android.content.Context,
+    sourceFile: File,
+    frames: List<VideoFrame>,
+    intervals: List<Long>
+): File = withContext(Dispatchers.Default) {
+    val (rawW, rawH) = parseResolution(settingsDataManager.getExportResolution()) ?: (320 to 240)
+    val width = VideoExporter.align16(rawW)
+    val height = VideoExporter.align16(rawH)
+    val bitmaps = frames.map { it.dto.bitmap!! }
+    val exportDir = File(context.cacheDir, "share").also { it.mkdirs() }
+    val outputFile = File(exportDir, "${sourceFile.nameWithoutExtension}.mp4")
+    VideoExporter.exportMp4(bitmaps, intervals, outputFile, width, height)
+    outputFile
+}
+
+private fun parseResolution(s: String): Pair<Int, Int>? {
+    val parts = s.lowercase().split("x")
+    if (parts.size != 2) return null
+    val w = parts[0].trim().toIntOrNull() ?: return null
+    val h = parts[1].trim().toIntOrNull() ?: return null
+    return w to h
 }
 
 private suspend fun readFirstMtjsnFrame(file: File): JSONObject? =
