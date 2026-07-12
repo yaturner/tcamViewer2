@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +79,7 @@ import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.CameraViewModel
 import com.das.tcamviewer2.paletteFactory
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
@@ -125,6 +127,7 @@ fun CameraScreen(
     var showTimeLapseDialog by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     // Exit fullscreen with back button before leaving the screen
     BackHandler(enabled = isFullscreen) { isFullscreen = false }
@@ -471,7 +474,15 @@ fun CameraScreen(
 
                 // Save — only meaningful once a frame has actually been captured
                 FeedbackButton(
-                    onClick = { currentImageDto?.let { cameraUtils.saveTjsn(it) } },
+                    onClick = {
+                        currentImageDto?.let { dto ->
+                            if (cameraUtils.saveTjsn(dto)) {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Image saved as ${dto.filename}")
+                                }
+                            }
+                        }
+                    },
                     enabled = currentImageDto != null,
                     contentPadding = btnPadding
                 ) {
