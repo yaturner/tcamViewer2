@@ -1,6 +1,8 @@
 package com.das.tcamviewer2.utils
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Rect
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -18,6 +20,10 @@ import kotlinx.coroutines.withContext
  * cumulative presentation timestamps derived from these durations, so the
  * resulting file's timing matches how the recording actually played back
  * instead of baking in a fixed frame rate.
+ *
+ * [spotmeterRects] holds one entry per frame (nullable, in 160x120 camera pixel
+ * space) — when present, the hotspot marker is burned into that frame before
+ * encoding, matching what the live/library views draw on top of the image.
  */
 object VideoExporter {
     private const val TIMEOUT_US = 10_000L
@@ -26,12 +32,14 @@ object VideoExporter {
     suspend fun exportMp4(
         frames: List<Bitmap>,
         frameDurationsMs: List<Long>,
+        spotmeterRects: List<Rect?>,
         outputFile: File,
         width: Int,
         height: Int
     ) = withContext(Dispatchers.Default) {
         require(frames.isNotEmpty()) { "No frames to export" }
         require(frames.size == frameDurationsMs.size) { "Frame/duration count mismatch" }
+        require(frames.size == spotmeterRects.size) { "Frame/spotmeter count mismatch" }
 
         val fps = computeFps(frames.size, frameDurationsMs.sum())
         val bitRate = computeBitRate(width, height, fps)
@@ -69,6 +77,9 @@ object VideoExporter {
                     if (inIndex >= 0) {
                         if (frameIndex < frames.size) {
                             val scaled = Bitmap.createScaledBitmap(frames[frameIndex], width, height, true)
+                            spotmeterRects[frameIndex]?.let { rect ->
+                                drawHotspotMarker(Canvas(scaled), rect, width, height)
+                            }
                             val image = codec.getInputImage(inIndex)
                             if (image != null) {
                                 writeBitmapToYuvImage(scaled, image, width, height)

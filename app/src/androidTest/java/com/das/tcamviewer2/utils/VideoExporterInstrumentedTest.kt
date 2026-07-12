@@ -38,8 +38,10 @@ class VideoExporterInstrumentedTest {
         val frames = List(frameDurationsMs.size) { i -> solidColorBitmap(width, height, i) }
         val outFile = File(context.cacheDir, "video_exporter_test_${System.currentTimeMillis()}.mp4")
 
+        val noSpotmeterRects = List<android.graphics.Rect?>(frameDurationsMs.size) { null }
+
         try {
-            VideoExporter.exportMp4(frames, frameDurationsMs, outFile, width, height)
+            VideoExporter.exportMp4(frames, frameDurationsMs, noSpotmeterRects, outFile, width, height)
 
             assertTrue("Output file should exist", outFile.exists())
             assertTrue("Output file should be non-empty", outFile.length() > 0)

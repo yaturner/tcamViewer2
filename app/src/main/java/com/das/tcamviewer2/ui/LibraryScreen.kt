@@ -93,6 +93,7 @@ import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
 import com.das.tcamviewer2.utils as globalUtils
 import com.das.tcamviewer2.utils.VideoExporter
+import com.das.tcamviewer2.utils.drawHotspotMarker
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -1164,9 +1165,10 @@ private suspend fun exportVideoAsMp4(
     val width = VideoExporter.align16(rawW)
     val height = VideoExporter.align16(rawH)
     val bitmaps = frames.map { it.dto.bitmap!! }
+    val spotmeterRects = frames.map { if (it.dto.tLinearEnabled != 0) it.dto.spotmeterLocation else null }
     val exportDir = File(context.cacheDir, "share").also { it.mkdirs() }
     val outputFile = File(exportDir, "${sourceFile.nameWithoutExtension}.mp4")
-    VideoExporter.exportMp4(bitmaps, intervals, outputFile, width, height)
+    VideoExporter.exportMp4(bitmaps, intervals, spotmeterRects, outputFile, width, height)
     outputFile
 }
 
@@ -1249,32 +1251,9 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
     }
 
     if (hasThermal) {
-        // ── Hotspot marker: same fixed 4x4-camera-pixel square as SpotmeterOverlay,
-        // centred on the reported spotmeter rect. The image fills imgW x imgH with no
-        // letterboxing (it's an exact 4:3 scale of the native 160x120), so mapping is
-        // a plain 4x scale — no aspect-fit math needed like the Compose overlay requires.
+        // Hotspot marker — same fixed 4x4-camera-pixel square shown on-screen.
         dto.spotmeterLocation?.let { rect ->
-            val markerSizePx = 4f
-            val sx = imgW / Constants.IMAGE_WIDTH.toFloat()
-            val sy = imgH / Constants.IMAGE_HEIGHT.toFloat()
-            val centerCol = (rect.left + rect.right) / 2f
-            val centerRow = (rect.top + rect.bottom) / 2f
-            val left = (centerCol - markerSizePx / 2f) * sx
-            val top = headerH + (centerRow - markerSizePx / 2f) * sy
-            val w = markerSizePx * sx
-            val h = markerSizePx * sy
-            val border = 3f
-
-            val blackFill = android.graphics.Paint().apply {
-                color = android.graphics.Color.BLACK
-                style = android.graphics.Paint.Style.FILL
-            }
-            val whiteFill = android.graphics.Paint().apply {
-                color = android.graphics.Color.WHITE
-                style = android.graphics.Paint.Style.FILL
-            }
-            canvas.drawRect(left - border, top - border, left + w + border, top + h + border, blackFill)
-            canvas.drawRect(left, top, left + w, top + h, whiteFill)
+            drawHotspotMarker(canvas, rect, imgW, imgH, offsetY = headerH.toFloat())
         }
 
         // ── Spotmeter temp (centred on image, stroke + fill for contrast) ────
