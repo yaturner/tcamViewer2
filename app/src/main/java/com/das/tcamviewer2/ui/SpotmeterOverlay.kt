@@ -11,9 +11,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.das.tcamviewer2.constants.Constants
 
+/** Fixed marker size, in camera pixels (160x120 space), regardless of the reported rect's own size. */
+private const val MARKER_SIZE_PX = 4f
+
 /**
- * Draws the hotspot/spotmeter square over a thermal image shown with ContentScale.Fit,
- * mapping [spotmeterRect] (160x120 camera pixel space) into the letterboxed image bounds.
+ * Draws a fixed-size 4x4 camera-pixel hotspot/spotmeter square, centered on [spotmeterRect],
+ * over a thermal image shown with ContentScale.Fit, mapping into the letterboxed image bounds.
  */
 @Composable
 fun SpotmeterOverlay(spotmeterRect: Rect?, modifier: Modifier = Modifier) {
@@ -34,10 +37,12 @@ fun SpotmeterOverlay(spotmeterRect: Rect?, modifier: Modifier = Modifier) {
             val offsetY = (size.height - fittedH) / 2f
             val sx = fittedW / Constants.IMAGE_WIDTH
             val sy = fittedH / Constants.IMAGE_HEIGHT
-            val left = offsetX + rect.left * sx
-            val top = offsetY + rect.top * sy
-            val w = (rect.width() + 1) * sx
-            val h = (rect.height() + 1) * sy
+            val centerCol = (rect.left + rect.right) / 2f
+            val centerRow = (rect.top + rect.bottom) / 2f
+            val left = offsetX + (centerCol - MARKER_SIZE_PX / 2f) * sx
+            val top = offsetY + (centerRow - MARKER_SIZE_PX / 2f) * sy
+            val w = MARKER_SIZE_PX * sx
+            val h = MARKER_SIZE_PX * sy
             // Solid black border behind a solid white square for visibility on any palette
             val border = 1.dp.toPx()
             drawRect(
