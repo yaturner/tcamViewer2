@@ -495,10 +495,11 @@ fun CameraScreen(
                         Text(label, fontSize = 12.sp)
                     }
                 } else {
+                    val canStream = isConnected && currentImageDto != null
                     Box {
                         FeedbackButton(
                             onClick = { streamMenuExpanded = true },
-                            enabled = isConnected,
+                            enabled = canStream,
                             contentPadding = btnPadding
                         ) {
                             Text("Stream", fontSize = 12.sp)
@@ -509,6 +510,7 @@ fun CameraScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Start") },
+                                enabled = canStream,
                                 onClick = {
                                     viewModel.toggleStreaming()
                                     streamMenuExpanded = false
@@ -516,7 +518,7 @@ fun CameraScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Record") },
-                                enabled = isConnected,
+                                enabled = canStream,
                                 onClick = {
                                     viewModel.toggleRecording()
                                     streamMenuExpanded = false
@@ -524,7 +526,7 @@ fun CameraScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Time Lapse") },
-                                enabled = isConnected,
+                                enabled = canStream,
                                 onClick = {
                                     streamMenuExpanded = false
                                     showTimeLapseDialog = true
