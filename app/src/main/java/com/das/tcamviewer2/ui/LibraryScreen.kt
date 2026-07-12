@@ -1213,7 +1213,7 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
     val imgW     = 640          // 160 × 4
     val imgH     = 480          // 120 × 4
     val headerH  = 72
-    val bottomPad = 28          // keeps image/colorbar bottom away from the bitmap edge
+    val bottomPad = 44          // room for the min-temp label below the colour bar
     val sidebarW = if (hasThermal) 120 else 0
     val totalW   = imgW + sidebarW
     val totalH   = headerH + imgH + bottomPad   // 580
@@ -1276,13 +1276,12 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
         canvas.drawText(spotText, cx, cy, spotStroke)
         canvas.drawText(spotText, cx, cy, spotFill)
 
-        // ── Colour bar: centred in sidebar, padded so labels fit above/below ─
-        // cbPad is the gap reserved above and below the bar for the temp labels
-        val cbPad = 50
+        // ── Colour bar: top-aligned with the image, full image height (matches
+        // the on-screen views — the bar itself is never shrunk to fit labels) ─
         val cbW   = 44
-        val cbH   = imgH - cbPad * 2         // 380 px tall
+        val cbH   = imgH
         val cbX   = imgW + (sidebarW - cbW) / 2
-        val cbY   = headerH + cbPad          // 122
+        val cbY   = headerH
 
         val cbPixels = IntArray(256) { i ->
             val rgb = dto.palette?.get(255 - i)
@@ -1303,18 +1302,19 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
             textAlign = android.graphics.Paint.Align.CENTER
         }
         val sidebarCx = imgW + sidebarW / 2f
-        // Max: baseline sits cbPad-10 px below the image top → above the bar
+        // Max: baseline sits just above the bar's top, inside the header band
+        // (shared with the filename title, which sits far to the left)
         canvas.drawText(
             formatTemp(dto.maxTemperature, tempScale, isCelsius),
             sidebarCx,
-            (headerH + cbPad - 12).toFloat(),   // y ≈ 110
+            (headerH - 12).toFloat(),
             tempPaint
         )
-        // Min: baseline sits cbPad-12 px above the bottom of the image area
+        // Min: baseline sits just below the bar's bottom, inside bottomPad
         canvas.drawText(
             formatTemp(dto.minTemperature, tempScale, isCelsius),
             sidebarCx,
-            (headerH + imgH - cbPad + 34).toFloat(),  // y ≈ 504
+            (headerH + imgH + 34).toFloat(),
             tempPaint
         )
     }
