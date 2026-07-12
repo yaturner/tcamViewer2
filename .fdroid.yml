@@ -1,0 +1,33 @@
+# Build metadata for F-Droid (https://f-droid.org/docs/Build_Metadata_Reference/).
+# Maintained here so F-Droid can pull build recipe updates directly from this
+# repo instead of requiring a manual metadata PR to fdroiddata for every release.
+#
+# IMPORTANT: this app ships two build flavors (see app/build.gradle.kts):
+#   - "full"   — includes GlitchTip (Sentry-protocol-compatible) crash reporting,
+#                distributed via GitHub releases.
+#   - "fdroid" — no crash reporting, no network telemetry of any kind. This is
+#                the flavor F-Droid must build (see Builds.gradle below), so the
+#                F-Droid release carries no Anti-Features: Tracking disclosure.
+
+Categories:
+  - Multimedia
+License: GPL-3.0-only
+SourceCode: https://github.com/yaturner/tcamViewer2
+IssueTracker: https://github.com/yaturner/tcamViewer2/issues
+
+RepoType: git
+Repo: https://github.com/yaturner/tcamViewer2.git
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+
+CurrentVersion: '1.0'
+CurrentVersionCode: 1
+
+Builds:
+  - versionName: '1.0'
+    versionCode: 1
+    commit: v1.0
+    subdir: app
+    gradle:
+      - fdroid

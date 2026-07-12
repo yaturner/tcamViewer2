@@ -1,0 +1,13 @@
+tCam Viewer 2 connects to a tCam (https://github.com/danjulio/tCam) open-source thermal imaging camera over Wi-Fi, decodes its raw radiometric data, applies colour palettes, and renders a live thermal video feed.
+
+Features:
+
+* Live 160x120 radiometric thermal video streamed directly from the camera over TCP, with a spotmeter, max/min temperature overlays, a live colour histogram, and a colour bar scale
+* 10 selectable colour palettes (Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia)
+* Capture single frames, record continuous video, or run a scheduled time lapse
+* Library screen to browse, sort, and delete saved images, videos, and time lapses, grouped by date
+* Full-screen image and video viewers with colour bar, temperature labels, and spotmeter overlay
+* Share or export images and videos (as MP4) to the device gallery
+* Celsius or Fahrenheit units, manual or automatic gain control, adjustable emissivity and gain mode
+
+This app only talks to a tCam camera on your local Wi-Fi network — it needs no account, no internet access beyond that, and collects no data about you.
