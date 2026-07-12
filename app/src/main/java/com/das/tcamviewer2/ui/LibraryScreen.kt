@@ -486,23 +486,27 @@ private fun BrowseWindow(
 
                         Row(
                             modifier = Modifier.align(Alignment.Center),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.Top
                         ) {
-                            // Main image: spotmeter temp above, hotspot square drawn on the image
+                            // Main image: spotmeter temp above, hotspot square drawn on the image.
+                            // Header reserves the same labelH used for the sidebar's max-temp
+                            // label, so the image and the color bar start at the same Y.
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 if (hasThermal) {
-                                    Text(
-                                        text = formatTemp(
-                                            currentDto.spotmeterMean, scale, isCelsius
-                                        ),
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier
-                                            .width(imgW)
-                                            .padding(bottom = 2.dp)
-                                    )
+                                    Box(
+                                        modifier = Modifier.width(imgW).height(labelH),
+                                        contentAlignment = Alignment.BottomCenter
+                                    ) {
+                                        Text(
+                                            text = formatTemp(
+                                                currentDto.spotmeterMean, scale, isCelsius
+                                            ),
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                                 Box(modifier = Modifier.size(width = imgW, height = imgH)) {
                                     Image(
@@ -527,14 +531,19 @@ private fun BrowseWindow(
                                         .padding(horizontal = 4.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(
-                                        text = formatTemp(
-                                            currentDto.maxTemperature, scale, isCelsius
-                                        ),
-                                        fontSize = 11.sp,
-                                        color = Color.White,
-                                        textAlign = TextAlign.Center
-                                    )
+                                    Box(
+                                        modifier = Modifier.height(labelH),
+                                        contentAlignment = Alignment.BottomCenter
+                                    ) {
+                                        Text(
+                                            text = formatTemp(
+                                                currentDto.maxTemperature, scale, isCelsius
+                                            ),
+                                            fontSize = 11.sp,
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                     Image(
                                         bitmap = colorBar,
                                         contentDescription = "Color scale",
@@ -1025,20 +1034,24 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
 
                             Row(
                                 modifier = Modifier.align(Alignment.Center),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.Top
                             ) {
+                                // Header reserves the same labelH used for the sidebar's max-temp
+                                // label, so the image and the color bar start at the same Y.
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     if (hasThermal) {
-                                        Text(
-                                            text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            textAlign = TextAlign.Center,
-                                            modifier = Modifier
-                                                .width(imgW)
-                                                .padding(bottom = 2.dp)
-                                        )
+                                        Box(
+                                            modifier = Modifier.width(imgW).height(labelH),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            Text(
+                                                text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
                                     }
                                     Box(modifier = Modifier.size(width = imgW, height = imgH)) {
                                         Image(
@@ -1060,8 +1073,13 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                             .padding(horizontal = 4.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally
                                     ) {
-                                        Text(formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
-                                            fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                                        Box(
+                                            modifier = Modifier.height(labelH),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            Text(formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
+                                                fontSize = 11.sp, color = Color.White, textAlign = TextAlign.Center)
+                                        }
                                         Image(bitmap = colorBar, contentDescription = null,
                                             modifier = Modifier.height(imgH).width(28.dp).padding(vertical = 4.dp),
                                             contentScale = ContentScale.FillBounds)

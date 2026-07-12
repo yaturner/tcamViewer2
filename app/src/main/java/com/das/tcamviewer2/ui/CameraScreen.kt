@@ -245,13 +245,16 @@ fun CameraScreen(
             ).coerceAtLeast(0.25f)
             val imgW = displayImageWidth * scale
             val imgH = displayImageHeight * scale
+            // Both header labels share this fixed height so the image and the color bar/
+            // histogram below them start at the exact same Y, regardless of text metrics.
+            val headerH = 24.dp
 
             // --- Image + sidebar row (only when a frame is available) ---
             if (imageBitmap != null) Row(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .padding(start = 16.dp, end = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.Start
             ) {
                 // 1. MAIN PREVIEW AREA
@@ -259,14 +262,16 @@ fun CameraScreen(
                     modifier = Modifier.padding(end = 10.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = spotmeterText,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .width(imgW)
-                            .padding(bottom = 2.dp),
-                        textAlign = TextAlign.Center
-                    )
+                    Box(
+                        modifier = Modifier.width(imgW).height(headerH),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Text(
+                            text = spotmeterText,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
 
                     Box(
                         modifier = Modifier.size(width = imgW, height = imgH)
@@ -317,20 +322,26 @@ fun CameraScreen(
 
                 // 2. DIAGNOSTICS & TEMPERATURE SIDEBAR
                 Row(
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     // Color bar + its own max/min labels, grouped so the labels stay
                     // centered over the bar itself even when the histogram (much wider)
-                    // sits alongside it. The bar itself is exactly imgH tall; the labels
-                    // are allowed to add extra height above/below rather than shrink it.
+                    // sits alongside it. The bar itself is exactly imgH tall, starting at
+                    // the same Y as the image (both headers share the fixed headerH height);
+                    // the labels are allowed to add extra height rather than shrink the bar.
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            text = maxTempText,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 5.dp)
-                        )
+                        Box(
+                            modifier = Modifier.height(headerH),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Text(
+                                text = maxTempText,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 5.dp)
+                            )
+                        }
 
                         Image(
                             bitmap = colorBarBitmap,
@@ -364,27 +375,32 @@ fun CameraScreen(
                     if (histogram != null && !isPhonePortrait) {
                         val hist = histogram!!
                         val histPalette = paletteFactory.getPaletteByName(currentPalette)
-                        Canvas(
-                            modifier = Modifier
-                                .width(histogramWidth)
-                                .height(imgH)
-                                .padding(horizontal = 5.dp, vertical = 2.dp)
-                        ) {
-                            val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
-                            val rowHeight = size.height / 256f
-                            for (row in 0 until 256) {
-                                val idx = 255 - row
-                                val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
-                                if (barWidth > 0f) {
-                                    val rgb = histPalette?.get(idx)
-                                    val color = if (rgb != null)
-                                        Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
-                                    else Color.Black
-                                    drawRect(
-                                        color = color,
-                                        topLeft = Offset(0f, row * rowHeight),
-                                        size = Size(barWidth, rowHeight)
-                                    )
+                        // No label of its own — a matching spacer keeps its top aligned with
+                        // the image/color bar above, which both reserve headerH for text.
+                        Column {
+                            Spacer(modifier = Modifier.height(headerH))
+                            Canvas(
+                                modifier = Modifier
+                                    .width(histogramWidth)
+                                    .height(imgH)
+                                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                            ) {
+                                val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
+                                val rowHeight = size.height / 256f
+                                for (row in 0 until 256) {
+                                    val idx = 255 - row
+                                    val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
+                                    if (barWidth > 0f) {
+                                        val rgb = histPalette?.get(idx)
+                                        val color = if (rgb != null)
+                                            Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
+                                        else Color.Black
+                                        drawRect(
+                                            color = color,
+                                            topLeft = Offset(0f, row * rowHeight),
+                                            size = Size(barWidth, rowHeight)
+                                        )
+                                    }
                                 }
                             }
                         }
