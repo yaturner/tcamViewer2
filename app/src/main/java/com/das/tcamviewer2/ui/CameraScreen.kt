@@ -469,10 +469,10 @@ fun CameraScreen(
                     Text("Get", fontSize = 12.sp)
                 }
 
-                // Save (stub)
+                // Save — only meaningful once a frame has actually been captured
                 FeedbackButton(
-                    onClick = { cameraUtils.saveTjsn(currentImageDto!!)},
-                    enabled = true,
+                    onClick = { currentImageDto?.let { cameraUtils.saveTjsn(it) } },
+                    enabled = currentImageDto != null,
                     contentPadding = btnPadding
                 ) {
                     Text("Save", fontSize = 12.sp)
