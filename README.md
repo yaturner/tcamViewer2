@@ -68,7 +68,7 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - Max temperature (top of bar), min temperature (bottom of bar), and spotmeter temperature overlaid on the image
 - Image time and filename shown in the title bar
 - Previous / next navigation when multiple files are selected
-- **Share** – composites the full image (scaled 4×), colour bar, and all temperature labels into a single PNG and fires the system share sheet
+- **Share** – composites the full image (scaled 4×), colour bar, spotmeter hotspot marker, and all temperature labels into a single PNG and fires the system share sheet
 - **Export** – saves the same composite PNG to the device gallery via MediaStore; no storage permission required on Android 10+
 - **Delete** – removes the file from disk and returns to the library
 - **Play** (`.mtjsn` recordings and `.tltjsn` time lapses) – opens the video player
@@ -79,6 +79,7 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - **Skip back / forward** 5 frames with fast-rewind / fast-forward buttons
 - Scrub slider with frame counter
 - **Fullscreen mode** – hides the title bar and system bars; tap the video or the fullscreen button to toggle; Back exits fullscreen before closing the player
+- **Share / Export** – encodes the frames to MP4 (at the configured export resolution, with the spotmeter hotspot marker burned into each frame) and fires the share sheet or saves to the device gallery via MediaStore
 
 ### Settings screen
 - Camera IP address
@@ -88,6 +89,7 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - Manual temperature range (min / max)
 - Shutter sound toggle
 - Spotmeter enable / disable
+- Export resolution for shared/exported video (`.mtjsn` / `.tltjsn` playback → MP4)
 - All settings are deferred until **Done** is pressed; **Cancel** discards changes and returns to the previous tab
 
 ## Architecture
@@ -217,6 +219,7 @@ Exported gallery images (PNG composites) use the MediaStore API and require no s
 | RxJava 3 / RxAndroid | Frame stream from `CameraService` to `CameraViewModel` |
 | Timber | Logging |
 | Hilt | Dependency injection (partially wired; `CameraUtils` uses `@Singleton`/`@Inject`) |
+| Sentry Android SDK | Crash reporting, sent to [GlitchTip](https://glitchtip.com/) (Sentry-protocol-compatible); auto-initializes from `AndroidManifest` meta-data, catches uncaught exceptions and ANRs with no code changes |
 
 ## License
 
