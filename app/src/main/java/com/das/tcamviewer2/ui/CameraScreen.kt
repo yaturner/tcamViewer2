@@ -1,5 +1,7 @@
 package com.das.tcamviewer2.ui
 
+import com.das.tcamviewer2.R
+
 import android.app.Activity
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
@@ -276,32 +278,23 @@ fun CameraScreen(
                     Box(
                         modifier = Modifier.size(width = imgW, height = imgH)
                     ) {
-                        if (imageBitmap != null) {
-                            Image(
-                                bitmap = imageBitmap,
-                                contentDescription = "Thermal Camera Feed",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .pointerInput(isConnected) {
-                                        if (!isConnected) return@pointerInput
-                                        detectTapGestures { offset ->
-                                            val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
-                                                .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
-                                            val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
-                                                .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-                                            viewModel.setSpotmeter(camX, camY)
-                                        }
-                                    },
-                                contentScale = ContentScale.FillBounds
-                            )
-                        } else {
-                            Image(
-                                painter = painterResource(id = android.R.drawable.ic_menu_camera),
-                                contentDescription = "Waiting for camera",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.FillBounds
-                            )
-                        }
+                        Image(
+                            bitmap = imageBitmap,
+                            contentDescription = "Thermal Camera Feed",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(isConnected) {
+                                    if (!isConnected) return@pointerInput
+                                    detectTapGestures { offset ->
+                                        val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
+                                            .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                        val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
+                                            .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                        viewModel.setSpotmeter(camX, camY)
+                                    }
+                                },
+                            contentScale = ContentScale.FillBounds
+                        )
 
                         // Spotmeter rectangle overlay
                         SpotmeterOverlay(spotmeterRect)
@@ -406,6 +399,15 @@ fun CameraScreen(
                         }
                     }
                 }
+            } else if (!isConnected) {
+                Image(
+                    painter = painterResource(id = R.drawable.appicon),
+                    contentDescription = "No camera image",
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(width = imgW, height = imgH),
+                    contentScale = ContentScale.Fit
+                )
             }  // end if (imageBitmap != null)
 
             // 3. Menu button (top-left) — header row above is hidden once connected
