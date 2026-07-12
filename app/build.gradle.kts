@@ -28,6 +28,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // GlitchTip (Sentry-protocol-compatible) crash reporting. The DSN is not a
+        // secret — it's embedded in every client build regardless — so it's fine
+        // committed here. Environment tag lets debug/release crashes be filtered
+        // separately in the GlitchTip dashboard.
+        manifestPlaceholders["sentryDsn"] = "https://98271d16a43b45c993b62bc5fc6e7ccc@app.glitchtip.com/25696"
+        manifestPlaceholders["sentryEnvironment"] = "release"
     }
 
 
@@ -51,6 +58,9 @@ android {
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        debug {
+            manifestPlaceholders["sentryEnvironment"] = "debug"
         }
     }
     compileOptions {
@@ -98,6 +108,7 @@ dependencies {
     implementation(libs.rxandroid)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+    implementation(libs.sentry.android)
 
     // Tooling/Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
