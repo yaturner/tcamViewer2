@@ -223,4 +223,4 @@ Exported gallery images (PNG composites) use the MediaStore API and require no s
 
 ## License
 
-This project is provided as-is for personal and research use.
+MIT — see [LICENSE](LICENSE).
