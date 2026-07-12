@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,6 +56,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -105,6 +107,7 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
     var sortAscending by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var browseFiles by remember { mutableStateOf<List<File>>(emptyList()) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -167,14 +170,7 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                             }) {
                                 Icon(Icons.Default.Visibility, contentDescription = "Browse")
                             }
-                            IconButton(onClick = {
-                                selectedPaths.forEach { File(it).delete() }
-                                fileGroups = fileGroups.mapNotNull { (folder, files) ->
-                                    val remaining = files.filter { it.absolutePath !in selectedPaths }
-                                    if (remaining.isNotEmpty()) folder to remaining else null
-                                }
-                                selectedPaths = emptySet()
-                            }) {
+                            IconButton(onClick = { showDeleteConfirm = true }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete")
                             }
                         }
@@ -271,6 +267,29 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                 }
             )
         }
+
+        if (showDeleteConfirm) {
+            val n = selectedPaths.size
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete $n file${if (n == 1) "" else "s"}?") },
+                text = { Text("This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        selectedPaths.forEach { File(it).delete() }
+                        fileGroups = fileGroups.mapNotNull { (folder, files) ->
+                            val remaining = files.filter { it.absolutePath !in selectedPaths }
+                            if (remaining.isNotEmpty()) folder to remaining else null
+                        }
+                        selectedPaths = emptySet()
+                        showDeleteConfirm = false
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
     }
 }
 
@@ -285,6 +304,7 @@ private fun BrowseWindow(
 
     var currentIndex by remember { mutableIntStateOf(0) }
     var showVideoPlayer by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // Keep index in bounds when the list shrinks after a delete
     LaunchedEffect(files.size) {
@@ -420,7 +440,7 @@ private fun BrowseWindow(
                         Icon(Icons.Default.SaveAlt, contentDescription = "Export to gallery")
                     }
                     // Delete — removes the current file from the list
-                    IconButton(onClick = { onDelete(file) }) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                     }
                 }
@@ -447,17 +467,11 @@ private fun BrowseWindow(
                     val scale = if (currentDto.tLinearResolution == 0) 10f else 100f
 
                     Row(modifier = Modifier.fillMaxSize()) {
-                        // Main image with spotmeter temp overlaid at centre
-                        Box(
+                        // Main image: spotmeter temp above, hotspot square drawn on the image
+                        Column(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
-                            contentAlignment = Alignment.Center
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Image(
-                                bitmap = imageBitmap,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
                             if (hasThermal) {
                                 Text(
                                     text = formatTemp(
@@ -466,8 +480,25 @@ private fun BrowseWindow(
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
-                                    textAlign = TextAlign.Center
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 2.dp)
                                 )
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    bitmap = imageBitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                                if (hasThermal) {
+                                    SpotmeterOverlay(currentDto.spotmeterLocation)
+                                }
                             }
                         }
 
@@ -553,6 +584,22 @@ private fun BrowseWindow(
     }
     if (showVideoPlayer) {
         VideoPlayerWindow(file = file, onDismiss = { showVideoPlayer = false })
+    }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete this file?") },
+            text = { Text("This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete(file)
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
     }
     } // end Box
 }
@@ -871,24 +918,35 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                     isLoading -> CircularProgressIndicator()
                     videoFrames.isEmpty() -> Text("No frames to display", color = Color.White)
                     currentFrame != null -> Row(modifier = Modifier.fillMaxSize()) {
-                        Box(
+                        Column(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
-                            contentAlignment = Alignment.Center
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Image(
-                                bitmap = currentFrame.bitmap,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
                             if (hasThermal) {
                                 Text(
                                     text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
-                                    textAlign = TextAlign.Center
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 2.dp)
                                 )
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    bitmap = currentFrame.bitmap,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                                if (hasThermal) {
+                                    SpotmeterOverlay(currentFrame.dto.spotmeterLocation)
+                                }
                             }
                         }
                         if (hasThermal && colorBarBitmap != null) {
