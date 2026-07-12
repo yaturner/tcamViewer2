@@ -192,15 +192,20 @@ Exported gallery images (PNG composites) use the MediaStore API and require no s
 
 ## Building
 
-```bash
-# Debug APK
-./gradlew assembleDebug
+The app has two product flavors (see [F-Droid](#f-droid) below for why):
 
-# Full build (debug + release)
+```bash
+# Debug APK (full flavor, with crash reporting)
+./gradlew assembleFullDebug
+
+# Debug APK (fdroid flavor, no crash reporting / no network telemetry)
+./gradlew assembleFdroidDebug
+
+# Full build (debug + release, both flavors)
 ./gradlew build
 
 # Install to connected device
-./gradlew installDebug
+./gradlew installFullDebug
 
 # Unit tests
 ./gradlew test
@@ -219,7 +224,16 @@ Exported gallery images (PNG composites) use the MediaStore API and require no s
 | RxJava 3 / RxAndroid | Frame stream from `CameraService` to `CameraViewModel` |
 | Timber | Logging |
 | Hilt | Dependency injection (partially wired; `CameraUtils` uses `@Singleton`/`@Inject`) |
-| Sentry Android SDK | Crash reporting, sent to [GlitchTip](https://glitchtip.com/) (Sentry-protocol-compatible); auto-initializes from `AndroidManifest` meta-data, catches uncaught exceptions and ANRs with no code changes |
+| Sentry Android SDK | **`full` flavor only.** Crash reporting, sent to [GlitchTip](https://glitchtip.com/) (Sentry-protocol-compatible); auto-initializes from flavor-specific `AndroidManifest` meta-data, catches uncaught exceptions and ANRs with no code changes |
+
+## F-Droid
+
+This app ships two build flavors, declared in `app/build.gradle.kts`:
+
+- **`full`** — includes GlitchTip crash reporting. This is what's distributed via GitHub releases.
+- **`fdroid`** — no crash reporting, no network telemetry, no `sentry-android` dependency at all (confirmed absent from the compiled `.dex`, not just disabled at runtime). This is the flavor F-Droid builds, so the F-Droid listing carries no `Anti-Features: Tracking` disclosure.
+
+Build metadata for F-Droid's automated build process lives in [`.fdroid.yml`](.fdroid.yml) at the repo root, and store listing text/screenshots live under `fastlane/metadata/android/en-US/`, following [F-Droid's standard layout](https://f-droid.org/docs/All_About_Descriptions_Graphics_and_Screenshots/).
 
 ## License
 

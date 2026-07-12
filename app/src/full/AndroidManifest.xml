@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged only into the "full" flavor (GitHub/direct-install builds). The "fdroid"
+     flavor has no equivalent file, so F-Droid builds carry no GlitchTip meta-data,
+     no sentry-android dependency, and no network telemetry at all. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- GlitchTip crash reporting (Sentry-protocol-compatible; auto-initializes,
+             catches uncaught exceptions and ANRs with no code changes needed). -->
+        <meta-data android:name="io.sentry.dsn" android:value="${sentryDsn}" />
+        <meta-data android:name="io.sentry.environment" android:value="${sentryEnvironment}" />
+        <meta-data android:name="io.sentry.anr.enable" android:value="true" />
+        <meta-data android:name="io.sentry.attach-stacktrace" android:value="true" />
+
+    </application>
+
+</manifest>
