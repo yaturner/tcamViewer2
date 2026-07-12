@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.das.tcamviewer2.constants.Constants
 
@@ -39,18 +38,17 @@ fun SpotmeterOverlay(spotmeterRect: Rect?, modifier: Modifier = Modifier) {
             val top = offsetY + rect.top * sy
             val w = (rect.width() + 1) * sx
             val h = (rect.height() + 1) * sy
-            // Black shadow for visibility on any palette
+            // Solid black border behind a solid white square for visibility on any palette
+            val border = 1.dp.toPx()
             drawRect(
                 color = Color.Black,
-                topLeft = Offset(left - 1f, top - 1f),
-                size = Size(w + 2f, h + 2f),
-                style = Stroke(width = 1.dp.toPx())
+                topLeft = Offset(left - border, top - border),
+                size = Size(w + border * 2, h + border * 2)
             )
             drawRect(
                 color = Color.White,
                 topLeft = Offset(left, top),
-                size = Size(w, h),
-                style = Stroke(width = 1.dp.toPx())
+                size = Size(w, h)
             )
         }
     }
