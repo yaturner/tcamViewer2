@@ -33,9 +33,8 @@ object VideoExporter {
         require(frames.isNotEmpty()) { "No frames to export" }
         require(frames.size == frameDurationsMs.size) { "Frame/duration count mismatch" }
 
-        val totalDurationMs = frameDurationsMs.sum().coerceAtLeast(1L)
-        val fps = (frames.size * 1000L / totalDurationMs).toInt().coerceIn(1, 30)
-        val bitRate = width * height * fps * BITS_PER_PIXEL_PER_SECOND
+        val fps = computeFps(frames.size, frameDurationsMs.sum())
+        val bitRate = computeBitRate(width, height, fps)
 
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
@@ -55,14 +54,8 @@ object VideoExporter {
         var muxerTrack = -1
         var muxerStarted = false
 
-        // Cumulative presentation timestamp (us): frame i begins showing at the
-        // sum of the durations of all frames before it.
-        val ptsUs = LongArray(frames.size)
-        var accMs = 0L
-        for (i in frames.indices) {
-            ptsUs[i] = accMs * 1000L
-            accMs += frameDurationsMs[i]
-        }
+        val ptsUs = computeCumulativePtsUs(frameDurationsMs)
+        val accMs = frameDurationsMs.sum()
 
         val bufferInfo = MediaCodec.BufferInfo()
         var frameIndex = 0
@@ -165,6 +158,29 @@ object VideoExporter {
 
     /** Rounds up to the nearest multiple of 16 — many hardware encoders require macroblock-aligned dimensions. */
     fun align16(n: Int): Int = ((n + 15) / 16) * 16
+
+    /**
+     * Cumulative presentation timestamp (in microseconds) for each frame: frame i begins
+     * showing at the sum of the durations of all frames before it. This is what makes the
+     * muxed file's timing match real per-frame capture gaps instead of a fixed frame rate.
+     */
+    internal fun computeCumulativePtsUs(frameDurationsMs: List<Long>): LongArray {
+        val ptsUs = LongArray(frameDurationsMs.size)
+        var accMs = 0L
+        for (i in frameDurationsMs.indices) {
+            ptsUs[i] = accMs * 1000L
+            accMs += frameDurationsMs[i]
+        }
+        return ptsUs
+    }
+
+    /** Average fps implied by [frameCount] frames spanning [totalDurationMs], clamped to a sane encoder range. */
+    internal fun computeFps(frameCount: Int, totalDurationMs: Long): Int =
+        (frameCount * 1000L / totalDurationMs.coerceAtLeast(1L)).toInt().coerceIn(1, 30)
+
+    /** A simple resolution/frame-rate-scaled bitrate target; not critical to correctness. */
+    internal fun computeBitRate(width: Int, height: Int, fps: Int): Int =
+        width * height * fps * BITS_PER_PIXEL_PER_SECOND
 
     /**
      * Picks the AOSP software AVC encoder by name (present on all modern Android devices as the

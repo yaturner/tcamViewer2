@@ -105,6 +105,9 @@ dependencies {
 
     // Unit tests
     testImplementation(libs.junit)
+    // Real (non-stub) org.json impl for JVM unit tests that exercise JSONObject-using code —
+    // Android's unit-test classpath only ships stubs that throw on every call.
+    testImplementation(libs.org.json)
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.test.ext.junit)

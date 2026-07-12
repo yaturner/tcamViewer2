@@ -714,13 +714,13 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
     }
 }
 
-private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
+internal fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
     val tempC = rawValue / scale - 273.15f
     return if (isCelsius) "%.1f°C".format(tempC) else "%.1f°F".format(tempC * 9f / 5f + 32f)
 }
 
 /** MM_dd_yyyy → "June 25, 2026" */
-private fun formatDateFolder(name: String): String {
+internal fun formatDateFolder(name: String): String {
     val parts = name.split("_")
     if (parts.size != 3) return name
     val monthNames = arrayOf(
@@ -732,7 +732,7 @@ private fun formatDateFolder(name: String): String {
 }
 
 /** img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.mtjsn → "HH:mm:ss",  tl_HH_mm_ss.tltjsn → "HH:mm:ss" */
-private fun formatFilename(name: String): String {
+internal fun formatFilename(name: String): String {
     val base = when {
         name.endsWith(".mtjsn")  -> name.removeSuffix(".mtjsn").removePrefix("vid_")
         name.endsWith(".tltjsn") -> name.removeSuffix(".tltjsn").removePrefix("tl_")
@@ -777,7 +777,7 @@ private suspend fun readMtjsnContent(file: File): MtjsnContent =
         MtjsnContent(frames, footer)
     }
 
-private fun calculateFrameInterval(videoInfo: JSONObject?, numFrames: Int): Long {
+internal fun calculateFrameInterval(videoInfo: JSONObject?, numFrames: Int): Long {
     if (videoInfo == null || numFrames <= 1) return 125L
     return runCatching {
         val startMs = parseVideoTimeMs(videoInfo.getString("start_time")) ?: return@runCatching 125L
@@ -786,13 +786,13 @@ private fun calculateFrameInterval(videoInfo: JSONObject?, numFrames: Int): Long
     }.getOrElse { 125L }
 }
 
-private fun parseVideoTimeMs(t: String): Long? = runCatching {
+internal fun parseVideoTimeMs(t: String): Long? = runCatching {
     val p = t.split(":")
     val ms = p[2].split(".").let { it.getOrNull(1)?.padEnd(3,'0')?.take(3)?.toLong() ?: 0L }
     p[0].toLong() * 3_600_000L + p[1].toLong() * 60_000L + p[2].split(".")[0].toLong() * 1_000L + ms
 }.getOrNull()
 
-private fun parseFrameTimestampMs(json: JSONObject): Long =
+internal fun parseFrameTimestampMs(json: JSONObject): Long =
     runCatching {
         val timeStr = json.getJSONObject("metadata").optString("Time", "")
         parseVideoTimeMs(timeStr) ?: 0L
@@ -1151,7 +1151,7 @@ private suspend fun exportVideoAsMp4(
     outputFile
 }
 
-private fun parseResolution(s: String): Pair<Int, Int>? {
+internal fun parseResolution(s: String): Pair<Int, Int>? {
     val parts = s.lowercase().split("x")
     if (parts.size != 2) return null
     val w = parts[0].trim().toIntOrNull() ?: return null
