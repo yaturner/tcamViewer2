@@ -86,7 +86,7 @@ class ImageDto {
             metadata = jsonObject!!.getJSONObject("metadata")
             // Prefer the explicitly passed palette; fall back to what's stored in metadata; default Rainbow
             val resolved = paletteName
-                ?: metadata!!.optString("palette", null)?.takeIf { paletteFactory.getPaletteByName(it) != null }
+                ?: metadata!!.optString("palette").takeIf { it.isNotEmpty() && paletteFactory.getPaletteByName(it) != null }
                 ?: "Rainbow"
             this.paletteName = resolved   // setter also writes resolved name into metadata["palette"]
             palette = paletteFactory.getPaletteByName(this.paletteName)
