@@ -1249,6 +1249,34 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
     }
 
     if (hasThermal) {
+        // ── Hotspot marker: same fixed 4x4-camera-pixel square as SpotmeterOverlay,
+        // centred on the reported spotmeter rect. The image fills imgW x imgH with no
+        // letterboxing (it's an exact 4:3 scale of the native 160x120), so mapping is
+        // a plain 4x scale — no aspect-fit math needed like the Compose overlay requires.
+        dto.spotmeterLocation?.let { rect ->
+            val markerSizePx = 4f
+            val sx = imgW / Constants.IMAGE_WIDTH.toFloat()
+            val sy = imgH / Constants.IMAGE_HEIGHT.toFloat()
+            val centerCol = (rect.left + rect.right) / 2f
+            val centerRow = (rect.top + rect.bottom) / 2f
+            val left = (centerCol - markerSizePx / 2f) * sx
+            val top = headerH + (centerRow - markerSizePx / 2f) * sy
+            val w = markerSizePx * sx
+            val h = markerSizePx * sy
+            val border = 3f
+
+            val blackFill = android.graphics.Paint().apply {
+                color = android.graphics.Color.BLACK
+                style = android.graphics.Paint.Style.FILL
+            }
+            val whiteFill = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE
+                style = android.graphics.Paint.Style.FILL
+            }
+            canvas.drawRect(left - border, top - border, left + w + border, top + h + border, blackFill)
+            canvas.drawRect(left, top, left + w, top + h, whiteFill)
+        }
+
         // ── Spotmeter temp (centred on image, stroke + fill for contrast) ────
         val spotText = formatTemp(dto.spotmeterMean, tempScale, isCelsius)
         val spotStroke = android.graphics.Paint().apply {
