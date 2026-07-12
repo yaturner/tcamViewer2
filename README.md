@@ -1,35 +1,8 @@
 # tCam Viewer 2
 
+<img src="screenshots/app_icon.png" alt="App icon" width="96">
+
 An Android app for viewing and managing imagery from a [tCam](https://github.com/danjulio/tCam) thermal imaging camera over Wi-Fi.
-
-## Screenshots
-
-**App icon:**
-
-![App icon](screenshots/app_icon.png)
-
-| Camera (disconnected) | Camera (live) |
-|---|---|
-| ![Camera disconnected](screenshots/camera_disconnected.png) | ![Camera live](screenshots/camera_live.png) |
-
-**Settings (camera connected) — top and bottom:**
-
-| Connected — top | Connected — bottom |
-|---|---|
-| ![Settings connected top](screenshots/settings_connected_top.png) | ![Settings connected bottom](screenshots/settings_connected_bottom.png) |
-
-When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
-
-
-**Library, browse window, and video player:**
-
-| Library | Browse window | Video player |
-|---|---|---|
-| ![Library](screenshots/library.png) | ![Browse window](screenshots/browse_window.png) | ![Video player](screenshots/video_player.png) |
-
-The **Library** groups saved files by date. Video recordings show a white camera badge and time lapse files show a yellow timer badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the **browse window** showing the full thermal image with colour bar, temperature labels, and spotmeter. For `.mtjsn` recordings and `.tltjsn` time lapses, tap the play button (▶) in the browse window to open the **video player**, which shows skip ±5 frame controls, a scrub slider, and a frame counter.
-
-**Camera live view** shows a thermal image of electronics using the Ironblack palette (21.6 °C – 33.4 °C range). The spotmeter temperature (23.1 °C) is overlaid at the measurement point, with a live histogram beside the colour bar.
 
 ## Overview
 
@@ -43,6 +16,13 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 ## Features
 
 ### Camera screen
+
+| Disconnected | Live |
+|---|---|
+| ![Camera disconnected](screenshots/camera_disconnected.png) | ![Camera live](screenshots/camera_live.png) |
+
+The live view above shows a thermal image using the Rainbow palette. The spotmeter temperature is overlaid at the measurement point, with a live histogram beside the colour bar. When disconnected and no frame has been captured yet, the app icon is shown in place of the image.
+
 - Live 160 × 120 radiometric thermal video streamed over TCP port 5001
 - Spotmeter, max, and min temperature overlays (Celsius or Fahrenheit)
 - Live colour histogram and colour bar scale
@@ -56,6 +36,11 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - **Stop** — stops streaming, recording, or an in-progress time lapse
 
 ### Library screen
+
+![Library](screenshots/library.png)
+
+The library groups saved files by date. Video recordings show a white camera badge and time lapse files show a yellow timer badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the browse window.
+
 - Browses all saved `.tjsn` (image), `.mtjsn` (video), and `.tltjsn` (time lapse) files grouped by date
 - Thumbnail preview loaded lazily per visible row; video recordings show a white camera badge; time lapse files show a yellow timer badge
 - Multi-select with visual highlight and checkmark badge
@@ -64,6 +49,11 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - Browse button opens a full-screen image viewer for selected files
 
 ### Browse / image viewer
+
+![Browse window](screenshots/browse_window.png)
+
+Full thermal image with colour bar, temperature labels, and spotmeter hotspot marker. Tap the play button (▶) on `.mtjsn` recordings and `.tltjsn` time lapses to open the video player.
+
 - Full-screen thermal image with colour bar sidebar
 - Max temperature (top of bar), min temperature (bottom of bar), and spotmeter temperature overlaid on the image
 - Image time and filename shown in the title bar
@@ -74,6 +64,9 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - **Play** (`.mtjsn` recordings and `.tltjsn` time lapses) – opens the video player
 
 ### Video player
+
+![Video player](screenshots/video_player.png)
+
 - Plays back `.mtjsn` recordings with accurate per-frame timing derived from metadata timestamps
 - Plays back `.tltjsn` time lapses at a smooth 8 fps (125 ms/frame), ignoring the original capture interval
 - **Skip back / forward** 5 frames with fast-rewind / fast-forward buttons
@@ -82,6 +75,13 @@ tCam Viewer 2 connects to a tCam device over a TCP socket, decodes its raw radio
 - **Share / Export** – encodes the frames to MP4 (at the configured export resolution, with the spotmeter hotspot marker burned into each frame) and fires the share sheet or saves to the device gallery via MediaStore
 
 ### Settings screen
+
+| Connected — top | Connected — bottom |
+|---|---|
+| ![Settings connected top](screenshots/settings_connected_top.png) | ![Settings connected bottom](screenshots/settings_connected_bottom.png) |
+
+When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
+
 - Camera IP address
 - Colour palette selection
 - Temperature units (Celsius / Fahrenheit)
