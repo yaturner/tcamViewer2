@@ -544,10 +544,11 @@ fun CameraScreen(
                     )
                 }
 
-                // Palette dropdown
+                // Palette dropdown — only meaningful once a frame has actually been captured
                 Box {
                     FeedbackButton(
                         onClick = { paletteMenuExpanded = true },
+                        enabled = currentImageDto != null,
                         contentPadding = btnPadding
                     ) {
                         Text(currentPalette, fontSize = 12.sp)
