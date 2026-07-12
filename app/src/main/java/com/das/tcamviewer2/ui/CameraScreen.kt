@@ -246,10 +246,6 @@ fun CameraScreen(
             val imgW = displayImageWidth * scale
             val imgH = displayImageHeight * scale
 
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
             // --- Image + sidebar row (only when a frame is available) ---
             if (imageBitmap != null) Row(
                 modifier = Modifier
@@ -582,6 +578,12 @@ fun CameraScreen(
                     }
                 }
             }
+
+            // Drawn last so it renders on top of the image/buttons instead of behind them.
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }
