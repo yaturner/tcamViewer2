@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -260,7 +261,11 @@ fun SettingsScreen(
                 headlineContent = { Text("Export Picture on Save") },
                 supportingContent = { Text(if (localExportPic) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(checked = localExportPic, onCheckedChange = { localExportPic = it })
+                    Switch(
+                        checked = localExportPic,
+                        onCheckedChange = { localExportPic = it },
+                        modifier = Modifier.testTag("switch_export_picture")
+                    )
                 }
             )
 
@@ -269,7 +274,11 @@ fun SettingsScreen(
                 headlineContent = { Text("Export Metadata") },
                 supportingContent = { Text(if (localExportMeta) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(checked = localExportMeta, onCheckedChange = { localExportMeta = it })
+                    Switch(
+                        checked = localExportMeta,
+                        onCheckedChange = { localExportMeta = it },
+                        modifier = Modifier.testTag("switch_export_metadata")
+                    )
                 }
             )
 
@@ -309,7 +318,11 @@ fun SettingsScreen(
                 headlineContent = { Text("Manual Range") },
                 supportingContent = { Text(if (localManualRange) "Custom Bounds Active" else "Automatic Scaling") },
                 trailingContent = {
-                    Switch(checked = localManualRange, onCheckedChange = { localManualRange = it })
+                    Switch(
+                        checked = localManualRange,
+                        onCheckedChange = { localManualRange = it },
+                        modifier = Modifier.testTag("switch_manual_range")
+                    )
                 }
             )
 
@@ -401,7 +414,11 @@ fun SettingsScreen(
                 headlineContent = { Text("Shutter Sound") },
                 supportingContent = { Text(if (localShutter) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(checked = localShutter, onCheckedChange = { localShutter = it })
+                    Switch(
+                        checked = localShutter,
+                        onCheckedChange = { localShutter = it },
+                        modifier = Modifier.testTag("switch_shutter_sound")
+                    )
                 }
             )
 
@@ -410,7 +427,11 @@ fun SettingsScreen(
                 headlineContent = { Text("Spotmeter") },
                 supportingContent = { Text(if (localSpotmeter) "Enabled" else "Disabled") },
                 trailingContent = {
-                    Switch(checked = localSpotmeter, onCheckedChange = { localSpotmeter = it })
+                    Switch(
+                        checked = localSpotmeter,
+                        onCheckedChange = { localSpotmeter = it },
+                        modifier = Modifier.testTag("switch_spotmeter")
+                    )
                 }
             )
 
