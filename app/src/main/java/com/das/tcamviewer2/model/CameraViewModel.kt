@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import timber.log.Timber
+import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -73,6 +74,7 @@ class CameraViewModel : ViewModel() {
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
     @Volatile private var recordingStream: FileOutputStream? = null
+    @Volatile private var recordingFile: File? = null
     @Volatile private var recordingFrameCount: Int = 0
     private var recordingStartMs: Long = 0L
     private var startedStreamingForRecord = false
@@ -87,6 +89,7 @@ class CameraViewModel : ViewModel() {
     val timeLapseMessage: SharedFlow<String> = _timeLapseMessage.asSharedFlow()
 
     private var timeLapseJob: Job? = null
+    @Volatile private var discardTimeLapse = false
 
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
     val currentBitmap: StateFlow<Bitmap?> = _currentBitmap.asStateFlow()
@@ -271,8 +274,11 @@ class CameraViewModel : ViewModel() {
             var frameCount = 0
             var naturalCompletion = false
             val startMs = System.currentTimeMillis()
+            var file: File? = null
             try {
-                stream = cameraUtils.openTimeLapseFile()
+                val handle = cameraUtils.openTimeLapseFile()
+                stream = handle.stream
+                file = handle.file
                 val endTime = startMs + durationMs
                 while (isActive && System.currentTimeMillis() < endTime) {
                     val frameStart = System.currentTimeMillis()
@@ -292,10 +298,16 @@ class CameraViewModel : ViewModel() {
                 Timber.e(e, "Time lapse error")
             } finally {
                 val endMs = System.currentTimeMillis()
-                runCatching {
-                    stream?.write(buildFooterJson(startMs, endMs, frameCount).toByteArray(Charsets.US_ASCII))
-                    stream?.close()
+                if (discardTimeLapse) {
+                    runCatching { stream?.close() }
+                    file?.delete()
+                } else {
+                    runCatching {
+                        stream?.write(buildFooterJson(startMs, endMs, frameCount).toByteArray(Charsets.US_ASCII))
+                        stream?.close()
+                    }
                 }
+                discardTimeLapse = false
                 _isTimeLapseCapturing.value = false
                 _isTimeLapsing.value = false
                 if (naturalCompletion) {
@@ -305,7 +317,8 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    fun stopTimeLapse() {
+    fun stopTimeLapse(save: Boolean) {
+        if (!save) discardTimeLapse = true
         timeLapseJob?.cancel()
     }
 
@@ -342,7 +355,9 @@ class CameraViewModel : ViewModel() {
         }
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                recordingStream = cameraUtils.openRecordingFile()
+                val handle = cameraUtils.openRecordingFile()
+                recordingStream = handle.stream
+                recordingFile = handle.file
                 recordingStartMs = System.currentTimeMillis()
                 recordingFrameCount = 0
                 _isRecording.value = true
@@ -357,17 +372,31 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun finishRecording(stopStreamIfAutoStarted: Boolean = true) {
+    // Stops the current recording from the "Stop" button, after the user has chosen whether
+    // to keep or discard it via the save/discard confirmation dialog.
+    fun stopRecording(save: Boolean) {
+        finishRecording(save = save, stopStreamIfAutoStarted = false)
+        toggleStreaming()
+    }
+
+    private fun finishRecording(save: Boolean = true, stopStreamIfAutoStarted: Boolean = true) {
         val stream = recordingStream
+        val file = recordingFile
         recordingStream = null
+        recordingFile = null
         val count = recordingFrameCount
         val endMs = System.currentTimeMillis()
         _isRecording.value = false
         viewModelScope.launch(Dispatchers.IO) {
             if (stream != null) {
                 try {
-                    stream.write(buildFooterJson(recordingStartMs, endMs, count).toByteArray(Charsets.US_ASCII))
-                    stream.close()
+                    if (save) {
+                        stream.write(buildFooterJson(recordingStartMs, endMs, count).toByteArray(Charsets.US_ASCII))
+                        stream.close()
+                    } else {
+                        stream.close()
+                        file?.delete()
+                    }
                 } catch (e: Exception) {
                     Timber.e(e, "Failed to write recording footer")
                 }

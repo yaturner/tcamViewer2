@@ -127,6 +127,7 @@ fun CameraScreen(
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var streamMenuExpanded by remember { mutableStateOf(false) }
     var showTimeLapseDialog by remember { mutableStateOf(false) }
+    var showStopSaveDialog by remember { mutableStateOf(false) }
     var isFullscreen by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -505,7 +506,7 @@ fun CameraScreen(
                 if (isStreaming || isRecording || isTimeLapsing) {
                     FeedbackButton(
                         onClick = {
-                            if (isTimeLapsing) viewModel.stopTimeLapse()
+                            if (isTimeLapsing || isRecording) showStopSaveDialog = true
                             else viewModel.toggleStreaming()
                         },
                         contentPadding = btnPadding
@@ -566,6 +567,29 @@ fun CameraScreen(
                             viewModel.startTimeLapse(intervalSec, durationSec)
                         },
                         onDismiss = { showTimeLapseDialog = false }
+                    )
+                }
+
+                if (showStopSaveDialog) {
+                    val label = if (isTimeLapsing) "time lapse" else "recording"
+                    AlertDialog(
+                        onDismissRequest = { showStopSaveDialog = false },
+                        title = { Text("Save $label?") },
+                        text = { Text("Do you want to save the $label, or discard it?") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showStopSaveDialog = false
+                                if (isTimeLapsing) viewModel.stopTimeLapse(save = true)
+                                else viewModel.stopRecording(save = true)
+                            }) { Text("Yes") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                showStopSaveDialog = false
+                                if (isTimeLapsing) viewModel.stopTimeLapse(save = false)
+                                else viewModel.stopRecording(save = false)
+                            }) { Text("No") }
+                        }
                     )
                 }
 

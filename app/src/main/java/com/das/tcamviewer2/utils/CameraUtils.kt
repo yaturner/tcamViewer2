@@ -26,6 +26,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 
+data class RecordingHandle(val file: File, val stream: FileOutputStream)
+
 @Singleton
 class CameraUtils @Inject constructor(
     @ApplicationContext private val context: Context
@@ -251,21 +253,23 @@ class CameraUtils @Inject constructor(
     }
 
     @Throws(IOException::class)
-    fun openRecordingFile(): FileOutputStream {
+    fun openRecordingFile(): RecordingHandle {
         val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
         val dir = File(rootDir, generateNewPath())
         if (!dir.exists()) dir.mkdirs()
         val filename = "vid_" + simpleDateFormatFile.format(Date()) + ".mtjsn"
-        return FileOutputStream(File(dir, filename))
+        val file = File(dir, filename)
+        return RecordingHandle(file, FileOutputStream(file))
     }
 
     @Throws(IOException::class)
-    fun openTimeLapseFile(): FileOutputStream {
+    fun openTimeLapseFile(): RecordingHandle {
         val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
         val dir = File(rootDir, generateNewPath())
         if (!dir.exists()) dir.mkdirs()
         val filename = "tl_" + simpleDateFormatFile.format(Date()) + ".tltjsn"
-        return FileOutputStream(File(dir, filename))
+        val file = File(dir, filename)
+        return RecordingHandle(file, FileOutputStream(file))
     }
 
     fun readTjsnFile(path: String): String {
