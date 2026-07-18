@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,6 +57,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -79,6 +81,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -824,6 +827,8 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     var currentIndex by remember { mutableIntStateOf(0) }
     var isFullscreen by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
+    var showFrameJumpDialog by remember { mutableStateOf(false) }
+    var frameJumpInput by remember { mutableStateOf("") }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
     val context = LocalContext.current
@@ -1139,7 +1144,14 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                         text = "${currentIndex + 1}/${videoFrames.size}",
                         color = Color.White,
                         fontSize = 12.sp,
-                        modifier = androidx.compose.ui.Modifier.width(52.dp).padding(start = 4.dp)
+                        modifier = androidx.compose.ui.Modifier
+                            .width(52.dp)
+                            .padding(start = 4.dp)
+                            .clickable {
+                                isPlaying = false
+                                frameJumpInput = (currentIndex + 1).toString()
+                                showFrameJumpDialog = true
+                            }
                     )
                     IconButton(onClick = { isFullscreen = !isFullscreen }) {
                         Icon(
@@ -1149,6 +1161,33 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                         )
                     }
                 }
+            }
+
+            if (showFrameJumpDialog) {
+                AlertDialog(
+                    onDismissRequest = { showFrameJumpDialog = false },
+                    title = { Text("Go to frame") },
+                    text = {
+                        OutlinedTextField(
+                            value = frameJumpInput,
+                            onValueChange = { frameJumpInput = it.filter(Char::isDigit) },
+                            label = { Text("Frame (1-${videoFrames.size})") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            frameJumpInput.toIntOrNull()?.let { n ->
+                                currentIndex = (n - 1).coerceIn(0, videoFrames.size - 1)
+                            }
+                            showFrameJumpDialog = false
+                        }) { Text("Go") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showFrameJumpDialog = false }) { Text("Cancel") }
+                    }
+                )
             }
         }
     }
