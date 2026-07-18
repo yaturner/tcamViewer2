@@ -33,10 +33,11 @@ fun drawHotspotMarker(
     val top = offsetY + (centerRow - markerSizePx / 2f) * sy
     val w = markerSizePx * sx
     val h = markerSizePx * sy
-    val border = 3f
 
-    val blackFill = Paint().apply { color = Color.BLACK; style = Paint.Style.FILL }
-    val whiteFill = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
-    canvas.drawRect(left - border, top - border, left + w + border, top + h + border, blackFill)
-    canvas.drawRect(left, top, left + w, top + h, whiteFill)
+    // Hollow square: a thicker black outline with a thinner white outline drawn on top of the
+    // same rect, so black shows on both sides of the white line for visibility on any palette
+    val blackStroke = Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 6f }
+    val whiteStroke = Paint().apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 2f }
+    canvas.drawRect(left, top, left + w, top + h, blackStroke)
+    canvas.drawRect(left, top, left + w, top + h, whiteStroke)
 }
