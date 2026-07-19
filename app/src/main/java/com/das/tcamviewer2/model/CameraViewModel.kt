@@ -49,6 +49,20 @@ class CameraViewModel : ViewModel() {
     private val _minTemp = MutableStateFlow("--")
     val minTemp: StateFlow<String> = _minTemp.asStateFlow()
 
+    // Raw values (same unit as the formatted text above) so the UI can position a
+    // marker along the color bar without re-parsing the display strings.
+    private val _spotmeterTempValue = MutableStateFlow<Float?>(null)
+    val spotmeterTempValue: StateFlow<Float?> = _spotmeterTempValue.asStateFlow()
+
+    private val _maxTempValue = MutableStateFlow<Float?>(null)
+    val maxTempValue: StateFlow<Float?> = _maxTempValue.asStateFlow()
+
+    private val _minTempValue = MutableStateFlow<Float?>(null)
+    val minTempValue: StateFlow<Float?> = _minTempValue.asStateFlow()
+
+    private val _spotmeterEnabled = MutableStateFlow(true)
+    val spotmeterEnabled: StateFlow<Boolean> = _spotmeterEnabled.asStateFlow()
+
     private val _fpsCounter = MutableStateFlow("-- fps")
     val fpsCounter: StateFlow<String> = _fpsCounter.asStateFlow()
 
@@ -158,6 +172,11 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch {
             settingsDataManager.temperatureUnitFlow.collect { v ->
                 cameraUtils.settingIsCelsius = (v == "Celsius")
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.spotmeterFlow.collect { v ->
+                _spotmeterEnabled.value = v
             }
         }
     }
@@ -438,9 +457,11 @@ class CameraViewModel : ViewModel() {
         if (dto?.imageData != null && dto.tLinearEnabled != 0) {
             viewModelScope.launch {
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
-                _spotmeterTemp.value = calcSpotTemp(
+                val (spotValue, spotText) = calcSpotTemp(
                     dto.imageData!!, camX, camY, scale, settingsDataManager.isUnitsCelsius()
                 )
+                _spotmeterTemp.value = spotText
+                _spotmeterTempValue.value = spotValue
             }
         }
 
@@ -470,19 +491,28 @@ class CameraViewModel : ViewModel() {
             if (dto.tLinearEnabled != 0) {
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
                 val rect = _spotmeterRect.value
-                _spotmeterTemp.value = if (rect != null && dto.imageData != null) {
+                val (spotValue, spotText) = if (rect != null && dto.imageData != null) {
                     val cx = (rect.left + rect.right) / 2
                     val cy = (rect.top + rect.bottom) / 2
                     calcSpotTemp(dto.imageData!!, cx, cy, scale, celsius)
                 } else {
                     formatTemp(dto.spotmeterMean, scale, celsius)
                 }
-                _maxTemp.value = formatTemp(dto.maxTemperature, scale, celsius)
-                _minTemp.value = formatTemp(dto.minTemperature, scale, celsius)
+                val (maxValue, maxText) = formatTemp(dto.maxTemperature, scale, celsius)
+                val (minValue, minText) = formatTemp(dto.minTemperature, scale, celsius)
+                _spotmeterTemp.value = spotText
+                _maxTemp.value = maxText
+                _minTemp.value = minText
+                _spotmeterTempValue.value = spotValue
+                _maxTempValue.value = maxValue
+                _minTempValue.value = minValue
             } else {
                 _spotmeterTemp.value = "--"
                 _maxTemp.value = "--"
                 _minTemp.value = "--"
+                _spotmeterTempValue.value = null
+                _maxTempValue.value = null
+                _minTempValue.value = null
             }
             updateFps()
         } catch (e: Exception) {
@@ -490,13 +520,15 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
+    /** Returns the temperature in the currently-selected display unit, alongside its formatted text. */
+    private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): Pair<Float, String> {
         val tempC = rawValue / scale - 273.15f
-        return if (isCelsius) "%.1f°C".format(tempC)
-        else "%.1f°F".format(tempC * 9f / 5f + 32f)
+        val value = if (isCelsius) tempC else tempC * 9f / 5f + 32f
+        val text = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
+        return value to text
     }
 
-    private fun calcSpotTemp(imageData: IntArray, cx: Int, cy: Int, scale: Float, isCelsius: Boolean): String {
+    private fun calcSpotTemp(imageData: IntArray, cx: Int, cy: Int, scale: Float, isCelsius: Boolean): Pair<Float, String> {
         val c1 = cx.coerceIn(0, Constants.IMAGE_WIDTH - 1)
         val c2 = (cx + 1).coerceAtMost(Constants.IMAGE_WIDTH - 1)
         val r1 = cy.coerceIn(0, Constants.IMAGE_HEIGHT - 1)

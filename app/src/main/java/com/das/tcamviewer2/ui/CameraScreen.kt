@@ -63,7 +63,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -109,6 +111,10 @@ fun CameraScreen(
     val spotmeterText by viewModel.spotmeterTemp.collectAsState()
     val maxTempText by viewModel.maxTemp.collectAsState()
     val minTempText by viewModel.minTemp.collectAsState()
+    val spotmeterTempValue by viewModel.spotmeterTempValue.collectAsState()
+    val maxTempValue by viewModel.maxTempValue.collectAsState()
+    val minTempValue by viewModel.minTempValue.collectAsState()
+    val spotmeterEnabled by viewModel.spotmeterEnabled.collectAsState()
     val fpsText by viewModel.fpsCounter.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
@@ -182,6 +188,17 @@ fun CameraScreen(
         createBitmap(1, 256).also {
             it.setPixels(pixels, 0, 1, 0, 0, 1, 256)
         }.asImageBitmap()
+    }
+
+    // Fraction of the way down the color bar (0 = max/top, 1 = min/bottom) the current
+    // spotmeter reading falls at, for the marker drawn beside the bar.
+    val spotFraction = remember(spotmeterTempValue, maxTempValue, minTempValue) {
+        val spot = spotmeterTempValue
+        val max = maxTempValue
+        val min = minTempValue
+        if (spot != null && max != null && min != null && max != min) {
+            ((max - spot) / (max - min)).coerceIn(0f, 1f)
+        } else null
     }
 
     if (showConnectError) {
@@ -337,26 +354,44 @@ fun CameraScreen(
                             )
                         }
 
-                        Image(
-                            bitmap = colorBarBitmap,
-                            contentDescription = "Color Bar Scale",
-                            modifier = Modifier
-                                .width(colorBarWidth)
-                                .height(imgH)
-                                .padding(end = 5.dp)
-                                .pointerInput(currentPalette) {
-                                    detectTapGestures { offset ->
-                                        val idx = PALETTE_OPTIONS.indexOf(currentPalette)
-                                        when {
-                                            offset.y < size.height / 3f ->
-                                                viewModel.setPalette(PALETTE_OPTIONS[(idx - 1 + PALETTE_OPTIONS.size) % PALETTE_OPTIONS.size])
-                                            offset.y > size.height * 2f / 3f ->
-                                                viewModel.setPalette(PALETTE_OPTIONS[(idx + 1) % PALETTE_OPTIONS.size])
+                        Box(modifier = Modifier.width(colorBarWidth).height(imgH)) {
+                            Image(
+                                bitmap = colorBarBitmap,
+                                contentDescription = "Color Bar Scale",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(end = 5.dp)
+                                    .pointerInput(currentPalette) {
+                                        detectTapGestures { offset ->
+                                            val idx = PALETTE_OPTIONS.indexOf(currentPalette)
+                                            when {
+                                                offset.y < size.height / 3f ->
+                                                    viewModel.setPalette(PALETTE_OPTIONS[(idx - 1 + PALETTE_OPTIONS.size) % PALETTE_OPTIONS.size])
+                                                offset.y > size.height * 2f / 3f ->
+                                                    viewModel.setPalette(PALETTE_OPTIONS[(idx + 1) % PALETTE_OPTIONS.size])
+                                            }
                                         }
+                                    },
+                                contentScale = ContentScale.FillBounds
+                            )
+
+                            // Arrow marking where the current spotmeter reading falls on the bar
+                            if (spotmeterEnabled && spotFraction != null) {
+                                Canvas(modifier = Modifier.matchParentSize()) {
+                                    val y = spotFraction * size.height
+                                    val tipX = size.width - 5.dp.toPx()
+                                    val halfHeight = 4.dp.toPx()
+                                    val path = Path().apply {
+                                        moveTo(tipX, y)
+                                        lineTo(size.width, y - halfHeight)
+                                        lineTo(size.width, y + halfHeight)
+                                        close()
                                     }
-                                },
-                            contentScale = ContentScale.FillBounds
-                        )
+                                    drawPath(path, color = Color.White)
+                                    drawPath(path, color = Color.Black, style = Stroke(width = 1.dp.toPx()))
+                                }
+                            }
+                        }
 
                         Text(
                             text = minTempText,
