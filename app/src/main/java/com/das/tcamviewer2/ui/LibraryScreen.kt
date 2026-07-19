@@ -1137,6 +1137,19 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                         }
                     }
                 }
+
+                if (!isLoading && videoFrames.isNotEmpty()) {
+                    IconButton(
+                        onClick = { isFullscreen = !isFullscreen },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(
+                            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
+                            tint = Color.White
+                        )
+                    }
+                }
             }
 
             if (!isLoading && videoFrames.isNotEmpty()) {
@@ -1193,13 +1206,6 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                 showFrameJumpDialog = true
                             }
                     )
-                    IconButton(onClick = { isFullscreen = !isFullscreen }) {
-                        Icon(
-                            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
-                            tint = Color.White
-                        )
-                    }
                 }
             }
 
