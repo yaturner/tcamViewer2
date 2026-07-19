@@ -25,7 +25,7 @@ The live view above shows a thermal image using the Rainbow palette. The spotmet
 
 - Live 160 × 120 radiometric thermal video streamed over TCP port 5001
 - Spotmeter, max, and min temperature overlays (Celsius or Fahrenheit)
-- Live colour histogram and colour bar scale
+- Live colour histogram and colour bar scale, with a position arrow tracking where the spotmeter reading falls between max and min
 - Frame-rate counter shown while streaming
 - 10 colour palettes selectable from a drop-down: Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia
 - **Get** — captures a single frame from the camera
@@ -56,12 +56,25 @@ Full thermal image with colour bar, temperature labels, and spotmeter hotspot ma
 
 - Full-screen thermal image with colour bar sidebar
 - Max temperature (top of bar), min temperature (bottom of bar), and spotmeter temperature overlaid on the image
+- A position arrow beside the colour bar shows where the spotmeter reading falls between max and min
 - Image time and filename shown in the title bar
 - Previous / next navigation when multiple files are selected
-- **Share** – composites the full image (scaled 4×), colour bar, spotmeter hotspot marker, and all temperature labels into a single PNG and fires the system share sheet
-- **Export** – saves the same composite PNG to the device gallery via MediaStore; no storage permission required on Android 10+
+- **Share** / **Export** – see [Exported / shared image](#exported--shared-image) below
 - **Delete** – removes the file from disk and returns to the library
 - **Play** (`.mtjsn` recordings and `.tltjsn` time lapses) – opens the video player
+
+#### Exported / shared image
+
+![Exported image](screenshots/exported_image.png)
+
+**Share** composites the full image (scaled 4×) and fires the system share sheet; **Export** saves the same composite PNG to the device gallery via MediaStore (no storage permission required on Android 10+). The composite includes:
+
+- Spotmeter temperature centred above the image
+- Colour bar with max/min labels and the same position arrow shown in the browse window
+- Spotmeter hotspot marker on the image
+- A footer with gain mode and emissivity on the top row, and capture time and date on the bottom row, left/right-justified to the image width
+
+All spotmeter-derived elements (temperature header, hotspot marker, and position arrow) are omitted when the **Spotmeter** setting is disabled.
 
 ### Video player
 
