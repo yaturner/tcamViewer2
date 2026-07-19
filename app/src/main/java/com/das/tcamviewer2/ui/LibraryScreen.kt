@@ -1203,8 +1203,11 @@ private suspend fun exportVideoAsMp4(
     val (rawW, rawH) = parseResolution(settingsDataManager.getExportResolution()) ?: (320 to 240)
     val width = VideoExporter.align16(rawW)
     val height = VideoExporter.align16(rawH)
+    val spotmeterEnabled = settingsDataManager.getSpotmeter()
     val bitmaps = frames.map { it.dto.bitmap!! }
-    val spotmeterRects = frames.map { if (it.dto.tLinearEnabled != 0) it.dto.spotmeterLocation else null }
+    val spotmeterRects = frames.map {
+        if (spotmeterEnabled && it.dto.tLinearEnabled != 0) it.dto.spotmeterLocation else null
+    }
     val exportDir = File(context.cacheDir, "share").also { it.mkdirs() }
     val outputFile = File(exportDir, "${sourceFile.nameWithoutExtension}.mp4")
     VideoExporter.exportMp4(bitmaps, intervals, spotmeterRects, outputFile, width, height)
@@ -1244,9 +1247,10 @@ private suspend fun readFirstMtjsnFrame(file: File): JSONObject? =
  * Builds a composite share image: scaled thermal image + colour bar sidebar + temperature labels
  * + spotmeter overlay + filename header. All rendering via Android Canvas (no Compose layer).
  */
-private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bitmap {
+private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bitmap {
     val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
     val hasThermal = dto.tLinearEnabled != 0
+    val spotmeterEnabled = settingsDataManager.getSpotmeter()
 
     // All dimensions in px (off-screen bitmap — not dp)
     val imgW     = 640          // 160 × 4
@@ -1290,9 +1294,11 @@ private fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bit
     }
 
     if (hasThermal) {
-        // Hotspot marker — same fixed 4x4-camera-pixel square shown on-screen.
-        dto.spotmeterLocation?.let { rect ->
-            drawHotspotMarker(canvas, rect, imgW, imgH, offsetY = headerH.toFloat())
+        // Hotspot marker — same fixed 4x4-camera-pixel square shown on-screen, only when enabled.
+        if (spotmeterEnabled) {
+            dto.spotmeterLocation?.let { rect ->
+                drawHotspotMarker(canvas, rect, imgW, imgH, offsetY = headerH.toFloat())
+            }
         }
 
         // ── Spotmeter temp (centred on image, stroke + fill for contrast) ────
