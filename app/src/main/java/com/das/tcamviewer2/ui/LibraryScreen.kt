@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -76,7 +77,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -327,6 +330,7 @@ private fun BrowseWindow(
     var dto by remember { mutableStateOf<ImageDto?>(null) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
+    val spotmeterEnabled by settingsDataManager.spotmeterFlow.collectAsState(initial = true)
 
     LaunchedEffect(file) {
         dto = null   // show spinner while loading the new image
@@ -529,6 +533,21 @@ private fun BrowseWindow(
                             // exactly imgH tall; the labels add extra height above/below
                             // rather than shrinking it.
                             if (hasThermal && colorBar != null) {
+                                // Fraction of the way down the bar (0 = max/top, 1 = min/bottom)
+                                // the current spotmeter reading falls at, for the marker arrow.
+                                // Raw telemetry values are unit-independent as a ratio.
+                                val spotFraction = remember(
+                                    currentDto.maxTemperature,
+                                    currentDto.minTemperature,
+                                    currentDto.spotmeterMean
+                                ) {
+                                    val max = currentDto.maxTemperature
+                                    val min = currentDto.minTemperature
+                                    val spot = currentDto.spotmeterMean
+                                    if (max != min)
+                                        ((max - spot).toFloat() / (max - min)).coerceIn(0f, 1f)
+                                    else null
+                                }
                                 Column(
                                     modifier = Modifier
                                         .width(64.dp)
@@ -548,15 +567,36 @@ private fun BrowseWindow(
                                             textAlign = TextAlign.Center
                                         )
                                     }
-                                    Image(
-                                        bitmap = colorBar,
-                                        contentDescription = "Color scale",
+                                    Box(
                                         modifier = Modifier
                                             .height(imgH)
-                                            .width(28.dp)
-                                            .padding(vertical = 4.dp),
-                                        contentScale = ContentScale.FillBounds
-                                    )
+                                            .width(38.dp)
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        Image(
+                                            bitmap = colorBar,
+                                            contentDescription = "Color scale",
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(start = 10.dp),
+                                            contentScale = ContentScale.FillBounds
+                                        )
+                                        if (spotmeterEnabled && spotFraction != null) {
+                                            Canvas(modifier = Modifier.matchParentSize()) {
+                                                val y = spotFraction * size.height
+                                                val tipX = 10.dp.toPx()
+                                                val halfHeight = 10.dp.toPx()
+                                                val path = Path().apply {
+                                                    moveTo(tipX, y)
+                                                    lineTo(0f, y - halfHeight)
+                                                    lineTo(0f, y + halfHeight)
+                                                    close()
+                                                }
+                                                drawPath(path, color = Color.White)
+                                                drawPath(path, color = Color.Black, style = Stroke(width = 1.dp.toPx()))
+                                            }
+                                        }
+                                    }
                                     Text(
                                         text = formatTemp(
                                             currentDto.minTemperature, scale, isCelsius
@@ -1244,8 +1284,9 @@ private suspend fun readFirstMtjsnFrame(file: File): JSONObject? =
     }
 
 /**
- * Builds a composite share image: scaled thermal image + colour bar sidebar + temperature labels
- * + spotmeter overlay + filename header. All rendering via Android Canvas (no Compose layer).
+ * Builds a composite share image: spotmeter temp header + scaled thermal image + colour bar
+ * sidebar + temperature labels + spotmeter overlay + gain/emissivity/date-time footer.
+ * All rendering via Android Canvas (no Compose layer).
  */
 private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bitmap {
     val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
@@ -1255,36 +1296,34 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
     // All dimensions in px (off-screen bitmap — not dp)
     val imgW     = 640          // 160 × 4
     val imgH     = 480          // 120 × 4
-    val headerH  = 72
-    val bottomPad = 44          // room for the min-temp label below the colour bar
+    val headerH  = 64           // room for the centred spotmeter temperature
+    val footerRow1Y = 34f       // baseline of the gain/emissivity row, relative to footer top
+    val footerRow2Y = 72f       // baseline of the date/time row, relative to footer top
+    val bottomPad = 96          // room for both footer rows below the image
     val sidebarW = if (hasThermal) 120 else 0
     val totalW   = imgW + sidebarW
-    val totalH   = headerH + imgH + bottomPad   // 580
+    val totalH   = headerH + imgH + bottomPad
 
     val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(result)
     canvas.drawColor(android.graphics.Color.BLACK)
 
-    // ── Header ───────────────────────────────────────────────────────────────
-    val titlePaint = android.graphics.Paint().apply {
-        color = android.graphics.Color.WHITE
-        textSize = 44f
-        isAntiAlias = true
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
+    // ── Header: centred spotmeter temperature (only when Spotmeter setting is on) ──
+    if (hasThermal && spotmeterEnabled) {
+        val headerPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 40f
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        canvas.drawText(
+            formatTemp(dto.spotmeterMean, tempScale, isCelsius),
+            imgW / 2f,
+            headerH - 18f,
+            headerPaint
+        )
     }
-    val subPaint = android.graphics.Paint().apply {
-        color = 0xFFAAAAAA.toInt()
-        textSize = 30f
-        isAntiAlias = true
-    }
-    val timeLabel = formatFilename(file.name)
-    canvas.drawText(timeLabel, 16f, 50f, titlePaint)
-    canvas.drawText(
-        file.name,
-        16f + titlePaint.measureText(timeLabel) + 20f,
-        50f,
-        subPaint
-    )
 
     // ── Thermal image (scaled 4×, starts at y = headerH) ────────────────────
     dto.bitmap?.let { src ->
@@ -1300,26 +1339,6 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
                 drawHotspotMarker(canvas, rect, imgW, imgH, offsetY = headerH.toFloat())
             }
         }
-
-        // ── Spotmeter temp (centred on image, stroke + fill for contrast) ────
-        val spotText = formatTemp(dto.spotmeterMean, tempScale, isCelsius)
-        val spotStroke = android.graphics.Paint().apply {
-            color = android.graphics.Color.BLACK
-            textSize = 56f
-            isAntiAlias = true
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            textAlign = android.graphics.Paint.Align.CENTER
-            style = android.graphics.Paint.Style.STROKE
-            strokeWidth = 6f
-        }
-        val spotFill = android.graphics.Paint(spotStroke).apply {
-            color = android.graphics.Color.WHITE
-            style = android.graphics.Paint.Style.FILL
-        }
-        val cx = imgW / 2f
-        val cy = headerH + imgH / 2f + 20f
-        canvas.drawText(spotText, cx, cy, spotStroke)
-        canvas.drawText(spotText, cx, cy, spotFill)
 
         // ── Colour bar: top-aligned with the image, full image height (matches
         // the on-screen views — the bar itself is never shrunk to fit labels) ─
@@ -1339,6 +1358,36 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
         canvas.drawBitmap(cbScaled, cbX.toFloat(), cbY.toFloat(), null)
         cbSrc.recycle(); cbScaled.recycle()
 
+        // ── Arrow marking where the current spotmeter reading falls on the bar
+        // (same fraction math as the on-screen marker, only when Spotmeter is on) ─
+        if (spotmeterEnabled && dto.maxTemperature != dto.minTemperature) {
+            val fraction = ((dto.maxTemperature - dto.spotmeterMean).toFloat() /
+                (dto.maxTemperature - dto.minTemperature)).coerceIn(0f, 1f)
+            val arrowY = cbY + fraction * cbH
+            val tipX = cbX.toFloat()
+            val baseX = tipX - 35f
+            val halfH = 25f
+            val arrowPath = android.graphics.Path().apply {
+                moveTo(tipX, arrowY)
+                lineTo(baseX, arrowY - halfH)
+                lineTo(baseX, arrowY + halfH)
+                close()
+            }
+            val arrowFill = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE
+                style = android.graphics.Paint.Style.FILL
+                isAntiAlias = true
+            }
+            val arrowStroke = android.graphics.Paint().apply {
+                color = android.graphics.Color.BLACK
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 2f
+                isAntiAlias = true
+            }
+            canvas.drawPath(arrowPath, arrowFill)
+            canvas.drawPath(arrowPath, arrowStroke)
+        }
+
         // ── Max / min labels (above and below the colour bar) ────────────────
         val tempPaint = android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
@@ -1348,21 +1397,48 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
         }
         val sidebarCx = imgW + sidebarW / 2f
         // Max: baseline sits just above the bar's top, inside the header band
-        // (shared with the filename title, which sits far to the left)
         canvas.drawText(
             formatTemp(dto.maxTemperature, tempScale, isCelsius),
             sidebarCx,
             (headerH - 12).toFloat(),
             tempPaint
         )
-        // Min: baseline sits just below the bar's bottom, inside bottomPad
+        // Min: baseline sits just below the bar's bottom, inside the footer band
         canvas.drawText(
             formatTemp(dto.minTemperature, tempScale, isCelsius),
             sidebarCx,
-            (headerH + imgH + 34).toFloat(),
+            (headerH + imgH + footerRow2Y).toFloat(),
             tempPaint
         )
     }
+
+    // ── Footer: row 1 = gain mode + emissivity, row 2 = time + date saved ────
+    val gainLabel = when (dto.gainMode) {
+        Constants.GAIN_MODE_HIGH -> "HIGH"
+        Constants.GAIN_MODE_LOW  -> "LOW"
+        Constants.GAIN_MODE_AUTO -> "AUTO"
+        else -> "?"
+    }
+    val emissivityStr = "%.2f".format(dto.emissivity / 8192f)
+    val timeStr = dto.metadata?.optString("Time").orEmpty()
+    val dateStr = dto.metadata?.optString("Date").orEmpty()
+
+    val infoPaintLeft = android.graphics.Paint().apply {
+        color = android.graphics.Color.WHITE
+        textSize = 28f
+        isAntiAlias = true
+        textAlign = android.graphics.Paint.Align.LEFT
+    }
+    val infoPaintRight = android.graphics.Paint(infoPaintLeft).apply {
+        textAlign = android.graphics.Paint.Align.RIGHT
+    }
+    val footerTop = headerH + imgH
+    val leftX = 16f
+    val rightX = imgW - 16f
+    canvas.drawText("g $gainLabel", leftX, footerTop + footerRow1Y, infoPaintLeft)
+    canvas.drawText("ε $emissivityStr", rightX, footerTop + footerRow1Y, infoPaintRight)
+    canvas.drawText(timeStr, leftX, footerTop + footerRow2Y, infoPaintLeft)
+    canvas.drawText(dateStr, rightX, footerTop + footerRow2Y, infoPaintRight)
 
     return result
 }
