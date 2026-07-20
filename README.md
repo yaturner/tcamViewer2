@@ -227,6 +227,10 @@ The app has two product flavors (see [F-Droid](#f-droid) below for why):
 ./gradlew connectedAndroidTest
 ```
 
+### Prebuilt APK
+
+`Prebuilt/app-full-release.apk` is a signed, ready-to-install release build (`full` flavor). Sideload it directly if you don't want to build from source; it's rebuilt and committed whenever a notable change lands.
+
 ## Dependencies
 
 | Library | Purpose |
