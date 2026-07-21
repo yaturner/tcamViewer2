@@ -188,7 +188,7 @@ Identical byte structure to `.mtjsn`. Each frame is captured on demand via a `ge
 <frame1_json> 0x03 <frame2_json> 0x03 … <frameN_json> 0x03 <video_info_json>
 ```
 
-Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/tl_<HH_mm_ss>.tltjsn`. Playback ignores the large inter-frame timestamps and renders at a fixed 8 fps.
+Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/tl_<HH_mm_ss>.tltjsn`. Playback ignores the large inter-frame timestamps and renders at a base rate of 8 fps. A tap control next to the skip buttons cycles the playback speed (0.1x–8x).
 
 Exported gallery images (PNG composites) use the MediaStore API and require no storage permission on Android 10+.
 
