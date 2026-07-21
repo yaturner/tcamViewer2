@@ -853,6 +853,11 @@ internal fun parseFrameTimestampMs(json: JSONObject): Long =
     }.getOrElse { 0L }
 
 private const val SKIP_FRAMES = 5
+private val TIME_LAPSE_SPEEDS = listOf(0.1f, 0.25f, 0.5f, 1f, 2f, 4f, 8f)
+private const val TIME_LAPSE_DEFAULT_SPEED_INDEX = 3
+
+private fun formatSpeed(v: Float): String =
+    if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -869,6 +874,7 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     var isExporting by remember { mutableStateOf(false) }
     var showFrameJumpDialog by remember { mutableStateOf(false) }
     var frameJumpInput by remember { mutableStateOf("") }
+    var speedIndex by remember { mutableIntStateOf(TIME_LAPSE_DEFAULT_SPEED_INDEX) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
     val context = LocalContext.current
@@ -896,6 +902,7 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
         isLoading = true
         isPlaying = false
         currentIndex = 0
+        speedIndex = TIME_LAPSE_DEFAULT_SPEED_INDEX
         val content = withContext(Dispatchers.IO) { readMtjsnContent(file) }
         fallbackIntervalMs = calculateFrameInterval(content.videoInfo, content.frames.size)
         val loaded = ArrayList<VideoFrame>(content.frames.size)
@@ -928,7 +935,9 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     LaunchedEffect(isPlaying) {
         if (!isPlaying || videoFrames.isEmpty()) return@LaunchedEffect
         while (isPlaying) {
-            delay(frameIntervals.getOrElse(currentIndex) { fallbackIntervalMs })
+            val baseInterval = frameIntervals.getOrElse(currentIndex) { fallbackIntervalMs }
+            val speed = if (file.extension == "tltjsn") TIME_LAPSE_SPEEDS[speedIndex] else 1f
+            delay((baseInterval / speed).toLong().coerceAtLeast(1L))
             val next = currentIndex + 1
             if (next >= videoFrames.size) {
                 isPlaying = false
@@ -1178,6 +1187,19 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                         enabled = currentIndex < videoFrames.size - 1
                     ) {
                         Icon(Icons.Default.FastForward, contentDescription = "Skip forward", tint = Color.White)
+                    }
+                    if (file.extension == "tltjsn") {
+                        Text(
+                            text = "${formatSpeed(TIME_LAPSE_SPEEDS[speedIndex])}x",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .width(44.dp)
+                                .clickable {
+                                    speedIndex = (speedIndex + 1) % TIME_LAPSE_SPEEDS.size
+                                }
+                        )
                     }
                     Slider(
                         value = currentIndex.toFloat(),
