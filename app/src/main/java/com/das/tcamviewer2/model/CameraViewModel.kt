@@ -196,6 +196,10 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch {
             settingsDataManager.temperatureUnitFlow.collect { v ->
                 cameraUtils.settingIsCelsius = (v == "Celsius")
+                // Re-render the already-displayed frame in the new unit immediately, rather
+                // than waiting for the next Get/stream frame to happen to pick it up.
+                refreshTempDisplays()
+                remapCurrentFrame(selectedPalette)
             }
         }
         viewModelScope.launch {
@@ -225,6 +229,33 @@ class CameraViewModel : ViewModel() {
             dto.paletteName = paletteName
             _currentBitmap.value = bmp
         }
+    }
+
+    /** Reformats the currently-displayed frame's spot/max/min temperature text and values
+     *  from its raw radiometric data, using whatever unit is currently selected — used both
+     *  when a frame first arrives and to re-render an already-displayed frame immediately
+     *  when the user changes units, rather than waiting for the next frame to reflect it. */
+    private fun refreshTempDisplays() {
+        val dto = _currentImageDto.value ?: return
+        if (dto.tLinearEnabled == 0) return
+        val celsius = cameraUtils.settingIsCelsius
+        val scale = if (dto.tLinearResolution == 0) 10f else 100f
+        val rect = _spotmeterRect.value
+        val (spotValue, spotText) = if (rect != null && dto.imageData != null) {
+            val cx = (rect.left + rect.right) / 2
+            val cy = (rect.top + rect.bottom) / 2
+            calcSpotTemp(dto.imageData!!, cx, cy, scale, celsius)
+        } else {
+            formatTemp(dto.spotmeterMean, scale, celsius)
+        }
+        val (maxValue, maxText) = formatTemp(dto.maxTemperature, scale, celsius)
+        val (minValue, minText) = formatTemp(dto.minTemperature, scale, celsius)
+        _spotmeterTemp.value = spotText
+        _maxTemp.value = maxText
+        _minTemp.value = minText
+        _spotmeterTempValue.value = spotValue
+        _maxTempValue.value = maxValue
+        _minTempValue.value = minValue
     }
 
     private suspend fun connectToCamera(ip: String) {
@@ -517,29 +548,12 @@ class CameraViewModel : ViewModel() {
                 recordingFrameCount++
             }
             val dto = ImageDto.create(json, selectedPalette)
-            val celsius = cameraUtils.settingIsCelsius
             _currentImageDto.value = dto
             _currentBitmap.value = dto.bitmap
             _histogram.value = dto.histogram
             if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
             if (dto.tLinearEnabled != 0) {
-                val scale = if (dto.tLinearResolution == 0) 10f else 100f
-                val rect = _spotmeterRect.value
-                val (spotValue, spotText) = if (rect != null && dto.imageData != null) {
-                    val cx = (rect.left + rect.right) / 2
-                    val cy = (rect.top + rect.bottom) / 2
-                    calcSpotTemp(dto.imageData!!, cx, cy, scale, celsius)
-                } else {
-                    formatTemp(dto.spotmeterMean, scale, celsius)
-                }
-                val (maxValue, maxText) = formatTemp(dto.maxTemperature, scale, celsius)
-                val (minValue, minText) = formatTemp(dto.minTemperature, scale, celsius)
-                _spotmeterTemp.value = spotText
-                _maxTemp.value = maxText
-                _minTemp.value = minText
-                _spotmeterTempValue.value = spotValue
-                _maxTempValue.value = maxValue
-                _minTempValue.value = minValue
+                refreshTempDisplays()
             } else {
                 _spotmeterTemp.value = "--"
                 _maxTemp.value = "--"
