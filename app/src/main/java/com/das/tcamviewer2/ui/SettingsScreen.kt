@@ -716,8 +716,6 @@ private fun CameraSettingsSection(
     var showEmissivityDialog by remember { mutableStateOf(false) }
     var showWifiDialog by remember { mutableStateOf(false) }
 
-    fun emissivityPct() = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
-
     Text(
         text = "CAMERA SETTINGS",
         fontSize = 12.sp,
@@ -731,10 +729,7 @@ private fun CameraSettingsSection(
         headlineContent = { Text("AGC") },
         supportingContent = { Text(if (localAgc) "Enabled" else "Disabled") },
         trailingContent = {
-            Switch(checked = localAgc, onCheckedChange = {
-                onAgcChange(it)
-                viewModel.sendCameraConfig(it, emissivityPct(), localGainMode)
-            })
+            Switch(checked = localAgc, onCheckedChange = { onAgcChange(it) })
         }
     )
 
@@ -759,7 +754,6 @@ private fun CameraSettingsSection(
             ),
             keyboardActions = KeyboardActions(onDone = {
                 keyboardController?.hide()
-                viewModel.sendCameraConfig(localAgc, emissivityPct(), localGainMode)
                 onEmissivityConfirm()
             })
         )
@@ -786,17 +780,11 @@ private fun CameraSettingsSection(
             "Auto" to Constants.GAIN_MODE_AUTO).forEach { (label, mode) ->
             Row(
                 modifier = Modifier
-                    .selectable(selected = localGainMode == mode, onClick = {
-                        onGainModeChange(mode)
-                        viewModel.sendCameraConfig(localAgc, emissivityPct(), mode)
-                    })
+                    .selectable(selected = localGainMode == mode, onClick = { onGainModeChange(mode) })
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                RadioButton(selected = localGainMode == mode, onClick = {
-                    onGainModeChange(mode)
-                    viewModel.sendCameraConfig(localAgc, emissivityPct(), mode)
-                })
+                RadioButton(selected = localGainMode == mode, onClick = { onGainModeChange(mode) })
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(label, fontSize = 16.sp)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -851,7 +839,6 @@ private fun CameraSettingsSection(
                 TextButton(onClick = {
                     val selectedPct = EMISSIVITY_PRESETS[selectedIndex].second
                     onEmissivityChange(selectedPct.toString())
-                    viewModel.sendCameraConfig(localAgc, selectedPct, localGainMode)
                     onEmissivityConfirm()
                     showEmissivityDialog = false
                 }) { Text("OK") }
