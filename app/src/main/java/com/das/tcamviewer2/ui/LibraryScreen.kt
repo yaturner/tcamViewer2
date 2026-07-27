@@ -1320,6 +1320,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
     val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
     val hasThermal = dto.tLinearEnabled != 0
     val spotmeterEnabled = settingsDataManager.getSpotmeter()
+    val exportMetadata = settingsDataManager.getExportMetadata()
 
     // All dimensions in px (off-screen bitmap — not dp)
     val imgW     = 640          // 160 × 4
@@ -1440,33 +1441,36 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
         )
     }
 
-    // ── Footer: row 1 = gain mode + emissivity, row 2 = time + date saved ────
-    val gainLabel = when (dto.gainMode) {
-        Constants.GAIN_MODE_HIGH -> "HIGH"
-        Constants.GAIN_MODE_LOW  -> "LOW"
-        Constants.GAIN_MODE_AUTO -> "AUTO"
-        else -> "?"
-    }
-    val emissivityStr = "%.2f".format(dto.emissivity / 8192f)
-    val timeStr = dto.metadata?.optString("Time").orEmpty()
-    val dateStr = dto.metadata?.optString("Date").orEmpty()
+    // ── Footer: row 1 = gain mode + emissivity, row 2 = time + date saved
+    // (only when the "Export Metadata" setting is on) ────────────────────────
+    if (exportMetadata) {
+        val gainLabel = when (dto.gainMode) {
+            Constants.GAIN_MODE_HIGH -> "HIGH"
+            Constants.GAIN_MODE_LOW  -> "LOW"
+            Constants.GAIN_MODE_AUTO -> "AUTO"
+            else -> "?"
+        }
+        val emissivityStr = "%.2f".format(dto.emissivity / 8192f)
+        val timeStr = dto.metadata?.optString("Time").orEmpty()
+        val dateStr = dto.metadata?.optString("Date").orEmpty()
 
-    val infoPaintLeft = android.graphics.Paint().apply {
-        color = android.graphics.Color.WHITE
-        textSize = 28f
-        isAntiAlias = true
-        textAlign = android.graphics.Paint.Align.LEFT
+        val infoPaintLeft = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 28f
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.LEFT
+        }
+        val infoPaintRight = android.graphics.Paint(infoPaintLeft).apply {
+            textAlign = android.graphics.Paint.Align.RIGHT
+        }
+        val footerTop = headerH + imgH
+        val leftX = 16f
+        val rightX = imgW - 16f
+        canvas.drawText("g $gainLabel", leftX, footerTop + footerRow1Y, infoPaintLeft)
+        canvas.drawText("ε $emissivityStr", rightX, footerTop + footerRow1Y, infoPaintRight)
+        canvas.drawText(timeStr, leftX, footerTop + footerRow2Y, infoPaintLeft)
+        canvas.drawText(dateStr, rightX, footerTop + footerRow2Y, infoPaintRight)
     }
-    val infoPaintRight = android.graphics.Paint(infoPaintLeft).apply {
-        textAlign = android.graphics.Paint.Align.RIGHT
-    }
-    val footerTop = headerH + imgH
-    val leftX = 16f
-    val rightX = imgW - 16f
-    canvas.drawText("g $gainLabel", leftX, footerTop + footerRow1Y, infoPaintLeft)
-    canvas.drawText("ε $emissivityStr", rightX, footerTop + footerRow1Y, infoPaintRight)
-    canvas.drawText(timeStr, leftX, footerTop + footerRow2Y, infoPaintLeft)
-    canvas.drawText(dateStr, rightX, footerTop + footerRow2Y, infoPaintRight)
 
     return result
 }
