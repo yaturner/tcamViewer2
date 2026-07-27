@@ -578,14 +578,14 @@ private fun BrowseWindow(
                                             contentDescription = "Color scale",
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .padding(start = 10.dp),
+                                                .padding(start = 7.dp),
                                             contentScale = ContentScale.FillBounds
                                         )
                                         if (spotmeterEnabled && spotFraction != null) {
                                             Canvas(modifier = Modifier.matchParentSize()) {
                                                 val y = spotFraction * size.height
-                                                val tipX = 10.dp.toPx()
-                                                val halfHeight = 10.dp.toPx()
+                                                val tipX = 7.dp.toPx()
+                                                val halfHeight = 7.dp.toPx()
                                                 val path = Path().apply {
                                                     moveTo(tipX, y)
                                                     lineTo(0f, y - halfHeight)
@@ -1393,8 +1393,8 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
                 (dto.maxTemperature - dto.minTemperature)).coerceIn(0f, 1f)
             val arrowY = cbY + fraction * cbH
             val tipX = cbX.toFloat()
-            val baseX = tipX - 35f
-            val halfH = 25f
+            val baseX = tipX - 25f
+            val halfH = 18f
             val arrowPath = android.graphics.Path().apply {
                 moveTo(tipX, arrowY)
                 lineTo(baseX, arrowY - halfH)

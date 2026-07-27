@@ -360,7 +360,7 @@ fun CameraScreen(
                                 contentDescription = "Color Bar Scale",
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .padding(end = 5.dp)
+                                    .padding(start = 6.dp)
                                     .pointerInput(currentPalette) {
                                         detectTapGestures { offset ->
                                             val idx = PALETTE_OPTIONS.indexOf(currentPalette)
@@ -375,16 +375,17 @@ fun CameraScreen(
                                 contentScale = ContentScale.FillBounds
                             )
 
-                            // Arrow marking where the current spotmeter reading falls on the bar
+                            // Arrow marking where the current spotmeter reading falls on the bar —
+                            // on the left, in the gutter between the image and the bar itself
                             if (spotmeterEnabled && spotFraction != null) {
                                 Canvas(modifier = Modifier.matchParentSize()) {
                                     val y = spotFraction * size.height
-                                    val tipX = size.width - 5.dp.toPx()
-                                    val halfHeight = 4.dp.toPx()
+                                    val tipX = 6.dp.toPx()
+                                    val halfHeight = 5.dp.toPx()
                                     val path = Path().apply {
                                         moveTo(tipX, y)
-                                        lineTo(size.width, y - halfHeight)
-                                        lineTo(size.width, y + halfHeight)
+                                        lineTo(0f, y - halfHeight)
+                                        lineTo(0f, y + halfHeight)
                                         close()
                                     }
                                     drawPath(path, color = Color.White)
