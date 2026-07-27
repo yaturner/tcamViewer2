@@ -272,10 +272,19 @@ fun CameraScreen(
             val imgW = displayImageWidth * scale
             val imgH = displayImageHeight * scale
 
+            // Constrains centering to the region above the button bar — Alignment.Center on
+            // a direct child would center within the *full* box, letting content bleed down
+            // into the button bar whenever its height exceeds maxHeight - 2*btnBarH.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .height((maxHeight - btnBarH).coerceAtLeast(0.dp)),
+                contentAlignment = Alignment.Center
+            ) {
             // --- Image + sidebar row (only when a frame is available) ---
             if (imageBitmap != null) Row(
                 modifier = Modifier
-                    .align(Alignment.Center)
                     .padding(start = 16.dp, end = 5.dp),
                 verticalAlignment = Alignment.Top,
                 horizontalArrangement = Arrangement.Start
@@ -448,12 +457,11 @@ fun CameraScreen(
                 Image(
                     painter = painterResource(id = R.drawable.appicon),
                     contentDescription = "No camera image",
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(width = imgW, height = imgH),
+                    modifier = Modifier.size(width = imgW, height = imgH),
                     contentScale = ContentScale.Fit
                 )
             }  // end if (imageBitmap != null)
+            }  // end content-area Box
 
             // 3. Menu button (top-left) — header row above is hidden once connected
             if (isConnected && !isFullscreen) {
