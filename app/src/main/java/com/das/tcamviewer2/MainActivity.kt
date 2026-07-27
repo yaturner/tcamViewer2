@@ -1,5 +1,6 @@
 package com.das.tcamviewer2
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -47,6 +48,7 @@ lateinit var settingsDataManager: SettingsDataManager
 lateinit var cameraUtils: CameraUtils
 lateinit var paletteFactory: PaletteFactory
 lateinit var utils: Utils
+lateinit var appContext: Context
 
 class MainActivity : ComponentActivity() {
 
@@ -54,6 +56,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         Timber.plant(Timber.DebugTree())
+        if (!::appContext.isInitialized) appContext = applicationContext
         if (!::cameraService.isInitialized) cameraService = CameraService()
         if (!::settingsDataManager.isInitialized) settingsDataManager = SettingsDataManager(this)
         if (!::cameraUtils.isInitialized) cameraUtils = CameraUtils(this)
