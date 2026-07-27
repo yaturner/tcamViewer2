@@ -884,6 +884,7 @@ private fun CameraSettingsSection(
         var wifiUseStaticIp by remember { mutableStateOf(false) }
         var wifiStaticIp by remember { mutableStateOf("") }
         var wifiStaticNetmask by remember { mutableStateOf("") }
+        var showWifiSaveConfirm by remember { mutableStateOf(false) }
 
         // Seed the editable fields from the camera's current status once it loads.
         LaunchedEffect(wifiInfo) {
@@ -1004,19 +1005,47 @@ private fun CameraSettingsSection(
             confirmButton = {
                 TextButton(
                     enabled = wifiInfo != null,
-                    onClick = {
-                        viewModel.sendWifiConfig(
-                            wifiIsAccessPoint, wifiSsid, wifiPassword,
-                            wifiUseStaticIp, wifiStaticIp, wifiStaticNetmask
-                        )
-                        showWifiDialog = false
-                    }
+                    onClick = { showWifiSaveConfirm = true }
                 ) { Text("Save") }
             },
             dismissButton = {
                 TextButton(onClick = { showWifiDialog = false }) { Text("Cancel") }
             }
         )
+
+        // --- Warn before applying — set_wifi restarts the camera's WiFi subsystem, which
+        // drops the current connection, so this shouldn't happen silently. ---
+        if (showWifiSaveConfirm) {
+            AlertDialog(
+                onDismissRequest = { showWifiSaveConfirm = false },
+                title = { Text("Save WiFi Settings?") },
+                text = {
+                    Text(
+                        "This will disconnect the camera. It will attempt to reconnect " +
+                            "on the new network."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.sendWifiConfig(
+                            wifiIsAccessPoint, wifiSsid, wifiPassword,
+                            wifiUseStaticIp, wifiStaticIp, wifiStaticNetmask
+                        )
+                        val reconnectIp = when {
+                            wifiIsAccessPoint -> wifiInfo?.get("ap_ip_addr") ?: "192.168.4.1"
+                            wifiUseStaticIp -> wifiStaticIp
+                            else -> null // DHCP client — new address unknown, best-effort retry
+                        }
+                        viewModel.reconnectAfterWifiChange(reconnectIp)
+                        showWifiSaveConfirm = false
+                        showWifiDialog = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showWifiSaveConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
 
         // --- SSID scan dialog — lists nearby networks the phone's own WiFi radio can see,
         // so the user can pick one instead of typing it by hand. ---

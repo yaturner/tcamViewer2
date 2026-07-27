@@ -16,6 +16,7 @@ import com.das.tcamviewer2.settingsDataManager
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -296,6 +297,33 @@ class CameraViewModel : ViewModel() {
     }
 
     fun dismissConnectError() { _showConnectError.value = false }
+
+    /** Disconnects immediately (the set_wifi command that must have just been sent restarts the
+     *  camera's WiFi subsystem on its own), then waits for it to rejoin the network and tries
+     *  once. [newIp] is the address to try — known up front for AP mode (its fixed address) and
+     *  static-IP client mode (what the user typed); null for DHCP client mode, where the new
+     *  address can't be known in advance, so the existing configured IP is retried as a
+     *  best-effort guess (DHCP lease stickiness often reassigns the same address). Failure
+     *  surfaces through the normal _showConnectError flow — the user can retry via Connect or
+     *  "Find cameras" (mDNS) once the camera settles on its new network. */
+    fun reconnectAfterWifiChange(newIp: String?) {
+        cameraService.disconnect()
+        _isConnected.value = false
+        _isStreaming.value = false
+        _spotmeterRect.value = null
+        _cameraConfig.value = null
+        userMovedSpotmeter = false
+        viewModelScope.launch(Dispatchers.IO) {
+            val ip = if (newIp != null) {
+                settingsDataManager.saveCameraIp(newIp)
+                newIp
+            } else {
+                settingsDataManager.getCameraIp()
+            }
+            delay(8_000L)
+            connectToCamera(ip)
+        }
+    }
 
     private suspend fun loadCameraConfig() {
         try {
