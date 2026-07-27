@@ -2,6 +2,7 @@ package com.das.tcamviewer2.model
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import android.media.MediaActionSound
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -134,6 +135,11 @@ class CameraViewModel : ViewModel() {
     private var frameCount = 0
     private var fpsWindowStart = -1L   // -1 = not yet started; initialised on first frame
 
+    // 35mm-style shutter click — plays for on-demand single-frame reads (Get, time lapse
+    // captures) but not for continuous streaming/recording frames, which would be constant noise.
+    @Volatile private var shutterSoundEnabled = true
+    private val shutterSound = MediaActionSound().apply { load(MediaActionSound.SHUTTER_CLICK) }
+
     init {
         observeSettings()
         frameDisposable = cameraService.getImageChannel()
@@ -177,6 +183,11 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch {
             settingsDataManager.spotmeterFlow.collect { v ->
                 _spotmeterEnabled.value = v
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.shutterSoundFlow.collect { v ->
+                shutterSoundEnabled = v
             }
         }
     }
@@ -473,6 +484,11 @@ class CameraViewModel : ViewModel() {
 
     private suspend fun processFrame(json: JSONObject) {
         if (!json.has("radiometric")) return
+        // Only single on-demand reads (Get, time lapse captures) click — continuous
+        // streaming/recording frames arrive too fast for a per-frame shutter sound to make sense.
+        if (shutterSoundEnabled && !_isStreaming.value) {
+            shutterSound.play(MediaActionSound.SHUTTER_CLICK)
+        }
         try {
             val stream = recordingStream
             if (stream != null) {
@@ -562,5 +578,6 @@ class CameraViewModel : ViewModel() {
         frameChannel.close()
         frameDisposable?.dispose()
         cameraService.disconnect()
+        shutterSound.release()
     }
 }

@@ -523,7 +523,7 @@ private fun BrowseWindow(
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.FillBounds
                                     )
-                                    if (hasThermal) {
+                                    if (hasThermal && spotmeterEnabled) {
                                         SpotmeterOverlay(currentDto.spotmeterLocation)
                                     }
                                 }
@@ -877,6 +877,7 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     var speedIndex by remember { mutableIntStateOf(TIME_LAPSE_DEFAULT_SPEED_INDEX) }
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
+    val spotmeterEnabled by settingsDataManager.spotmeterFlow.collectAsState(initial = true)
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -1115,7 +1116,7 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                             modifier = Modifier.fillMaxSize(),
                                             contentScale = ContentScale.FillBounds
                                         )
-                                        if (hasThermal) {
+                                        if (hasThermal && spotmeterEnabled) {
                                             SpotmeterOverlay(currentFrame.dto.spotmeterLocation)
                                         }
                                     }

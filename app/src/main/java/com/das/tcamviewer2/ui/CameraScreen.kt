@@ -327,7 +327,9 @@ fun CameraScreen(
                         )
 
                         // Spotmeter rectangle overlay
-                        SpotmeterOverlay(spotmeterRect)
+                        if (spotmeterEnabled) {
+                            SpotmeterOverlay(spotmeterRect)
+                        }
 
                         if (showAgcHint) {
                             Text(
