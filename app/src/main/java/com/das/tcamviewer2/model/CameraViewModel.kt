@@ -3,6 +3,7 @@ package com.das.tcamviewer2.model
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.media.MediaActionSound
+import android.media.MediaPlayer
 import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -137,8 +138,36 @@ class CameraViewModel : ViewModel() {
 
     // 35mm-style shutter click — plays for on-demand single-frame reads (Get, time lapse
     // captures) but not for continuous streaming/recording frames, which would be constant noise.
+    //
+    // Played via MediaPlayer against the same system click file MediaActionSound uses, rather
+    // than through MediaActionSound/SoundPool directly: SoundPool has a long-standing bug where
+    // very short OGG Vorbis clips (like this one) decode with an audible click/thump artifact
+    // from mishandled Vorbis pre-roll samples. MediaPlayer's full decode pipeline doesn't have
+    // that truncation bug. Falls back to MediaActionSound if the file isn't found at any of the
+    // usual system paths (e.g. a different OEM layout).
     @Volatile private var shutterSoundEnabled = true
-    private val shutterSound = MediaActionSound().apply { load(MediaActionSound.SHUTTER_CLICK) }
+    private val shutterClickFile: File? = listOf(
+        "/product/media/audio/ui", "/odm/media/audio/ui", "/oem/media/audio/ui", "/system/media/audio/ui"
+    ).map { File(it, "camera_click.ogg") }.firstOrNull { it.exists() }
+    private val shutterSoundFallback = MediaActionSound().apply { load(MediaActionSound.SHUTTER_CLICK) }
+
+    private fun playShutterSound() {
+        val file = shutterClickFile
+        if (file == null) {
+            shutterSoundFallback.play(MediaActionSound.SHUTTER_CLICK)
+            return
+        }
+        try {
+            val player = MediaPlayer()
+            player.setDataSource(file.absolutePath)
+            player.setOnCompletionListener { it.release() }
+            player.setOnErrorListener { mp, _, _ -> mp.release(); true }
+            player.prepare()
+            player.start()
+        } catch (e: Exception) {
+            Timber.e(e, "Shutter sound playback failed")
+        }
+    }
 
     init {
         observeSettings()
@@ -487,7 +516,7 @@ class CameraViewModel : ViewModel() {
         // Only single on-demand reads (Get, time lapse captures) click — continuous
         // streaming/recording frames arrive too fast for a per-frame shutter sound to make sense.
         if (shutterSoundEnabled && !_isStreaming.value) {
-            shutterSound.play(MediaActionSound.SHUTTER_CLICK)
+            playShutterSound()
         }
         try {
             val stream = recordingStream
@@ -578,6 +607,6 @@ class CameraViewModel : ViewModel() {
         frameChannel.close()
         frameDisposable?.dispose()
         cameraService.disconnect()
-        shutterSound.release()
+        shutterSoundFallback.release()
     }
 }
