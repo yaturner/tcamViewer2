@@ -95,7 +95,7 @@ All spotmeter-derived elements (temperature header, hotspot marker, and position
 
 When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
 
-- Camera IP address
+- Camera IP address — changing it while connected and pressing **Save** first shows a confirmation dialog (this will disconnect the camera); confirming disconnects only, and the new address is persisted on the next **Save** press
 - Colour palette selection
 - Temperature units (Celsius / Fahrenheit)
 - AGC (Automatic Gain Control) toggle
@@ -103,7 +103,7 @@ When connected, a **Camera Settings** section appears at the top with AGC, emiss
 - Shutter sound toggle
 - Spotmeter enable / disable
 - Export resolution for shared/exported video (`.mtjsn` / `.tltjsn` playback → MP4)
-- All settings are deferred until **Done** is pressed; **Cancel** discards changes and returns to the previous tab
+- All settings are deferred until **Save** is pressed; **Cancel** discards changes and returns to the previous tab
 
 ## Architecture
 
