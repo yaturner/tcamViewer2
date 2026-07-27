@@ -250,11 +250,17 @@ fun CameraScreen(
                 .then(if (isFullscreen && isLandscape) Modifier.padding(bottom = 24.dp) else Modifier)
         ) {
             // Scale image to fit available space (important in landscape / windowed mode)
+            // Both header labels share this fixed height so the image and the color bar/
+            // histogram below them start at the exact same Y, regardless of text metrics.
+            val headerH = 24.dp
             val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val btnBarH = if (isFullscreen) 0.dp else 56.dp + navBarInset
             val sidebarW = colorBarWidth + (if (isPhonePortrait) 0.dp else histogramWidth) + 30.dp
             val availW = maxWidth - sidebarW - 32.dp
-            val availH = maxHeight - btnBarH - 16.dp
+            // The color bar column is headerH (max label) + bar + headerH (min label) tall,
+            // taller than the image alone — reserve that here or its bottom label collides
+            // with the button bar in landscape, where height is the binding constraint.
+            val availH = maxHeight - btnBarH - 16.dp - (headerH * 2)
             // Fullscreen is meant to maximize the image, so let it scale up past its
             // native 320x240dp size there; otherwise cap at 1x to avoid upscaling normally.
             val maxScale = if (isFullscreen) Float.MAX_VALUE else 1f
@@ -265,9 +271,6 @@ fun CameraScreen(
             ).coerceAtLeast(0.25f)
             val imgW = displayImageWidth * scale
             val imgH = displayImageHeight * scale
-            // Both header labels share this fixed height so the image and the color bar/
-            // histogram below them start at the exact same Y, regardless of text metrics.
-            val headerH = 24.dp
 
             // --- Image + sidebar row (only when a frame is available) ---
             if (imageBitmap != null) Row(
@@ -394,12 +397,17 @@ fun CameraScreen(
                             }
                         }
 
-                        Text(
-                            text = minTempText,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(start = 5.dp)
-                        )
+                        Box(
+                            modifier = Modifier.height(headerH),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            Text(
+                                text = minTempText,
+                                fontSize = 12.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(start = 5.dp)
+                            )
+                        }
                     }
 
                     if (histogram != null && !isPhonePortrait) {
