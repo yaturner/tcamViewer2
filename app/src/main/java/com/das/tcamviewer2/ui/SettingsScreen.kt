@@ -1,7 +1,17 @@
 package com.das.tcamviewer2.ui
 
+import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,6 +32,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
@@ -56,6 +68,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -712,9 +726,17 @@ private fun CameraSettingsSection(
 ) {
     val wifiInfo by viewModel.wifiInfo.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val wifiManager = remember {
+        context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+    }
 
     var showEmissivityDialog by remember { mutableStateOf(false) }
     var showWifiDialog by remember { mutableStateOf(false) }
+    var showSsidScanDialog by remember { mutableStateOf(false) }
+    val ssidScanPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> if (granted) showSsidScanDialog = true }
 
     Text(
         text = "CAMERA SETTINGS",
@@ -795,7 +817,7 @@ private fun CameraSettingsSection(
     // WiFi / Network
     ListItem(
         headlineContent = { Text("WiFi / Network") },
-        supportingContent = { Text("View camera network status") },
+        supportingContent = { Text("Configure the camera's WiFi connection") },
         trailingContent = {
             FeedbackButton(
                 onClick = {
@@ -803,7 +825,7 @@ private fun CameraSettingsSection(
                     showWifiDialog = true
                 },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-            ) { Text("Show", fontSize = 12.sp) }
+            ) { Text("Edit", fontSize = 12.sp) }
         }
     )
 
@@ -849,38 +871,250 @@ private fun CameraSettingsSection(
         )
     }
 
-    // --- WiFi info dialog ---
+    // --- WiFi settings dialog — mirrors the fields/layout of the original tcamViewer's
+    // fragment_wifi_settings.xml: an AP/client toggle, shared SSID/password fields (meaning
+    // depends on that toggle), a static-IP toggle, and the static IP/netmask fields. Saves
+    // straight to the camera on its own Save button, independent of the outer Done/Cancel —
+    // a WiFi change is a deliberate, separate action, not something to bundle silently in.
     if (showWifiDialog) {
+        var wifiIsAccessPoint by remember { mutableStateOf(true) }
+        var wifiSsid by remember { mutableStateOf("") }
+        var wifiPassword by remember { mutableStateOf("") }
+        var wifiPasswordVisible by remember { mutableStateOf(false) }
+        var wifiUseStaticIp by remember { mutableStateOf(false) }
+        var wifiStaticIp by remember { mutableStateOf("") }
+        var wifiStaticNetmask by remember { mutableStateOf("") }
+
+        // Seed the editable fields from the camera's current status once it loads.
+        LaunchedEffect(wifiInfo) {
+            val info = wifiInfo ?: return@LaunchedEffect
+            val flags = info["flags"]?.toIntOrNull() ?: 0
+            val isClientMode = (flags and Constants.WIFI_MASK_CLIENT_MODE) != 0
+            wifiIsAccessPoint = !isClientMode
+            wifiUseStaticIp = (flags and Constants.WIFI_MASK_STATIC_IP) != 0
+            wifiSsid = if (isClientMode) info["sta_ssid"].orEmpty() else info["ap_ssid"].orEmpty()
+            wifiStaticIp = info["sta_ip_addr"].orEmpty()
+            wifiStaticNetmask = info["sta_netmask"].orEmpty()
+        }
+
         AlertDialog(
             onDismissRequest = { showWifiDialog = false },
-            title = { Text("Network Status") },
+            title = { Text("WiFi Settings") },
             text = {
-                when (wifiInfo) {
-                    null -> CircularProgressIndicator()
-                    emptyMap<String, String>() -> Text("Could not retrieve network information.")
-                    else -> Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                        wifiInfo!!.forEach { (key, value) ->
-                            val display = if (key.contains("pw", ignoreCase = true)) "••••••" else value
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Text(
-                                    text = "$key:",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.weight(0.45f)
-                                )
-                                Text(text = display, fontSize = 13.sp, modifier = Modifier.weight(0.55f))
+                if (wifiInfo == null) {
+                    CircularProgressIndicator()
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Camera is Access Point",
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = wifiIsAccessPoint,
+                                onCheckedChange = { wifiIsAccessPoint = it }
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = wifiSsid,
+                                onValueChange = { wifiSsid = it },
+                                label = { Text("SSID") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(onClick = {
+                                val granted = ContextCompat.checkSelfPermission(
+                                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    showSsidScanDialog = true
+                                } else {
+                                    ssidScanPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                }
+                            }) {
+                                Icon(Icons.Default.Search, contentDescription = "Scan for networks")
                             }
                         }
+
+                        OutlinedTextField(
+                            value = wifiPassword,
+                            onValueChange = { wifiPassword = it },
+                            label = { Text("Password") },
+                            singleLine = true,
+                            visualTransformation = if (wifiPasswordVisible) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { wifiPasswordVisible = !wifiPasswordVisible }) {
+                                    Icon(
+                                        imageVector = if (wifiPasswordVisible) Icons.Filled.VisibilityOff
+                                                      else Icons.Filled.Visibility,
+                                        contentDescription = if (wifiPasswordVisible) "Hide password" else "Show password"
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Use Static IP when Client",
+                                fontSize = 14.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = wifiUseStaticIp,
+                                onCheckedChange = { wifiUseStaticIp = it }
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = wifiStaticIp,
+                            onValueChange = { wifiStaticIp = it },
+                            label = { Text("Client Static IP Address") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = wifiStaticNetmask,
+                            onValueChange = { wifiStaticNetmask = it },
+                            label = { Text("Client Static IP Netmask") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        )
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showWifiDialog = false }) { Text("Close") }
+                TextButton(
+                    enabled = wifiInfo != null,
+                    onClick = {
+                        viewModel.sendWifiConfig(
+                            wifiIsAccessPoint, wifiSsid, wifiPassword,
+                            wifiUseStaticIp, wifiStaticIp, wifiStaticNetmask
+                        )
+                        showWifiDialog = false
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWifiDialog = false }) { Text("Cancel") }
             }
         )
+
+        // --- SSID scan dialog — lists nearby networks the phone's own WiFi radio can see,
+        // so the user can pick one instead of typing it by hand. ---
+        if (showSsidScanDialog) {
+            val scannedSsids = remember { mutableStateListOf<String>() }
+            var isScanningSsids by remember { mutableStateOf(false) }
+            var selectedScannedSsid by remember { mutableStateOf<String?>(null) }
+
+            LaunchedEffect(Unit) {
+                scannedSsids.clear()
+                selectedScannedSsid = null
+                isScanningSsids = true
+                try {
+                    withTimeoutOrNull(10_000L) {
+                        suspendCancellableCoroutine<Unit> { cont ->
+                            val receiver = object : BroadcastReceiver() {
+                                override fun onReceive(ctx: Context, intent: Intent) {
+                                    if (cont.isActive) cont.resume(Unit) {}
+                                }
+                            }
+                            context.registerReceiver(
+                                receiver, IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+                            )
+                            cont.invokeOnCancellation {
+                                runCatching { context.unregisterReceiver(receiver) }
+                            }
+                            // startScan() returns false when throttled (e.g. too many recent
+                            // scans) — fall back to whatever results are already cached.
+                            @Suppress("DEPRECATION")
+                            val started = wifiManager.startScan()
+                            if (!started && cont.isActive) cont.resume(Unit) {}
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Permission revoked mid-scan, etc. — fall through to whatever's cached.
+                }
+                val results = try {
+                    @Suppress("DEPRECATION")
+                    wifiManager.scanResults
+                        .mapNotNull { it.SSID?.takeIf(String::isNotBlank) }
+                        .distinct()
+                        .sorted()
+                } catch (e: SecurityException) {
+                    emptyList()
+                }
+                scannedSsids.addAll(results)
+                isScanningSsids = false
+            }
+
+            AlertDialog(
+                onDismissRequest = { showSsidScanDialog = false },
+                title = { Text("Available Networks") },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (isScanningSsids) {
+                            CircularProgressIndicator(modifier = Modifier.padding(bottom = 12.dp))
+                        }
+                        if (scannedSsids.isEmpty()) {
+                            Text(if (isScanningSsids) "Scanning for networks…" else "No networks found.")
+                        } else {
+                            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                scannedSsids.forEach { ssid ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .selectable(
+                                                selected = selectedScannedSsid == ssid,
+                                                onClick = { selectedScannedSsid = ssid }
+                                            )
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = selectedScannedSsid == ssid,
+                                            onClick = { selectedScannedSsid = ssid }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(ssid)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = selectedScannedSsid != null,
+                        onClick = {
+                            selectedScannedSsid?.let { wifiSsid = it }
+                            showSsidScanDialog = false
+                        }
+                    ) { Text("Select") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSsidScanDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
     }
 }
 

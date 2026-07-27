@@ -323,6 +323,24 @@ class CameraViewModel : ViewModel() {
         cameraService.setConfig(agcEnabled, emissivity, gainMode)
     }
 
+    fun sendWifiConfig(
+        isAccessPoint: Boolean,
+        ssid: String,
+        password: String,
+        useStaticIp: Boolean,
+        staticIp: String,
+        staticNetmask: String
+    ) {
+        val args = when {
+            isAccessPoint -> String.format(Constants.ARGS_SET_WIFI_AP, ssid, password)
+            useStaticIp -> String.format(
+                Constants.ARGS_SET_WIFI_STATIC, ssid, password, staticIp, staticNetmask
+            )
+            else -> String.format(Constants.ARGS_SET_WIFI_NOT_STATIC, ssid, password)
+        }
+        cameraService.setWifi(args)
+    }
+
     fun fetchWifiInfo() {
         _wifiInfo.value = null
         viewModelScope.launch(Dispatchers.IO) {

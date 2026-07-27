@@ -251,6 +251,18 @@ class CameraService : Service() {
         }
     }
 
+    fun setWifi(argsJson: String) {
+        serviceScope.launch {
+            try {
+                val cmd = String.format(Constants.CMD_SET_WIFI, argsJson)
+                outToSocket?.write(cmd.toByteArray(StandardCharsets.UTF_8))
+                outToSocket?.flush()
+            } catch (e: Exception) {
+                Timber.e(e, "setWifi failed")
+            }
+        }
+    }
+
     private fun startListening() {
         running = true
         bytesRead = 0
