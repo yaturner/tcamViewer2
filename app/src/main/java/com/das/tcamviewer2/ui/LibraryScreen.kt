@@ -1322,14 +1322,16 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
     val spotmeterEnabled = settingsDataManager.getSpotmeter()
     val exportMetadata = settingsDataManager.getExportMetadata()
 
-    // All dimensions in px (off-screen bitmap — not dp)
-    val imgW     = 640          // 160 × 4
-    val imgH     = 480          // 120 × 4
-    val headerH  = 64           // room for the centred spotmeter temperature
-    val footerRow1Y = 34f       // baseline of the gain/emissivity row, relative to footer top
-    val footerRow2Y = 72f       // baseline of the date/time row, relative to footer top
-    val bottomPad = 96          // room for both footer rows below the image
-    val sidebarW = if (hasThermal) 120 else 0
+    // All dimensions in px (off-screen bitmap — not dp). Every other constant here was
+    // tuned against the 640×480 (160×4) design size, so scale them together with it to
+    // follow the "Export Resolution" setting rather than always rendering at 640×480.
+    val (imgW, imgH) = parseResolution(settingsDataManager.getExportResolution()) ?: (640 to 480)
+    val scale = imgW / 640f
+    val headerH  = (64 * scale).toInt()     // room for the centred spotmeter temperature
+    val footerRow1Y = 34f * scale       // baseline of the gain/emissivity row, relative to footer top
+    val footerRow2Y = 72f * scale       // baseline of the date/time row, relative to footer top
+    val bottomPad = (96 * scale).toInt()    // room for both footer rows below the image
+    val sidebarW = if (hasThermal) (120 * scale).toInt() else 0
     val totalW   = imgW + sidebarW
     val totalH   = headerH + imgH + bottomPad
 
@@ -1341,7 +1343,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
     if (hasThermal && spotmeterEnabled) {
         val headerPaint = android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = 40f
+            textSize = 40f * scale
             isAntiAlias = true
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             textAlign = android.graphics.Paint.Align.CENTER
@@ -1349,7 +1351,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
         canvas.drawText(
             formatTemp(dto.spotmeterMean, tempScale, isCelsius),
             imgW / 2f,
-            headerH - 18f,
+            headerH - 18f * scale,
             headerPaint
         )
     }
@@ -1371,7 +1373,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
 
         // ── Colour bar: top-aligned with the image, full image height (matches
         // the on-screen views — the bar itself is never shrunk to fit labels) ─
-        val cbW   = 44
+        val cbW   = (44 * scale).toInt()
         val cbH   = imgH
         val cbX   = imgW + (sidebarW - cbW) / 2
         val cbY   = headerH
@@ -1394,8 +1396,8 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
                 (dto.maxTemperature - dto.minTemperature)).coerceIn(0f, 1f)
             val arrowY = cbY + fraction * cbH
             val tipX = cbX.toFloat()
-            val baseX = tipX - 25f
-            val halfH = 18f
+            val baseX = tipX - 25f * scale
+            val halfH = 18f * scale
             val arrowPath = android.graphics.Path().apply {
                 moveTo(tipX, arrowY)
                 lineTo(baseX, arrowY - halfH)
@@ -1410,7 +1412,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
             val arrowStroke = android.graphics.Paint().apply {
                 color = android.graphics.Color.BLACK
                 style = android.graphics.Paint.Style.STROKE
-                strokeWidth = 2f
+                strokeWidth = 2f * scale
                 isAntiAlias = true
             }
             canvas.drawPath(arrowPath, arrowFill)
@@ -1420,7 +1422,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
         // ── Max / min labels (above and below the colour bar) ────────────────
         val tempPaint = android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = 30f
+            textSize = 30f * scale
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.CENTER
         }
@@ -1429,7 +1431,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
         canvas.drawText(
             formatTemp(dto.maxTemperature, tempScale, isCelsius),
             sidebarCx,
-            (headerH - 12).toFloat(),
+            headerH - 12f * scale,
             tempPaint
         )
         // Min: baseline sits just below the bar's bottom, inside the footer band
@@ -1456,7 +1458,7 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
 
         val infoPaintLeft = android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
-            textSize = 28f
+            textSize = 28f * scale
             isAntiAlias = true
             textAlign = android.graphics.Paint.Align.LEFT
         }
@@ -1464,8 +1466,8 @@ private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boole
             textAlign = android.graphics.Paint.Align.RIGHT
         }
         val footerTop = headerH + imgH
-        val leftX = 16f
-        val rightX = imgW - 16f
+        val leftX = 16f * scale
+        val rightX = imgW - 16f * scale
         canvas.drawText("g $gainLabel", leftX, footerTop + footerRow1Y, infoPaintLeft)
         canvas.drawText("ε $emissivityStr", rightX, footerTop + footerRow1Y, infoPaintRight)
         canvas.drawText(timeStr, leftX, footerTop + footerRow2Y, infoPaintLeft)
