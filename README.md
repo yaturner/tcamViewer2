@@ -225,6 +225,12 @@ The app has two product flavors (see [F-Droid](#f-droid) below for why):
 
 # Instrumented tests (requires connected device)
 ./gradlew connectedAndroidTest
+
+# Check Kotlin formatting (ktlint via Spotless)
+./gradlew spotlessCheck
+
+# Auto-fix Kotlin formatting
+./gradlew spotlessApply
 ```
 
 ### Prebuilt APK

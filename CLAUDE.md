@@ -23,6 +23,12 @@ Android app (Kotlin + Jetpack Compose) for viewing a [tCam](https://github.com/d
 
 # Run a single unit test class
 ./gradlew test --tests "com.das.tcamviewer2.ExampleUnitTest"
+
+# Check Kotlin formatting (ktlint via Spotless)
+./gradlew spotlessCheck
+
+# Auto-fix Kotlin formatting
+./gradlew spotlessApply
 ```
 
 Install to connected device: use Android Studio's Run button or `./gradlew installDebug`.
