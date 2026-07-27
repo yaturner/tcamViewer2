@@ -32,9 +32,25 @@ import java.util.concurrent.ConcurrentHashMap
 
 class CameraService : Service() {
 
+    companion object {
+        // Bounds how long a read() call blocks so the listening loop stays responsive to
+        // disconnect()/stopListening() instead of sitting in a blocking syscall indefinitely —
+        // important on the flaky WiFi links this app talks to, where the camera can go quiet
+        // for a while (modem-sleep) without that meaning the connection actually died.
+        private const val SOCKET_READ_TIMEOUT_MS = 30_000
+    }
+
     private var cameraSocket: Socket? = null
     private var isStreaming = false
     private var ipAddress: String? = null
+
+    // java.net.Socket's own isConnected()/isClosed() only reflect whether connect()/close()
+    // were ever called — they don't track whether the link is actually still alive. A silent
+    // WiFi drop leaves isConnected()==true and isClosed()==false indefinitely, which is exactly
+    // the "app thinks it's connected but every command times out" failure mode this app has
+    // hit repeatedly. Track our own flag instead, flipped the moment any read/write actually
+    // fails, and use it (not the Socket's) as the source of truth for isConnected.
+    @Volatile private var connectedFlag = false
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var listeningJob: Job? = null
@@ -79,7 +95,6 @@ class CameraService : Service() {
 
         readBuffer = ByteArray(Constants.BUFFER_LENGTH)
         response = ByteArray(Constants.BUFFER_LENGTH)
-        cameraSocket = Socket()
         resetBuffers()
     }
 
@@ -100,28 +115,31 @@ class CameraService : Service() {
     fun getIpAddress(): String? = ipAddress
 
     fun connect(): Boolean = runBlocking {
+        // Tear down anything left over from a previous attempt first — reconnecting without
+        // this risked leaking the old socket's file descriptor and leaving stale stream
+        // references around if a prior connect/read had failed without fully cleaning up.
+        teardownConnection()
         running = true
         val connected = withContext(Dispatchers.IO) {
             try {
-                cameraSocket = Socket().apply {
-                    connect(java.net.InetSocketAddress(ipAddress, 5001), 5000)
-                    inFromSocket = getInputStream()
-                    outToSocket = getOutputStream()
-                }
+                val socket = Socket()
+                socket.connect(java.net.InetSocketAddress(ipAddress, 5001), 5000)
+                socket.soTimeout = SOCKET_READ_TIMEOUT_MS
+                socket.keepAlive = true
+                cameraSocket = socket
+                inFromSocket = socket.getInputStream()
+                outToSocket = socket.getOutputStream()
                 true
             } catch (e: Exception) {
-                //Sentry.captureException(e)
-                cameraSocket = null
+                Timber.e(e, "connect failed")
+                teardownConnection()
                 false
             }
         }
 
-        if (connected && isConnected) {
-            startListening()
-            true
-        } else {
-            false
-        }
+        connectedFlag = connected
+        if (connected) startListening()
+        connected
     }
 
     fun stopListening() {
@@ -130,20 +148,65 @@ class CameraService : Service() {
     }
 
     fun disconnect() {
-        if (isConnected) {
-            stopStreaming()
-            stopListening()
-            try {
-                cameraSocket?.close()
-            } catch (e: IOException) {
-                //Sentry.captureException(e)
-            } finally {
-                cameraSocket = null
-            }
+        stopStreaming()
+        running = false
+        // Closing the streams here (not just cancelling the listening coroutine) is what
+        // actually unblocks a thread currently sitting in a blocking read() call — coroutine
+        // cancellation alone is cooperative and won't interrupt that blocking JVM I/O.
+        teardownConnection()
+        listeningJob?.cancel()
+        failPendingRequests("Disconnected")
+    }
+
+    /** Fully tears down the socket and its streams. Always safe to call — even if already
+     *  torn down, mid-failure, or never fully connected — so every failure path can call it
+     *  unconditionally instead of each needing its own "is there something to clean up" check. */
+    private fun teardownConnection() {
+        connectedFlag = false
+        try { cameraSocket?.shutdownInput() } catch (_: Exception) {}
+        try { cameraSocket?.shutdownOutput() } catch (_: Exception) {}
+        try { inFromSocket?.close() } catch (_: Exception) {}
+        try { outToSocket?.close() } catch (_: Exception) {}
+        try { cameraSocket?.close() } catch (_: Exception) {}
+        cameraSocket = null
+        inFromSocket = null
+        outToSocket = null
+    }
+
+    /** Immediately fails every in-flight request rather than leaving callers to wait out their
+     *  own individual timeouts once we already know the connection is dead. */
+    private fun failPendingRequests(reason: String) {
+        val error = parseResponse(String.format(Constants.ERROR_RESPONSE, reason))
+        pendingRequests.values.forEach { it.complete(error) }
+        pendingRequests.clear()
+        singleImageDeferred?.let { if (!it.isCompleted) it.complete(error) }
+        singleImageDeferred = null
+    }
+
+    /** Centralizes the write-then-handle-failure path shared by every fire-and-forget command
+     *  (getImage, setConfig, setWifi, ...) — on any write failure, tear the connection down and
+     *  fail in-flight requests immediately instead of leaving stale state for the next attempt
+     *  to trip over. */
+    private fun writeCommand(bytes: ByteArray): Boolean {
+        val out = outToSocket
+        if (out == null) {
+            teardownConnection()
+            failPendingRequests("Socket not connected")
+            return false
+        }
+        return try {
+            out.write(bytes)
+            out.flush()
+            true
+        } catch (e: IOException) {
+            Timber.e(e, "Command write failed — tearing down connection")
+            teardownConnection()
+            failPendingRequests("Socket write failed: ${e.message}")
+            false
         }
     }
 
-    // --- MODIFIED: A suspending function that executes a command AND awaits its response ---
+    // A suspending function that executes a command AND awaits its response
     suspend fun sendCmd(cmd: String, expectedKey: String, timeoutMillis: Long = 5000L): JSONObject {
         if (!isConnected) {
             return parseResponse(String.format(Constants.ERROR_RESPONSE, "Socket disconnected"))
@@ -155,9 +218,10 @@ class CameraService : Service() {
 
         return withContext(Dispatchers.IO) {
             try {
-                // 2. Transmit bytes down the wire
-                outToSocket?.write(cmd.toByteArray(StandardCharsets.UTF_8))
-                outToSocket?.flush()
+                // 2. Transmit bytes down the wire — on failure this tears the connection down
+                // and completes deferredResponse (among all pending requests) with an error,
+                // so the await() below resolves immediately instead of waiting out the timeout.
+                writeCommand(cmd.toByteArray(StandardCharsets.UTF_8))
 
                 // 3. Await resolution with a safety timeout guard wrapper
                 withTimeout(timeoutMillis) {
@@ -165,10 +229,6 @@ class CameraService : Service() {
                 }
             } catch (e: TimeoutCancellationException) {
                 parseResponse(String.format(Constants.ERROR_RESPONSE, "Request timed out matching key: $expectedKey"))
-            } catch (e: Exception) {
-                cameraSocket = null
-                //Sentry.captureException(e)
-                parseResponse(String.format(Constants.ERROR_RESPONSE, e.toString()))
             } finally {
                 // Remove the handler from execution scope map memory cleanly
                 pendingRequests.remove(expectedKey)
@@ -177,7 +237,7 @@ class CameraService : Service() {
     }
 
     val isConnected: Boolean
-        get() = cameraSocket?.let { !it.isClosed && it.isConnected } ?: false
+        get() = connectedFlag
 
     // Example updated caller logic
     fun startStreaming() {
@@ -201,12 +261,7 @@ class CameraService : Service() {
 
     fun getImage() {
         serviceScope.launch {
-            try {
-                outToSocket?.write(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
-                outToSocket?.flush()
-            } catch (e: Exception) {
-                Timber.e(e, "getImage failed")
-            }
+            writeCommand(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
         }
     }
 
@@ -214,11 +269,14 @@ class CameraService : Service() {
         if (!isConnected) return null
         val deferred = CompletableDeferred<JSONObject>()
         singleImageDeferred = deferred
+        val sent = withContext(Dispatchers.IO) {
+            writeCommand(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
+        }
+        if (!sent) {
+            singleImageDeferred = null
+            return null
+        }
         return try {
-            withContext(Dispatchers.IO) {
-                outToSocket?.write(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
-                outToSocket?.flush()
-            }
             withTimeoutOrNull(timeoutMs) { deferred.await() }
         } catch (e: Exception) {
             singleImageDeferred = null
@@ -240,26 +298,16 @@ class CameraService : Service() {
 
     fun setConfig(agcEnabled: Boolean, emissivity: Int, gainMode: Int) {
         serviceScope.launch {
-            try {
-                val args = String.format(Constants.ARGS_SET_CONFIG, if (agcEnabled) 1 else 0, emissivity, gainMode)
-                val cmd = String.format(Constants.CMD_SET_CONFIG, args)
-                outToSocket?.write(cmd.toByteArray(StandardCharsets.UTF_8))
-                outToSocket?.flush()
-            } catch (e: Exception) {
-                Timber.e(e, "setConfig failed")
-            }
+            val args = String.format(Constants.ARGS_SET_CONFIG, if (agcEnabled) 1 else 0, emissivity, gainMode)
+            val cmd = String.format(Constants.CMD_SET_CONFIG, args)
+            writeCommand(cmd.toByteArray(StandardCharsets.UTF_8))
         }
     }
 
     fun setWifi(argsJson: String) {
         serviceScope.launch {
-            try {
-                val cmd = String.format(Constants.CMD_SET_WIFI, argsJson)
-                outToSocket?.write(cmd.toByteArray(StandardCharsets.UTF_8))
-                outToSocket?.flush()
-            } catch (e: Exception) {
-                Timber.e(e, "setWifi failed")
-            }
+            val cmd = String.format(Constants.CMD_SET_WIFI, argsJson)
+            writeCommand(cmd.toByteArray(StandardCharsets.UTF_8))
         }
     }
 
@@ -272,15 +320,26 @@ class CameraService : Service() {
             while (isConnected && running) {
                 try {
                     bytesRead = input.read(readBuffer)
+                } catch (e: java.net.SocketTimeoutException) {
+                    // Just an idle link (e.g. camera modem-sleep) — not necessarily dead.
+                    // Looping back re-checks isConnected/running so a concurrent disconnect()
+                    // is noticed promptly instead of blocking another full read() cycle.
+                    continue
                 } catch (e: java.io.IOException) {
-                    Timber.e(e, "Socket read error — stopping listener")
+                    Timber.e(e, "Socket read error — tearing down connection")
                     running = false
-                    try { cameraSocket?.close() } catch (_: Exception) {}
-                    cameraSocket = null
+                    teardownConnection()
+                    failPendingRequests("Socket read error: ${e.message}")
                     break
                 }
                 when {
-                    bytesRead < 0 -> { running = false; break }
+                    bytesRead < 0 -> {
+                        Timber.w("Socket read hit EOF — camera closed the connection")
+                        running = false
+                        teardownConnection()
+                        failPendingRequests("Camera closed the connection")
+                        break
+                    }
                     bytesRead == 0 -> { delay(100); continue }
                 }
                 for (index in 0 until bytesRead) {
