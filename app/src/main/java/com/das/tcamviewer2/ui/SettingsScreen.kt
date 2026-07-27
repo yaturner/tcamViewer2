@@ -118,6 +118,7 @@ fun SettingsScreen(
     val discoveredDevices = remember { mutableStateListOf<Pair<String, String>>() }
     var isDiscovering by remember { mutableStateOf(false) }
     var discoverySelectedDevice by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var showIpChangeConfirm by remember { mutableStateOf(false) }
 
     var showPaletteDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -159,6 +160,28 @@ fun SettingsScreen(
     var localUnit        by remember(savedUnit, resetKey)        { mutableStateOf(savedUnit) }
     var localPalette     by remember(savedPalette, resetKey)     { mutableStateOf(savedPalette) }
 
+    suspend fun performSave(sendConfigIfConnected: Boolean) {
+        dataManager.saveCameraIp(localIp)
+        dataManager.saveExportPicture(localExportPic)
+        dataManager.saveExportMetadata(localExportMeta)
+        dataManager.saveExportResolution(localResolution)
+        dataManager.saveManualRange(localManualRange)
+        dataManager.saveMinValue(localMin)
+        dataManager.saveMaxValue(localMax)
+        dataManager.saveShutterSound(localShutter)
+        dataManager.saveSpotmeter(localSpotmeter)
+        dataManager.saveTemperatureUnit(localUnit)
+        dataManager.saveSelectedPalette(localPalette)
+        dataManager.saveCameraAgc(localAgc)
+        dataManager.saveCameraEmissivity(localEmissivity)
+        dataManager.saveCameraGainMode(localGainMode)
+        if (sendConfigIfConnected && isConnected) {
+            val emissivityPct = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
+            viewModel.sendCameraConfig(localAgc, emissivityPct, localGainMode)
+        }
+        onNavigateBack()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -184,29 +207,13 @@ fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 FeedbackButton(onClick = {
-                    coroutineScope.launch {
-                        dataManager.saveCameraIp(localIp)
-                        dataManager.saveExportPicture(localExportPic)
-                        dataManager.saveExportMetadata(localExportMeta)
-                        dataManager.saveExportResolution(localResolution)
-                        dataManager.saveManualRange(localManualRange)
-                        dataManager.saveMinValue(localMin)
-                        dataManager.saveMaxValue(localMax)
-                        dataManager.saveShutterSound(localShutter)
-                        dataManager.saveSpotmeter(localSpotmeter)
-                        dataManager.saveTemperatureUnit(localUnit)
-                        dataManager.saveSelectedPalette(localPalette)
-                        dataManager.saveCameraAgc(localAgc)
-                        dataManager.saveCameraEmissivity(localEmissivity)
-                        dataManager.saveCameraGainMode(localGainMode)
-                        if (isConnected) {
-                            val emissivityPct = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
-                            viewModel.sendCameraConfig(localAgc, emissivityPct, localGainMode)
-                        }
-                        onNavigateBack()
+                    if (isConnected && localIp != savedIp) {
+                        showIpChangeConfirm = true
+                    } else {
+                        coroutineScope.launch { performSave(sendConfigIfConnected = true) }
                     }
                 }) {
-                    Text("Done")
+                    Text("Save")
                 }
             }
         }
@@ -574,6 +581,29 @@ For questions about this privacy statement, please contact the developer through
         )
     }
 
+    // --- Warn before changing the camera IP while connected — set_config/get_image etc. all
+    // target the old address, so switching it out from under an active connection would just
+    // leave the app pointed at a socket to nowhere. OK only disconnects — nothing is saved here;
+    // the edited fields stay on screen and are only persisted by a subsequent Save press (which
+    // by then sees isConnected == false and proceeds straight to performSave). Cancel disconnects
+    // nothing and leaves the unsaved edits untouched. ---
+    if (showIpChangeConfirm) {
+        AlertDialog(
+            onDismissRequest = { showIpChangeConfirm = false },
+            title = { Text("Change IP Address") },
+            text = { Text("This will disconnect the camera.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.toggleConnection() // isConnected is true here, so this disconnects
+                    showIpChangeConfirm = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showIpChangeConfirm = false }) { Text("Cancel") }
+            }
+        )
+    }
+
     // --- Camera Discovery Dialog ---
     if (showDiscoveryDialog) {
         LaunchedEffect(Unit) {
@@ -874,7 +904,7 @@ private fun CameraSettingsSection(
     // --- WiFi settings dialog — mirrors the fields/layout of the original tcamViewer's
     // fragment_wifi_settings.xml: an AP/client toggle, shared SSID/password fields (meaning
     // depends on that toggle), a static-IP toggle, and the static IP/netmask fields. Saves
-    // straight to the camera on its own Save button, independent of the outer Done/Cancel —
+    // straight to the camera on its own Save button, independent of the outer Save/Cancel —
     // a WiFi change is a deliberate, separate action, not something to bundle silently in.
     if (showWifiDialog) {
         var wifiIsAccessPoint by remember { mutableStateOf(true) }
