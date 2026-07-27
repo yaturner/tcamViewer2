@@ -68,6 +68,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.Inet4Address
 import kotlin.coroutines.resume
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +86,8 @@ fun SettingsScreen(
     val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
 
     val isConnected by viewModel.isConnected.collectAsState()
+    val currentMinTemp by viewModel.minTempValue.collectAsState()
+    val currentMaxTemp by viewModel.maxTempValue.collectAsState()
 
     // Camera settings — persisted in DataStore. The ViewModel writes the camera's actual
     // reported config here once per connect, so these flows are always the source of truth.
@@ -320,7 +325,18 @@ fun SettingsScreen(
                 trailingContent = {
                     Switch(
                         checked = localManualRange,
-                        onCheckedChange = { localManualRange = it },
+                        onCheckedChange = { enabled ->
+                            localManualRange = enabled
+                            // Freshly enabling — seed with a round-degree bound of the current
+                            // image's actual range (in the current unit), like the desktop app,
+                            // rather than leaving stale/default values from a different unit.
+                            val min = currentMinTemp
+                            val max = currentMaxTemp
+                            if (enabled && min != null && max != null) {
+                                localMin = floor(min).toInt().toString()
+                                localMax = ceil(max).toInt().toString()
+                            }
+                        },
                         modifier = Modifier.testTag("switch_manual_range")
                     )
                 }
@@ -442,6 +458,17 @@ fun SettingsScreen(
                     supportingContent = { Text("Select your global temperature unit") }
                 )
                 val unitOptions = listOf("Celsius (°C)", "Fahrenheit (°F)")
+                // Manual Range bounds are stored as plain unlabeled numbers — switching units
+                // must translate them so they keep meaning the same physical temperature
+                // instead of silently being reinterpreted under the new unit.
+                fun selectUnit(unitName: String) {
+                    if (unitName != localUnit) {
+                        val toCelsius = unitName == "Celsius"
+                        localMin = convertManualBound(localMin, toCelsius)
+                        localMax = convertManualBound(localMax, toCelsius)
+                        localUnit = unitName
+                    }
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -454,14 +481,14 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .selectable(
                                     selected = localUnit == unitName,
-                                    onClick = { localUnit = unitName }
+                                    onClick = { selectUnit(unitName) }
                                 )
                                 .padding(vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
                                 selected = localUnit == unitName,
-                                onClick = { localUnit = unitName }
+                                onClick = { selectUnit(unitName) }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(option, fontSize = 16.sp)
@@ -867,4 +894,11 @@ private fun CameraSettingsSection(
             }
         )
     }
+}
+
+/** Converts a Manual Range bound string between °C and °F, preserving the physical temperature. */
+private fun convertManualBound(value: String, toCelsius: Boolean): String {
+    val v = value.toFloatOrNull() ?: return value
+    val converted = if (toCelsius) (v - 32f) * 5f / 9f else v * 9f / 5f + 32f
+    return converted.roundToInt().toString()
 }
