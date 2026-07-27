@@ -1,3 +1,5 @@
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Properties
 
 plugins {
@@ -16,6 +18,26 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// Version scheme: major.minor.ddMMyyHHmm
+//  - major:  bumped by hand in version.properties whenever a build is marked as a GitHub Release
+//  - minor:  total commit count — advances automatically with every commit, no manual bookkeeping
+//  - suffix: this build's timestamp, so every build is uniquely identifiable
+val versionPropertiesFile = rootProject.file("version.properties")
+val versionProperties = Properties().apply {
+    if (versionPropertiesFile.exists()) {
+        versionPropertiesFile.inputStream().use { load(it) }
+    }
+}
+val appVersionMajor = versionProperties.getProperty("major", "1").toInt()
+val appVersionMinor = providers.exec {
+    workingDir = rootDir
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.get().trim().toInt()
+val appBuildTimestamp = SimpleDateFormat("ddMMyyHHmm").format(Date())
+val appVersionName = "$appVersionMajor.$appVersionMinor.$appBuildTimestamp"
+// Must stay monotonically increasing across releases for Android/Play update checks.
+val appVersionCode = appVersionMajor * 100_000 + appVersionMinor
+
 android {
     namespace = "com.das.tcamviewer2"
     compileSdk = 37
@@ -24,8 +46,8 @@ android {
         applicationId = "com.das.tcamviewer2"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -85,6 +107,7 @@ android {
         compose = true
         dataBinding = true
         viewBinding = true
+        buildConfig = true
     }
 //    composeOptions {
 //        // Keeps the compiler extension aligned with your Kotlin version
