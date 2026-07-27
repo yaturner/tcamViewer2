@@ -55,6 +55,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -134,7 +135,9 @@ fun CameraScreen(
     var streamMenuExpanded by remember { mutableStateOf(false) }
     var showTimeLapseDialog by remember { mutableStateOf(false) }
     var showStopSaveDialog by remember { mutableStateOf(false) }
-    var isFullscreen by remember { mutableStateOf(false) }
+    // rememberSaveable so fullscreen mode survives rotation instead of dropping back to
+    // the normal view — the same class of bug as the tab reset fixed for issue #2.
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 

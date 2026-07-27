@@ -72,6 +72,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,6 +109,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+// File isn't directly saveable, but its path is — lets browseFiles survive rotation so the
+// Browse overlay doesn't silently drop back to the file grid (same class of bug as issue #2).
+private val FileListSaver = listSaver<List<File>, String>(
+    save = { list -> list.map { it.absolutePath } },
+    restore = { paths -> paths.map { File(it) } }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
@@ -117,7 +126,7 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
     var selectedPaths by remember { mutableStateOf(emptySet<String>()) }
     var sortAscending by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
-    var browseFiles by remember { mutableStateOf<List<File>>(emptyList()) }
+    var browseFiles by rememberSaveable(stateSaver = FileListSaver) { mutableStateOf<List<File>>(emptyList()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -313,8 +322,10 @@ private fun BrowseWindow(
 ) {
     BackHandler(onBack = onDismiss)
 
-    var currentIndex by remember { mutableIntStateOf(0) }
-    var showVideoPlayer by remember { mutableStateOf(false) }
+    // rememberSaveable so rotating while browsing a file (or watching its video) doesn't
+    // silently drop back to the plain image view — same class of bug as issue #2.
+    var currentIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showVideoPlayer by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     // Keep index in bounds when the list shrinks after a delete
@@ -869,8 +880,11 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     var fallbackIntervalMs by remember { mutableStateOf(125L) }
     var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(false) }
+    // currentIndex isn't worth making saveable here — LaunchedEffect(file) below resets it to 0
+    // on every fresh load anyway (frames themselves aren't cheaply saveable). isFullscreen is
+    // saveable so rotating mid-playback keeps fullscreen mode — same class of bug as issue #2.
     var currentIndex by remember { mutableIntStateOf(0) }
-    var isFullscreen by remember { mutableStateOf(false) }
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var showFrameJumpDialog by remember { mutableStateOf(false) }
     var frameJumpInput by remember { mutableStateOf("") }
