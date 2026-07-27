@@ -22,7 +22,7 @@ fun drawHotspotMarker(
     imgWidthPx: Int,
     imgHeightPx: Int,
     offsetX: Float = 0f,
-    offsetY: Float = 0f
+    offsetY: Float = 0f,
 ) {
     val markerSizePx = 4f
     val sx = imgWidthPx / Constants.IMAGE_WIDTH.toFloat()
@@ -36,8 +36,18 @@ fun drawHotspotMarker(
 
     // Hollow square: a thicker black outline with a thinner white outline drawn on top of the
     // same rect, so black shows on both sides of the white line for visibility on any palette
-    val blackStroke = Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 6f }
-    val whiteStroke = Paint().apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 2f }
+    val blackStroke =
+        Paint().apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = 6f
+        }
+    val whiteStroke =
+        Paint().apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+        }
     canvas.drawRect(left, top, left + w, top + h, blackStroke)
     canvas.drawRect(left, top, left + w, top + h, whiteStroke)
 }

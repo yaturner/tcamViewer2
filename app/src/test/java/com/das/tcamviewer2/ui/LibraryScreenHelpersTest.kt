@@ -6,7 +6,6 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LibraryScreenHelpersTest {
-
     // --- formatTemp ---
 
     @Test
@@ -132,18 +131,20 @@ class LibraryScreenHelpersTest {
 
     @Test
     fun parseFrameTimestampMsReadsMetadataTimeField() {
-        val json = JSONObject().apply {
-            put("metadata", JSONObject().apply { put("Time", "8:17:41.158") })
-        }
+        val json =
+            JSONObject().apply {
+                put("metadata", JSONObject().apply { put("Time", "8:17:41.158") })
+            }
         val expected = 8L * 3_600_000 + 17L * 60_000 + 41L * 1_000 + 158
         assertEquals(expected, parseFrameTimestampMs(json))
     }
 
     @Test
     fun parseFrameTimestampMsHandlesTwoDigitFractionField() {
-        val json = JSONObject().apply {
-            put("metadata", JSONObject().apply { put("Time", "8:17:41.48") })
-        }
+        val json =
+            JSONObject().apply {
+                put("metadata", JSONObject().apply { put("Time", "8:17:41.48") })
+            }
         val expected = 8L * 3_600_000 + 17L * 60_000 + 41L * 1_000 + 480
         assertEquals(expected, parseFrameTimestampMs(json))
     }
@@ -169,29 +170,32 @@ class LibraryScreenHelpersTest {
 
     @Test
     fun calculateFrameIntervalDefaultsForSingleFrame() {
-        val videoInfo = JSONObject().apply {
-            put("start_time", "0:00:00.000")
-            put("end_time", "0:00:10.000")
-        }
+        val videoInfo =
+            JSONObject().apply {
+                put("start_time", "0:00:00.000")
+                put("end_time", "0:00:10.000")
+            }
         assertEquals(125L, calculateFrameInterval(videoInfo, 1))
         assertEquals(125L, calculateFrameInterval(videoInfo, 0))
     }
 
     @Test
     fun calculateFrameIntervalDividesDurationAcrossFrames() {
-        val videoInfo = JSONObject().apply {
-            put("start_time", "0:00:00.000")
-            put("end_time", "0:00:10.000") // 10,000ms
-        }
+        val videoInfo =
+            JSONObject().apply {
+                put("start_time", "0:00:00.000")
+                put("end_time", "0:00:10.000") // 10,000ms
+            }
         assertEquals(100L, calculateFrameInterval(videoInfo, 100)) // 10000 / 100
     }
 
     @Test
     fun calculateFrameIntervalDefaultsWhenEndBeforeStart() {
-        val videoInfo = JSONObject().apply {
-            put("start_time", "0:00:10.000")
-            put("end_time", "0:00:00.000")
-        }
+        val videoInfo =
+            JSONObject().apply {
+                put("start_time", "0:00:10.000")
+                put("end_time", "0:00:00.000")
+            }
         assertEquals(125L, calculateFrameInterval(videoInfo, 50))
     }
 

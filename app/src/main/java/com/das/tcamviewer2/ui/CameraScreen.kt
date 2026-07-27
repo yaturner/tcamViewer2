@@ -1,7 +1,5 @@
 package com.das.tcamviewer2.ui
 
-import com.das.tcamviewer2.R
-
 import android.app.Activity
 import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
@@ -16,11 +14,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -42,10 +40,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -59,8 +57,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -69,6 +65,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -79,6 +77,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.das.tcamviewer2.R
 import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.CameraViewModel
@@ -88,14 +87,14 @@ import kotlinx.coroutines.launch
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
-    "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia"
+    "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia",
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CameraScreen(
     onOpenDrawer: () -> Unit = {},
-    viewModel: CameraViewModel = viewModel()
+    viewModel: CameraViewModel = viewModel(),
 ) {
     val displayImageWidth = 320.dp
     val displayImageHeight = 240.dp
@@ -201,7 +200,9 @@ fun CameraScreen(
         val min = minTempValue
         if (spot != null && max != null && min != null && max != min) {
             ((max - spot) / (max - min)).coerceIn(0f, 1f)
-        } else null
+        } else {
+            null
+        }
     }
 
     if (showConnectError) {
@@ -211,14 +212,14 @@ fun CameraScreen(
             text = { Text("The camera failed to connect, please verify that the IP address is correct and the camera is turned on.") },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissConnectError() }) { Text("OK") }
-            }
+            },
         )
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .statusBarsPadding()
+            .statusBarsPadding(),
     ) {
         if (!isConnected && !isFullscreen) {
             Row(
@@ -226,21 +227,24 @@ fun CameraScreen(
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.primaryContainer)
                     .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onOpenDrawer) {
                     Icon(
                         imageVector = Icons.Filled.Menu,
                         contentDescription = "Open menu",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
                 Text(
-                    text = if (isConnecting) "Thermal Viewer (Connecting...)"
-                           else "Thermal Viewer (Disconnected)",
+                    text = if (isConnecting) {
+                        "Thermal Viewer (Connecting...)"
+                    } else {
+                        "Thermal Viewer (Disconnected)"
+                    },
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
+                    fontSize = 16.sp,
                 )
             }
         }
@@ -250,7 +254,7 @@ fun CameraScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .background(Color(0xFF80C0FF))
-                .then(if (isFullscreen && isLandscape) Modifier.padding(bottom = 24.dp) else Modifier)
+                .then(if (isFullscreen && isLandscape) Modifier.padding(bottom = 24.dp) else Modifier),
         ) {
             // Scale image to fit available space (important in landscape / windowed mode)
             // Both header labels share this fixed height so the image and the color bar/
@@ -270,7 +274,7 @@ fun CameraScreen(
             val scale = minOf(
                 availW.value / displayImageWidth.value,
                 availH.value / displayImageHeight.value,
-                maxScale
+                maxScale,
             ).coerceAtLeast(0.25f)
             val imgW = displayImageWidth * scale
             val imgH = displayImageHeight * scale
@@ -283,196 +287,201 @@ fun CameraScreen(
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
                     .height((maxHeight - btnBarH).coerceAtLeast(0.dp)),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
             ) {
-            // --- Image + sidebar row (only when a frame is available) ---
-            if (imageBitmap != null) Row(
-                modifier = Modifier
-                    .padding(start = 16.dp, end = 5.dp),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.Start
-            ) {
-                // 1. MAIN PREVIEW AREA
-                Column(
-                    modifier = Modifier.padding(end = 10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier.width(imgW).height(headerH),
-                        contentAlignment = Alignment.BottomCenter
+                // --- Image + sidebar row (only when a frame is available) ---
+                if (imageBitmap != null) {
+                    Row(
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 5.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.Start,
                     ) {
-                        Text(
-                            text = spotmeterText,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier.size(width = imgW, height = imgH)
-                    ) {
-                        Image(
-                            bitmap = imageBitmap,
-                            contentDescription = "Thermal Camera Feed",
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(isConnected) {
-                                    if (!isConnected) return@pointerInput
-                                    detectTapGestures { offset ->
-                                        val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
-                                            .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
-                                        val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
-                                            .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-                                        viewModel.setSpotmeter(camX, camY)
-                                    }
-                                },
-                            contentScale = ContentScale.FillBounds
-                        )
-
-                        // Spotmeter rectangle overlay
-                        if (spotmeterEnabled) {
-                            SpotmeterOverlay(spotmeterRect)
-                        }
-
-                        if (showAgcHint) {
-                            Text(
-                                text = "AGC on — temps unavailable",
-                                fontSize = 11.sp,
-                                color = Color.White,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .background(Color.Black.copy(alpha = 0.5f))
-                                    .padding(horizontal = 6.dp, vertical = 3.dp)
-                            )
-                        }
-                    }
-                }
-
-                // 2. DIAGNOSTICS & TEMPERATURE SIDEBAR
-                Row(
-                    verticalAlignment = Alignment.Top
-                ) {
-                    // Color bar + its own max/min labels, grouped so the labels stay
-                    // centered over the bar itself even when the histogram (much wider)
-                    // sits alongside it. The bar itself is exactly imgH tall, starting at
-                    // the same Y as the image (both headers share the fixed headerH height);
-                    // the labels are allowed to add extra height rather than shrink the bar.
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier.height(headerH),
-                            contentAlignment = Alignment.BottomCenter
+                        // 1. MAIN PREVIEW AREA
+                        Column(
+                            modifier = Modifier.padding(end = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Text(
-                                text = maxTempText,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 5.dp)
-                            )
+                            Box(
+                                modifier = Modifier.width(imgW).height(headerH),
+                                contentAlignment = Alignment.BottomCenter,
+                            ) {
+                                Text(
+                                    text = spotmeterText,
+                                    fontSize = 12.sp,
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier.size(width = imgW, height = imgH),
+                            ) {
+                                Image(
+                                    bitmap = imageBitmap,
+                                    contentDescription = "Thermal Camera Feed",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .pointerInput(isConnected) {
+                                            if (!isConnected) return@pointerInput
+                                            detectTapGestures { offset ->
+                                                val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
+                                                    .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                                val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
+                                                    .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                                viewModel.setSpotmeter(camX, camY)
+                                            }
+                                        },
+                                    contentScale = ContentScale.FillBounds,
+                                )
+
+                                // Spotmeter rectangle overlay
+                                if (spotmeterEnabled) {
+                                    SpotmeterOverlay(spotmeterRect)
+                                }
+
+                                if (showAgcHint) {
+                                    Text(
+                                        text = "AGC on — temps unavailable",
+                                        fontSize = 11.sp,
+                                        color = Color.White,
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .background(Color.Black.copy(alpha = 0.5f))
+                                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                                    )
+                                }
+                            }
                         }
 
-                        Box(modifier = Modifier.width(colorBarWidth).height(imgH)) {
-                            Image(
-                                bitmap = colorBarBitmap,
-                                contentDescription = "Color Bar Scale",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(start = 6.dp)
-                                    .pointerInput(currentPalette) {
-                                        detectTapGestures { offset ->
-                                            val idx = PALETTE_OPTIONS.indexOf(currentPalette)
-                                            when {
-                                                offset.y < size.height / 3f ->
-                                                    viewModel.setPalette(PALETTE_OPTIONS[(idx - 1 + PALETTE_OPTIONS.size) % PALETTE_OPTIONS.size])
-                                                offset.y > size.height * 2f / 3f ->
-                                                    viewModel.setPalette(PALETTE_OPTIONS[(idx + 1) % PALETTE_OPTIONS.size])
+                        // 2. DIAGNOSTICS & TEMPERATURE SIDEBAR
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            // Color bar + its own max/min labels, grouped so the labels stay
+                            // centered over the bar itself even when the histogram (much wider)
+                            // sits alongside it. The bar itself is exactly imgH tall, starting at
+                            // the same Y as the image (both headers share the fixed headerH height);
+                            // the labels are allowed to add extra height rather than shrink the bar.
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Box(
+                                    modifier = Modifier.height(headerH),
+                                    contentAlignment = Alignment.BottomCenter,
+                                ) {
+                                    Text(
+                                        text = maxTempText,
+                                        fontSize = 12.sp,
+                                        modifier = Modifier.padding(horizontal = 5.dp),
+                                    )
+                                }
+
+                                Box(modifier = Modifier.width(colorBarWidth).height(imgH)) {
+                                    Image(
+                                        bitmap = colorBarBitmap,
+                                        contentDescription = "Color Bar Scale",
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(start = 6.dp)
+                                            .pointerInput(currentPalette) {
+                                                detectTapGestures { offset ->
+                                                    val idx = PALETTE_OPTIONS.indexOf(currentPalette)
+                                                    when {
+                                                        offset.y < size.height / 3f ->
+                                                            viewModel.setPalette(PALETTE_OPTIONS[(idx - 1 + PALETTE_OPTIONS.size) % PALETTE_OPTIONS.size])
+
+                                                        offset.y > size.height * 2f / 3f ->
+                                                            viewModel.setPalette(PALETTE_OPTIONS[(idx + 1) % PALETTE_OPTIONS.size])
+                                                    }
+                                                }
+                                            },
+                                        contentScale = ContentScale.FillBounds,
+                                    )
+
+                                    // Arrow marking where the current spotmeter reading falls on the bar —
+                                    // on the left, in the gutter between the image and the bar itself
+                                    if (spotmeterEnabled && spotFraction != null) {
+                                        Canvas(modifier = Modifier.matchParentSize()) {
+                                            val y = spotFraction * size.height
+                                            val tipX = 6.dp.toPx()
+                                            val halfHeight = 5.dp.toPx()
+                                            val path = Path().apply {
+                                                moveTo(tipX, y)
+                                                lineTo(0f, y - halfHeight)
+                                                lineTo(0f, y + halfHeight)
+                                                close()
+                                            }
+                                            drawPath(path, color = Color.White)
+                                            drawPath(path, color = Color.Black, style = Stroke(width = 1.dp.toPx()))
+                                        }
+                                    }
+                                }
+
+                                Box(
+                                    modifier = Modifier.height(headerH),
+                                    contentAlignment = Alignment.TopCenter,
+                                ) {
+                                    Text(
+                                        text = minTempText,
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(start = 5.dp),
+                                    )
+                                }
+                            }
+
+                            if (histogram != null && !isPhonePortrait) {
+                                val hist = histogram!!
+                                val histPalette = paletteFactory.getPaletteByName(currentPalette)
+                                // No label of its own — a matching spacer keeps its top aligned with
+                                // the image/color bar above, which both reserve headerH for text.
+                                Column {
+                                    Spacer(modifier = Modifier.height(headerH))
+                                    Canvas(
+                                        modifier = Modifier
+                                            .width(histogramWidth)
+                                            .height(imgH)
+                                            .padding(horizontal = 5.dp, vertical = 2.dp),
+                                    ) {
+                                        val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
+                                        val rowHeight = size.height / 256f
+                                        for (row in 0 until 256) {
+                                            val idx = 255 - row
+                                            val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
+                                            if (barWidth > 0f) {
+                                                val rgb = histPalette?.get(idx)
+                                                val color = if (rgb != null) {
+                                                    Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
+                                                } else {
+                                                    Color.Black
+                                                }
+                                                drawRect(
+                                                    color = color,
+                                                    topLeft = Offset(0f, row * rowHeight),
+                                                    size = Size(barWidth, rowHeight),
+                                                )
                                             }
                                         }
-                                    },
-                                contentScale = ContentScale.FillBounds
-                            )
-
-                            // Arrow marking where the current spotmeter reading falls on the bar —
-                            // on the left, in the gutter between the image and the bar itself
-                            if (spotmeterEnabled && spotFraction != null) {
-                                Canvas(modifier = Modifier.matchParentSize()) {
-                                    val y = spotFraction * size.height
-                                    val tipX = 6.dp.toPx()
-                                    val halfHeight = 5.dp.toPx()
-                                    val path = Path().apply {
-                                        moveTo(tipX, y)
-                                        lineTo(0f, y - halfHeight)
-                                        lineTo(0f, y + halfHeight)
-                                        close()
-                                    }
-                                    drawPath(path, color = Color.White)
-                                    drawPath(path, color = Color.Black, style = Stroke(width = 1.dp.toPx()))
-                                }
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier.height(headerH),
-                            contentAlignment = Alignment.TopCenter
-                        ) {
-                            Text(
-                                text = minTempText,
-                                fontSize = 12.sp,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.padding(start = 5.dp)
-                            )
-                        }
-                    }
-
-                    if (histogram != null && !isPhonePortrait) {
-                        val hist = histogram!!
-                        val histPalette = paletteFactory.getPaletteByName(currentPalette)
-                        // No label of its own — a matching spacer keeps its top aligned with
-                        // the image/color bar above, which both reserve headerH for text.
-                        Column {
-                            Spacer(modifier = Modifier.height(headerH))
-                            Canvas(
-                                modifier = Modifier
-                                    .width(histogramWidth)
-                                    .height(imgH)
-                                    .padding(horizontal = 5.dp, vertical = 2.dp)
-                            ) {
-                                val maxCount = hist.maxOrNull()?.coerceAtLeast(1) ?: 1
-                                val rowHeight = size.height / 256f
-                                for (row in 0 until 256) {
-                                    val idx = 255 - row
-                                    val barWidth = (hist[idx].toLong() * size.width / maxCount).toFloat()
-                                    if (barWidth > 0f) {
-                                        val rgb = histPalette?.get(idx)
-                                        val color = if (rgb != null)
-                                            Color(red = rgb[0] / 255f, green = rgb[1] / 255f, blue = rgb[2] / 255f)
-                                        else Color.Black
-                                        drawRect(
-                                            color = color,
-                                            topLeft = Offset(0f, row * rowHeight),
-                                            size = Size(barWidth, rowHeight)
-                                        )
                                     }
                                 }
                             }
                         }
                     }
-                }
-            } else if (!isConnected) {
-                Image(
-                    painter = painterResource(id = R.drawable.appicon),
-                    contentDescription = "No camera image",
-                    modifier = Modifier.size(width = imgW, height = imgH),
-                    contentScale = ContentScale.Fit
-                )
-            }  // end if (imageBitmap != null)
-            }  // end content-area Box
+                } else if (!isConnected) {
+                    Image(
+                        painter = painterResource(id = R.drawable.appicon),
+                        contentDescription = "No camera image",
+                        modifier = Modifier.size(width = imgW, height = imgH),
+                        contentScale = ContentScale.Fit,
+                    )
+                } // end if (imageBitmap != null)
+            } // end content-area Box
 
             // 3. Menu button (top-left) — header row above is hidden once connected
             if (isConnected && !isFullscreen) {
                 IconButton(
                     onClick = onOpenDrawer,
-                    modifier = Modifier.align(Alignment.TopStart)
+                    modifier = Modifier.align(Alignment.TopStart),
                 ) {
                     Icon(imageVector = Icons.Filled.Menu, contentDescription = "Open menu")
                 }
@@ -484,14 +493,14 @@ fun CameraScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .navigationBarsPadding(),
-                horizontalAlignment = Alignment.End
+                horizontalAlignment = Alignment.End,
             ) {
                 if (isStreaming) {
                     Text(
                         text = fpsText,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier.padding(16.dp),
                     )
                 }
 
@@ -499,178 +508,189 @@ fun CameraScreen(
                     IconButton(onClick = { isFullscreen = !isFullscreen }) {
                         Icon(
                             imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen"
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
                         )
                     }
                 }
             }
 
             // 4. BUTTON BAR (bottom) — hidden in fullscreen
-            if (!isFullscreen) Row(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val btnPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-
-                // Connect / Disconnect
-                FeedbackButton(
-                    onClick = { viewModel.toggleConnection() },
-                    enabled = !isConnecting,
-                    contentPadding = btnPadding
+            if (!isFullscreen) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        when {
-                            isConnected -> "Disconnect"
-                            isConnecting -> "Connecting..."
-                            else -> "Connect"
-                        },
-                        fontSize = 12.sp
-                    )
-                }
+                    val btnPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
 
-                // Get — single frame capture; only meaningful when connected but not streaming
-                FeedbackButton(
-                    onClick = { viewModel.getImage() },
-                    enabled = isConnected && !isStreaming,
-                    contentPadding = btnPadding
-                ) {
-                    Text("Get", fontSize = 12.sp)
-                }
+                    // Connect / Disconnect
+                    FeedbackButton(
+                        onClick = { viewModel.toggleConnection() },
+                        enabled = !isConnecting,
+                        contentPadding = btnPadding,
+                    ) {
+                        Text(
+                            when {
+                                isConnected -> "Disconnect"
+                                isConnecting -> "Connecting..."
+                                else -> "Connect"
+                            },
+                            fontSize = 12.sp,
+                        )
+                    }
 
-                // Save — only meaningful once a frame has actually been captured
-                FeedbackButton(
-                    onClick = {
-                        currentImageDto?.let { dto ->
-                            if (cameraUtils.saveTjsn(dto)) {
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Image saved as ${dto.filename}")
-                                }
-                            }
-                        }
-                    },
-                    enabled = currentImageDto != null,
-                    contentPadding = btnPadding
-                ) {
-                    Text("Save", fontSize = 12.sp)
-                }
+                    // Get — single frame capture; only meaningful when connected but not streaming
+                    FeedbackButton(
+                        onClick = { viewModel.getImage() },
+                        enabled = isConnected && !isStreaming,
+                        contentPadding = btnPadding,
+                    ) {
+                        Text("Get", fontSize = 12.sp)
+                    }
 
-                // Stop button (active) or Stream dropdown (idle)
-                if (isStreaming || isRecording || isTimeLapsing) {
+                    // Save — only meaningful once a frame has actually been captured
                     FeedbackButton(
                         onClick = {
-                            if (isTimeLapsing || isRecording) showStopSaveDialog = true
-                            else viewModel.toggleStreaming()
+                            currentImageDto?.let { dto ->
+                                if (cameraUtils.saveTjsn(dto)) {
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Image saved as ${dto.filename}")
+                                    }
+                                }
+                            }
                         },
-                        contentPadding = btnPadding
+                        enabled = currentImageDto != null,
+                        contentPadding = btnPadding,
                     ) {
-                        val label = when {
-                            isTimeLapsing && isTimeLapseCapturing -> "Rec"
-                            isTimeLapsing -> "Stream"
-                            else -> "Stop"
-                        }
-                        Text(label, fontSize = 12.sp)
+                        Text("Save", fontSize = 12.sp)
                     }
-                } else {
-                    val canStream = isConnected && currentImageDto != null
+
+                    // Stop button (active) or Stream dropdown (idle)
+                    if (isStreaming || isRecording || isTimeLapsing) {
+                        FeedbackButton(
+                            onClick = {
+                                if (isTimeLapsing || isRecording) {
+                                    showStopSaveDialog = true
+                                } else {
+                                    viewModel.toggleStreaming()
+                                }
+                            },
+                            contentPadding = btnPadding,
+                        ) {
+                            val label = when {
+                                isTimeLapsing && isTimeLapseCapturing -> "Rec"
+                                isTimeLapsing -> "Stream"
+                                else -> "Stop"
+                            }
+                            Text(label, fontSize = 12.sp)
+                        }
+                    } else {
+                        val canStream = isConnected && currentImageDto != null
+                        Box {
+                            FeedbackButton(
+                                onClick = { streamMenuExpanded = true },
+                                enabled = canStream,
+                                contentPadding = btnPadding,
+                            ) {
+                                Text("Stream", fontSize = 12.sp)
+                            }
+                            DropdownMenu(
+                                expanded = streamMenuExpanded,
+                                onDismissRequest = { streamMenuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Start") },
+                                    enabled = canStream,
+                                    onClick = {
+                                        viewModel.toggleStreaming()
+                                        streamMenuExpanded = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Record") },
+                                    enabled = canStream,
+                                    onClick = {
+                                        viewModel.toggleRecording()
+                                        streamMenuExpanded = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Time Lapse") },
+                                    enabled = canStream,
+                                    onClick = {
+                                        streamMenuExpanded = false
+                                        showTimeLapseDialog = true
+                                    },
+                                )
+                            }
+                        }
+                    }
+
+                    if (showTimeLapseDialog) {
+                        TimeLapseDialog(
+                            onConfirm = { intervalSec, durationSec ->
+                                showTimeLapseDialog = false
+                                viewModel.startTimeLapse(intervalSec, durationSec)
+                            },
+                            onDismiss = { showTimeLapseDialog = false },
+                        )
+                    }
+
+                    if (showStopSaveDialog) {
+                        val label = if (isTimeLapsing) "time lapse" else "recording"
+                        AlertDialog(
+                            onDismissRequest = { showStopSaveDialog = false },
+                            title = { Text("Save $label?") },
+                            text = { Text("Do you want to save the $label, or discard it?") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showStopSaveDialog = false
+                                    if (isTimeLapsing) {
+                                        viewModel.stopTimeLapse(save = true)
+                                    } else {
+                                        viewModel.stopRecording(save = true)
+                                    }
+                                }) { Text("Yes") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    showStopSaveDialog = false
+                                    if (isTimeLapsing) {
+                                        viewModel.stopTimeLapse(save = false)
+                                    } else {
+                                        viewModel.stopRecording(save = false)
+                                    }
+                                }) { Text("No") }
+                            },
+                        )
+                    }
+
+                    // Palette dropdown — only meaningful once a frame has actually been captured
                     Box {
                         FeedbackButton(
-                            onClick = { streamMenuExpanded = true },
-                            enabled = canStream,
-                            contentPadding = btnPadding
+                            onClick = { paletteMenuExpanded = true },
+                            enabled = currentImageDto != null,
+                            contentPadding = btnPadding,
                         ) {
-                            Text("Stream", fontSize = 12.sp)
+                            Text(currentPalette, fontSize = 12.sp)
                         }
                         DropdownMenu(
-                            expanded = streamMenuExpanded,
-                            onDismissRequest = { streamMenuExpanded = false }
+                            expanded = paletteMenuExpanded,
+                            onDismissRequest = { paletteMenuExpanded = false },
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Start") },
-                                enabled = canStream,
-                                onClick = {
-                                    viewModel.toggleStreaming()
-                                    streamMenuExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Record") },
-                                enabled = canStream,
-                                onClick = {
-                                    viewModel.toggleRecording()
-                                    streamMenuExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Time Lapse") },
-                                enabled = canStream,
-                                onClick = {
-                                    streamMenuExpanded = false
-                                    showTimeLapseDialog = true
-                                }
-                            )
-                        }
-                    }
-                }
-
-                if (showTimeLapseDialog) {
-                    TimeLapseDialog(
-                        onConfirm = { intervalSec, durationSec ->
-                            showTimeLapseDialog = false
-                            viewModel.startTimeLapse(intervalSec, durationSec)
-                        },
-                        onDismiss = { showTimeLapseDialog = false }
-                    )
-                }
-
-                if (showStopSaveDialog) {
-                    val label = if (isTimeLapsing) "time lapse" else "recording"
-                    AlertDialog(
-                        onDismissRequest = { showStopSaveDialog = false },
-                        title = { Text("Save $label?") },
-                        text = { Text("Do you want to save the $label, or discard it?") },
-                        confirmButton = {
-                            TextButton(onClick = {
-                                showStopSaveDialog = false
-                                if (isTimeLapsing) viewModel.stopTimeLapse(save = true)
-                                else viewModel.stopRecording(save = true)
-                            }) { Text("Yes") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = {
-                                showStopSaveDialog = false
-                                if (isTimeLapsing) viewModel.stopTimeLapse(save = false)
-                                else viewModel.stopRecording(save = false)
-                            }) { Text("No") }
-                        }
-                    )
-                }
-
-                // Palette dropdown — only meaningful once a frame has actually been captured
-                Box {
-                    FeedbackButton(
-                        onClick = { paletteMenuExpanded = true },
-                        enabled = currentImageDto != null,
-                        contentPadding = btnPadding
-                    ) {
-                        Text(currentPalette, fontSize = 12.sp)
-                    }
-                    DropdownMenu(
-                        expanded = paletteMenuExpanded,
-                        onDismissRequest = { paletteMenuExpanded = false }
-                    ) {
-                        PALETTE_OPTIONS.forEach { name ->
-                            DropdownMenuItem(
-                                text = { Text(name) },
-                                onClick = {
-                                    viewModel.setPalette(name)
-                                    paletteMenuExpanded = false
-                                }
-                            )
+                            PALETTE_OPTIONS.forEach { name ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        viewModel.setPalette(name)
+                                        paletteMenuExpanded = false
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -679,30 +699,42 @@ fun CameraScreen(
             // Drawn last so it renders on top of the image/buttons instead of behind them.
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.align(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center),
             )
         }
     }
 }
 
 private val TIMELAPSE_INTERVALS = listOf(
-    1 to "1 second", 2 to "2 seconds", 5 to "5 seconds", 10 to "10 seconds",
-    30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes", 300 to "5 minutes"
+    1 to "1 second",
+    2 to "2 seconds",
+    5 to "5 seconds",
+    10 to "10 seconds",
+    30 to "30 seconds",
+    60 to "1 minute",
+    120 to "2 minutes",
+    300 to "5 minutes",
 )
 
 private val TIMELAPSE_DURATIONS = listOf(
-    30 to "30 seconds", 60 to "1 minute", 120 to "2 minutes", 300 to "5 minutes",
-    600 to "10 minutes", 1800 to "30 minutes", 3600 to "1 hour", 7200 to "2 hours"
+    30 to "30 seconds",
+    60 to "1 minute",
+    120 to "2 minutes",
+    300 to "5 minutes",
+    600 to "10 minutes",
+    1800 to "30 minutes",
+    3600 to "1 hour",
+    7200 to "2 hours",
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeLapseDialog(
     onConfirm: (intervalSec: Int, durationSec: Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    var intervalIndex by remember { mutableIntStateOf(2) }  // default: 5 seconds
-    var durationIndex by remember { mutableIntStateOf(4) }  // default: 10 minutes
+    var intervalIndex by remember { mutableIntStateOf(2) } // default: 5 seconds
+    var durationIndex by remember { mutableIntStateOf(4) } // default: 10 minutes
     var intervalExpanded by remember { mutableStateOf(false) }
     var durationExpanded by remember { mutableStateOf(false) }
 
@@ -715,7 +747,7 @@ private fun TimeLapseDialog(
 
                 ExposedDropdownMenuBox(
                     expanded = intervalExpanded,
-                    onExpandedChange = { intervalExpanded = it }
+                    onExpandedChange = { intervalExpanded = it },
                 ) {
                     OutlinedTextField(
                         value = TIMELAPSE_INTERVALS[intervalIndex].second,
@@ -723,16 +755,19 @@ private fun TimeLapseDialog(
                         readOnly = true,
                         label = { Text("Interval") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = intervalExpanded) },
-                        modifier = Modifier.menuAnchor()
+                        modifier = Modifier.menuAnchor(),
                     )
                     ExposedDropdownMenu(
                         expanded = intervalExpanded,
-                        onDismissRequest = { intervalExpanded = false }
+                        onDismissRequest = { intervalExpanded = false },
                     ) {
                         TIMELAPSE_INTERVALS.forEachIndexed { i, (_, label) ->
                             DropdownMenuItem(
                                 text = { Text(label) },
-                                onClick = { intervalIndex = i; intervalExpanded = false }
+                                onClick = {
+                                    intervalIndex = i
+                                    intervalExpanded = false
+                                },
                             )
                         }
                     }
@@ -740,7 +775,7 @@ private fun TimeLapseDialog(
 
                 ExposedDropdownMenuBox(
                     expanded = durationExpanded,
-                    onExpandedChange = { durationExpanded = it }
+                    onExpandedChange = { durationExpanded = it },
                 ) {
                     OutlinedTextField(
                         value = TIMELAPSE_DURATIONS[durationIndex].second,
@@ -748,16 +783,19 @@ private fun TimeLapseDialog(
                         readOnly = true,
                         label = { Text("Duration") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = durationExpanded) },
-                        modifier = Modifier.menuAnchor()
+                        modifier = Modifier.menuAnchor(),
                     )
                     ExposedDropdownMenu(
                         expanded = durationExpanded,
-                        onDismissRequest = { durationExpanded = false }
+                        onDismissRequest = { durationExpanded = false },
                     ) {
                         TIMELAPSE_DURATIONS.forEachIndexed { i, (_, label) ->
                             DropdownMenuItem(
                                 text = { Text(label) },
-                                onClick = { durationIndex = i; durationExpanded = false }
+                                onClick = {
+                                    durationIndex = i
+                                    durationExpanded = false
+                                },
                             )
                         }
                     }
@@ -771,12 +809,12 @@ private fun TimeLapseDialog(
             TextButton(onClick = {
                 onConfirm(
                     TIMELAPSE_INTERVALS[intervalIndex].first,
-                    TIMELAPSE_DURATIONS[durationIndex].first
+                    TIMELAPSE_DURATIONS[durationIndex].first,
                 )
             }) { Text("Start") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
+        },
     )
 }

@@ -24,7 +24,7 @@ fun FeedbackButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
-    content: @Composable RowScope.() -> Unit
+    content: @Composable RowScope.() -> Unit,
 ) {
     val context = LocalContext.current
     val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
@@ -34,9 +34,9 @@ fun FeedbackButton(
         targetValue = if (isPressed) 0.88f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
+            stiffness = Spring.StiffnessHigh,
         ),
-        label = "buttonScale"
+        label = "buttonScale",
     )
     Button(
         onClick = {
@@ -47,7 +47,7 @@ fun FeedbackButton(
         enabled = enabled,
         contentPadding = contentPadding,
         interactionSource = interactionSource,
-        content = content
+        content = content,
     )
 }
 
@@ -56,7 +56,7 @@ fun FeedbackTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    content: @Composable RowScope.() -> Unit
+    content: @Composable RowScope.() -> Unit,
 ) {
     val context = LocalContext.current
     val audioManager = remember(context) { context.getSystemService(AudioManager::class.java) }
@@ -66,9 +66,9 @@ fun FeedbackTextButton(
         targetValue = if (isPressed) 0.88f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessHigh
+            stiffness = Spring.StiffnessHigh,
         ),
-        label = "textButtonScale"
+        label = "textButtonScale",
     )
     TextButton(
         onClick = {
@@ -78,6 +78,6 @@ fun FeedbackTextButton(
         modifier = modifier.scale(scale),
         enabled = enabled,
         interactionSource = interactionSource,
-        content = content
+        content = content,
     )
 }

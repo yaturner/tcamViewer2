@@ -12,30 +12,32 @@ import com.das.tcamviewer2.palette.Rainbow
 import com.das.tcamviewer2.palette.Sepia
 
 class PaletteFactory {
-    val paletteNames: Array<String?> = arrayOf<String?>(
-        "Arctic",
-        "Banded",
-        "Blackhot",
-        "DoubleRainbow",
-        "Fusion",
-        "Gray",
-        "Ironblack",
-        "Isotherm",
-        "Rainbow",
-        "Sepia"
-    )
-    private val palettes = arrayOf<Array<IntArray?>?>(
-        Arctic.palette,
-        Banded.palette,
-        Blackhot.pallete,
-        DoubleRainbow.palette,
-        Fusion.palette,
-        Gray.palette,
-        Ironblack.palette,
-        Isotherm.palette,
-        Rainbow.palette,
-        Sepia.palette
-    )
+    val paletteNames: Array<String?> =
+        arrayOf<String?>(
+            "Arctic",
+            "Banded",
+            "Blackhot",
+            "DoubleRainbow",
+            "Fusion",
+            "Gray",
+            "Ironblack",
+            "Isotherm",
+            "Rainbow",
+            "Sepia",
+        )
+    private val palettes =
+        arrayOf<Array<IntArray?>?>(
+            Arctic.palette,
+            Banded.palette,
+            Blackhot.pallete,
+            DoubleRainbow.palette,
+            Fusion.palette,
+            Gray.palette,
+            Ironblack.palette,
+            Isotherm.palette,
+            Rainbow.palette,
+            Sepia.palette,
+        )
 
     fun getPaletteName(index: Int): String? {
         if (index < paletteNames.size) {

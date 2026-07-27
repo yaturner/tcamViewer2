@@ -52,13 +52,13 @@ fun SpotmeterOverlay(spotmeterRect: Rect?, modifier: Modifier = Modifier) {
                 color = Color.Black,
                 topLeft = topLeft,
                 size = squareSize,
-                style = Stroke(width = 3.dp.toPx())
+                style = Stroke(width = 3.dp.toPx()),
             )
             drawRect(
                 color = Color.White,
                 topLeft = topLeft,
                 size = squareSize,
-                style = Stroke(width = 1.dp.toPx())
+                style = Stroke(width = 1.dp.toPx()),
             )
         }
     }

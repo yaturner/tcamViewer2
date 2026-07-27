@@ -11,7 +11,6 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -72,6 +71,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.das.tcamviewer2.BuildConfig
 import com.das.tcamviewer2.SettingsDataManager
@@ -92,7 +92,7 @@ import kotlin.math.roundToInt
 fun SettingsScreen(
     onNavigateBack: () -> Unit = {},
     onOpenDrawer: () -> Unit = {},
-    viewModel: CameraViewModel = viewModel()
+    viewModel: CameraViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     val dataManager = remember { SettingsDataManager(context) }
@@ -106,13 +106,13 @@ fun SettingsScreen(
 
     // Camera settings — persisted in DataStore. The ViewModel writes the camera's actual
     // reported config here once per connect, so these flows are always the source of truth.
-    val savedCameraAgc       by dataManager.cameraAgcFlow.collectAsState(initial = false)
+    val savedCameraAgc by dataManager.cameraAgcFlow.collectAsState(initial = false)
     val savedCameraEmissivity by dataManager.cameraEmissivityFlow.collectAsState(initial = "90")
-    val savedCameraGainMode  by dataManager.cameraGainModeFlow.collectAsState(initial = Constants.GAIN_MODE_HIGH)
+    val savedCameraGainMode by dataManager.cameraGainModeFlow.collectAsState(initial = Constants.GAIN_MODE_HIGH)
 
-    var localAgc        by remember(savedCameraAgc)        { mutableStateOf(savedCameraAgc) }
+    var localAgc by remember(savedCameraAgc) { mutableStateOf(savedCameraAgc) }
     var localEmissivity by remember(savedCameraEmissivity) { mutableStateOf(savedCameraEmissivity) }
-    var localGainMode   by remember(savedCameraGainMode)   { mutableStateOf(savedCameraGainMode) }
+    var localGainMode by remember(savedCameraGainMode) { mutableStateOf(savedCameraGainMode) }
 
     var showDiscoveryDialog by remember { mutableStateOf(false) }
     val discoveredDevices = remember { mutableStateListOf<Pair<String, String>>() }
@@ -128,37 +128,37 @@ fun SettingsScreen(
     val resolutions = listOf("160x120", "320x240", "480x360", "640x480")
     val paletteOptions = listOf(
         "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
-        "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia"
+        "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia",
     )
 
     // --- Saved DataStore values (source of truth) ---
-    val savedIp           by dataManager.cameraIpFlow.collectAsState(initial = "192.168.4.1")
-    val savedExportPic    by dataManager.exportPictureFlow.collectAsState(initial = false)
-    val savedExportMeta   by dataManager.exportMetadataFlow.collectAsState(initial = false)
-    val savedExportRes    by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
-    val savedManualRange  by dataManager.manualRangeFlow.collectAsState(initial = false)
-    val savedMin          by dataManager.minValueFlow.collectAsState(initial = "0")
-    val savedMax          by dataManager.maxValueFlow.collectAsState(initial = "100")
-    val savedShutter      by dataManager.shutterSoundFlow.collectAsState(initial = true)
-    val savedSpotmeter    by dataManager.spotmeterFlow.collectAsState(initial = true)
-    val savedUnit         by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
-    val savedPalette      by dataManager.selectedPaletteFlow.collectAsState(initial = "Rainbow")
+    val savedIp by dataManager.cameraIpFlow.collectAsState(initial = "192.168.4.1")
+    val savedExportPic by dataManager.exportPictureFlow.collectAsState(initial = false)
+    val savedExportMeta by dataManager.exportMetadataFlow.collectAsState(initial = false)
+    val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
+    val savedManualRange by dataManager.manualRangeFlow.collectAsState(initial = false)
+    val savedMin by dataManager.minValueFlow.collectAsState(initial = "0")
+    val savedMax by dataManager.maxValueFlow.collectAsState(initial = "100")
+    val savedShutter by dataManager.shutterSoundFlow.collectAsState(initial = true)
+    val savedSpotmeter by dataManager.spotmeterFlow.collectAsState(initial = true)
+    val savedUnit by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
+    val savedPalette by dataManager.selectedPaletteFlow.collectAsState(initial = "Rainbow")
 
     // Incrementing this forces every local state to reinitialize from saved values (Cancel)
     var resetKey by remember { mutableStateOf(0) }
 
     // --- Local (unsaved) working copies ---
-    var localIp          by remember(savedIp, resetKey)          { mutableStateOf(savedIp) }
-    var localExportPic   by remember(savedExportPic, resetKey)   { mutableStateOf(savedExportPic) }
-    var localExportMeta  by remember(savedExportMeta, resetKey)  { mutableStateOf(savedExportMeta) }
-    var localResolution  by remember(savedExportRes, resetKey)   { mutableStateOf(savedExportRes) }
+    var localIp by remember(savedIp, resetKey) { mutableStateOf(savedIp) }
+    var localExportPic by remember(savedExportPic, resetKey) { mutableStateOf(savedExportPic) }
+    var localExportMeta by remember(savedExportMeta, resetKey) { mutableStateOf(savedExportMeta) }
+    var localResolution by remember(savedExportRes, resetKey) { mutableStateOf(savedExportRes) }
     var localManualRange by remember(savedManualRange, resetKey) { mutableStateOf(savedManualRange) }
-    var localMin         by remember(savedMin, resetKey)         { mutableStateOf(savedMin) }
-    var localMax         by remember(savedMax, resetKey)         { mutableStateOf(savedMax) }
-    var localShutter     by remember(savedShutter, resetKey)     { mutableStateOf(savedShutter) }
-    var localSpotmeter   by remember(savedSpotmeter, resetKey)   { mutableStateOf(savedSpotmeter) }
-    var localUnit        by remember(savedUnit, resetKey)        { mutableStateOf(savedUnit) }
-    var localPalette     by remember(savedPalette, resetKey)     { mutableStateOf(savedPalette) }
+    var localMin by remember(savedMin, resetKey) { mutableStateOf(savedMin) }
+    var localMax by remember(savedMax, resetKey) { mutableStateOf(savedMax) }
+    var localShutter by remember(savedShutter, resetKey) { mutableStateOf(savedShutter) }
+    var localSpotmeter by remember(savedSpotmeter, resetKey) { mutableStateOf(savedSpotmeter) }
+    var localUnit by remember(savedUnit, resetKey) { mutableStateOf(savedUnit) }
+    var localPalette by remember(savedPalette, resetKey) { mutableStateOf(savedPalette) }
 
     suspend fun performSave(sendConfigIfConnected: Boolean) {
         dataManager.saveCameraIp(localIp)
@@ -190,7 +190,7 @@ fun SettingsScreen(
                     IconButton(onClick = onOpenDrawer) {
                         Icon(Icons.Filled.Menu, contentDescription = "Open menu")
                     }
-                }
+                },
             )
         },
         bottomBar = {
@@ -200,9 +200,12 @@ fun SettingsScreen(
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                FeedbackTextButton(onClick = { resetKey++; onNavigateBack() }) {
+                FeedbackTextButton(onClick = {
+                    resetKey++
+                    onNavigateBack()
+                }) {
                     Text("Cancel")
                 }
                 Spacer(modifier = Modifier.width(8.dp))
@@ -216,33 +219,33 @@ fun SettingsScreen(
                     Text("Save")
                 }
             }
-        }
+        },
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
         ) {
             // Camera Settings — only shown when camera is connected
             if (isConnected) {
                 CameraSettingsSection(
-                    viewModel          = viewModel,
-                    localAgc           = localAgc,
-                    onAgcChange        = {
+                    viewModel = viewModel,
+                    localAgc = localAgc,
+                    onAgcChange = {
                         localAgc = it
                         coroutineScope.launch { dataManager.saveCameraAgc(it) }
                     },
-                    localEmissivity    = localEmissivity,
+                    localEmissivity = localEmissivity,
                     onEmissivityChange = { localEmissivity = it },
                     onEmissivityConfirm = {
                         coroutineScope.launch { dataManager.saveCameraEmissivity(localEmissivity) }
                     },
-                    localGainMode      = localGainMode,
-                    onGainModeChange   = {
+                    localGainMode = localGainMode,
+                    onGainModeChange = {
                         localGainMode = it
                         coroutineScope.launch { dataManager.saveCameraGainMode(it) }
-                    }
+                    },
                 )
             }
 
@@ -251,13 +254,13 @@ fun SettingsScreen(
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp)
+                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp),
             )
 
             // Camera IP Address
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedTextField(
                     value = localIp,
@@ -267,11 +270,11 @@ fun SettingsScreen(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Done
+                        imeAction = ImeAction.Done,
                     ),
                     keyboardActions = KeyboardActions(
-                        onDone = { keyboardController?.hide() }
-                    )
+                        onDone = { keyboardController?.hide() },
+                    ),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = {
@@ -291,9 +294,9 @@ fun SettingsScreen(
                     Switch(
                         checked = localExportPic,
                         onCheckedChange = { localExportPic = it },
-                        modifier = Modifier.testTag("switch_export_picture")
+                        modifier = Modifier.testTag("switch_export_picture"),
                     )
-                }
+                },
             )
 
             // Export Metadata
@@ -304,15 +307,15 @@ fun SettingsScreen(
                     Switch(
                         checked = localExportMeta,
                         onCheckedChange = { localExportMeta = it },
-                        modifier = Modifier.testTag("switch_export_metadata")
+                        modifier = Modifier.testTag("switch_export_metadata"),
                     )
-                }
+                },
             )
 
             // Export Resolution dropdown
             ExposedDropdownMenuBox(
                 expanded = resMenuExpanded,
-                onExpandedChange = { resMenuExpanded = it }
+                onExpandedChange = { resMenuExpanded = it },
             ) {
                 OutlinedTextField(
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
@@ -321,11 +324,11 @@ fun SettingsScreen(
                     readOnly = true,
                     label = { Text("Export Resolution") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = resMenuExpanded) },
-                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
                 )
                 ExposedDropdownMenu(
                     expanded = resMenuExpanded,
-                    onDismissRequest = { resMenuExpanded = false }
+                    onDismissRequest = { resMenuExpanded = false },
                 ) {
                     resolutions.forEach { option ->
                         DropdownMenuItem(
@@ -334,7 +337,7 @@ fun SettingsScreen(
                                 localResolution = option
                                 resMenuExpanded = false
                             },
-                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                         )
                     }
                 }
@@ -359,9 +362,9 @@ fun SettingsScreen(
                                 localMax = ceil(max).toInt().toString()
                             }
                         },
-                        modifier = Modifier.testTag("switch_manual_range")
+                        modifier = Modifier.testTag("switch_manual_range"),
                     )
-                }
+                },
             )
 
             // Manual Range min/max fields
@@ -370,7 +373,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     OutlinedTextField(
                         value = localMin,
@@ -378,7 +381,7 @@ fun SettingsScreen(
                         label = { Text("Min") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
                     OutlinedTextField(
                         value = localMax,
@@ -386,7 +389,7 @@ fun SettingsScreen(
                         label = { Text("Max") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )
                 }
             }
@@ -402,7 +405,7 @@ fun SettingsScreen(
                     }) {
                         Icon(Icons.Default.PlayArrow, contentDescription = "Open Palette Selection")
                     }
-                }
+                },
             )
             if (showPaletteDialog) {
                 AlertDialog(
@@ -412,7 +415,7 @@ fun SettingsScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
+                                .verticalScroll(rememberScrollState()),
                         ) {
                             paletteOptions.forEach { palette ->
                                 Row(
@@ -420,14 +423,14 @@ fun SettingsScreen(
                                         .fillMaxWidth()
                                         .selectable(
                                             selected = palette == tempDialogPalette,
-                                            onClick = { tempDialogPalette = palette }
+                                            onClick = { tempDialogPalette = palette },
                                         )
                                         .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     RadioButton(
                                         selected = palette == tempDialogPalette,
-                                        onClick = { tempDialogPalette = palette }
+                                        onClick = { tempDialogPalette = palette },
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(palette, fontSize = 16.sp)
@@ -443,7 +446,7 @@ fun SettingsScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showPaletteDialog = false }) { Text("Cancel") }
-                    }
+                    },
                 )
             }
 
@@ -455,9 +458,9 @@ fun SettingsScreen(
                     Switch(
                         checked = localShutter,
                         onCheckedChange = { localShutter = it },
-                        modifier = Modifier.testTag("switch_shutter_sound")
+                        modifier = Modifier.testTag("switch_shutter_sound"),
                     )
-                }
+                },
             )
 
             // Spotmeter
@@ -468,18 +471,19 @@ fun SettingsScreen(
                     Switch(
                         checked = localSpotmeter,
                         onCheckedChange = { localSpotmeter = it },
-                        modifier = Modifier.testTag("switch_spotmeter")
+                        modifier = Modifier.testTag("switch_spotmeter"),
                     )
-                }
+                },
             )
 
             // Temperature Units
             Column(modifier = Modifier.fillMaxWidth()) {
                 ListItem(
                     headlineContent = { Text("Units") },
-                    supportingContent = { Text("Select your global temperature unit") }
+                    supportingContent = { Text("Select your global temperature unit") },
                 )
                 val unitOptions = listOf("Celsius (°C)", "Fahrenheit (°F)")
+
                 // Manual Range bounds are stored as plain unlabeled numbers — switching units
                 // must translate them so they keep meaning the same physical temperature
                 // instead of silently being reinterpreted under the new unit.
@@ -495,7 +499,7 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(24.dp)
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
                     unitOptions.forEach { option ->
                         val unitName = if (option.contains("Celsius")) "Celsius" else "Fahrenheit"
@@ -503,14 +507,14 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .selectable(
                                     selected = localUnit == unitName,
-                                    onClick = { selectUnit(unitName) }
+                                    onClick = { selectUnit(unitName) },
                                 )
                                 .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RadioButton(
                                 selected = localUnit == unitName,
-                                onClick = { selectUnit(unitName) }
+                                onClick = { selectUnit(unitName) },
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(option, fontSize = 16.sp)
@@ -522,7 +526,7 @@ fun SettingsScreen(
             // Version
             ListItem(
                 headlineContent = { Text("Version") },
-                supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") }
+                supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") },
             )
 
             // Privacy Statement
@@ -533,7 +537,7 @@ fun SettingsScreen(
                     IconButton(onClick = { showPrivacyDialog = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Privacy Statement")
                     }
-                }
+                },
             )
         }
     }
@@ -547,7 +551,7 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(rememberScrollState()),
                 ) {
                     Text(
                         text = """
@@ -571,13 +575,13 @@ If this privacy statement is updated, the new version will be included in the ne
 Contact
 For questions about this privacy statement, please contact the developer through the app's distribution channel.
                         """.trimIndent(),
-                        fontSize = 14.sp
+                        fontSize = 14.sp,
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showPrivacyDialog = false }) { Text("Close") }
-            }
+            },
         )
     }
 
@@ -600,7 +604,7 @@ For questions about this privacy statement, please contact the developer through
             },
             dismissButton = {
                 TextButton(onClick = { showIpChangeConfirm = false }) { Text("Cancel") }
-            }
+            },
         )
     }
 
@@ -612,8 +616,12 @@ For questions about this privacy statement, please contact the developer through
 
             val discoveryListener = object : NsdManager.DiscoveryListener {
                 override fun onDiscoveryStarted(serviceType: String) {}
-                override fun onDiscoveryStopped(serviceType: String) { isDiscovering = false }
-                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { isDiscovering = false }
+                override fun onDiscoveryStopped(serviceType: String) {
+                    isDiscovering = false
+                }
+                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                    isDiscovering = false
+                }
                 override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {}
                 override fun onServiceLost(serviceInfo: NsdServiceInfo) {}
                 override fun onServiceFound(serviceInfo: NsdServiceInfo) {
@@ -629,10 +637,17 @@ For questions about this privacy statement, please contact the developer through
                 withTimeoutOrNull(10_000L) {
                     for (serviceInfo in pendingResolves) {
                         val resolved = suspendCancellableCoroutine { cont ->
-                            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                                override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) { cont.resume(null) }
-                                override fun onServiceResolved(info: NsdServiceInfo) { cont.resume(info) }
-                            })
+                            nsdManager.resolveService(
+                                serviceInfo,
+                                object : NsdManager.ResolveListener {
+                                    override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
+                                        cont.resume(null)
+                                    }
+                                    override fun onServiceResolved(info: NsdServiceInfo) {
+                                        cont.resume(info)
+                                    }
+                                },
+                            )
                         }
                         resolved?.let { info ->
                             val ip = (info.host as? Inet4Address)?.hostAddress ?: return@let
@@ -644,7 +659,9 @@ For questions about this privacy statement, please contact the developer through
                     }
                 }
             } finally {
-                try { nsdManager.stopServiceDiscovery(discoveryListener) } catch (_: Exception) {}
+                try {
+                    nsdManager.stopServiceDiscovery(discoveryListener)
+                } catch (_: Exception) {}
                 isDiscovering = false
             }
         }
@@ -667,14 +684,14 @@ For questions about this privacy statement, please contact the developer through
                                         .fillMaxWidth()
                                         .selectable(
                                             selected = discoverySelectedDevice == device,
-                                            onClick = { discoverySelectedDevice = device }
+                                            onClick = { discoverySelectedDevice = device },
                                         )
                                         .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     RadioButton(
                                         selected = discoverySelectedDevice == device,
-                                        onClick = { discoverySelectedDevice = device }
+                                        onClick = { discoverySelectedDevice = device },
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column {
@@ -693,53 +710,53 @@ For questions about this privacy statement, please contact the developer through
                     onClick = {
                         discoverySelectedDevice?.let { (_, ip) -> localIp = ip }
                         showDiscoveryDialog = false
-                    }
+                    },
                 ) { Text("Done") }
             },
             dismissButton = {
                 TextButton(onClick = { showDiscoveryDialog = false }) { Text("Cancel") }
-            }
+            },
         )
     }
 }
 
 private val EMISSIVITY_PRESETS = listOf(
-"Aluminum, polished........5" to 5,
-"Aluminum, oxidized........25" to 25,
-"Brass, tarnished..........22" to 22,
-"Brass, polished...........3" to 3,
-"Brick, common.............85" to 85,
-"Brick, plastered..........94" to 94,
-"Carbon....................96" to 96,
-"Chipboard, untreated......90" to 90,
-"Clay, fired...............91" to 91,
-"Concrete..................95" to 95,
-"Elec Tape, Black..........96" to 96,
-"Enamel....................90" to 90,
-"Formica.................. 93" to 93,
-"Soil......................93" to 93,
-"Glass Pane................97" to 97,
-"Granite.................. 86" to 86,
-"Iron, hot rolled..........77" to 77,
-"Iron sheet, galvanized....28" to 28,
-"Lacquer, black............97" to 97,
-"Lacquer, white............87" to 87,
-"Lead, oxidized............63" to 63,
-"Leather, tanned...........77" to 77,
-"Oil, thick................82" to 82,
-"Paint, oil, avg.......... 94" to 94,
-"Paper, white..............90" to 90,
-"Plasterboard..............90" to 90,
-"Plastic, PCB..............91" to 91,
-"Plastic, PVC..............93" to 93,
-"Porcelain, glazed.........92" to 92,
-"Rubber....................94" to 94,
-"Snow......................80" to 80,
-"Steel, rolled............ 50" to 50,
-"Tar Paper................ 92" to 92,
-"Varnish, oak floor........92" to 92,
-"Water.....................98" to 98,
-"Wood, plywood.............82" to 82
+    "Aluminum, polished........5" to 5,
+    "Aluminum, oxidized........25" to 25,
+    "Brass, tarnished..........22" to 22,
+    "Brass, polished...........3" to 3,
+    "Brick, common.............85" to 85,
+    "Brick, plastered..........94" to 94,
+    "Carbon....................96" to 96,
+    "Chipboard, untreated......90" to 90,
+    "Clay, fired...............91" to 91,
+    "Concrete..................95" to 95,
+    "Elec Tape, Black..........96" to 96,
+    "Enamel....................90" to 90,
+    "Formica.................. 93" to 93,
+    "Soil......................93" to 93,
+    "Glass Pane................97" to 97,
+    "Granite.................. 86" to 86,
+    "Iron, hot rolled..........77" to 77,
+    "Iron sheet, galvanized....28" to 28,
+    "Lacquer, black............97" to 97,
+    "Lacquer, white............87" to 87,
+    "Lead, oxidized............63" to 63,
+    "Leather, tanned...........77" to 77,
+    "Oil, thick................82" to 82,
+    "Paint, oil, avg.......... 94" to 94,
+    "Paper, white..............90" to 90,
+    "Plasterboard..............90" to 90,
+    "Plastic, PCB..............91" to 91,
+    "Plastic, PVC..............93" to 93,
+    "Porcelain, glazed.........92" to 92,
+    "Rubber....................94" to 94,
+    "Snow......................80" to 80,
+    "Steel, rolled............ 50" to 50,
+    "Tar Paper................ 92" to 92,
+    "Varnish, oak floor........92" to 92,
+    "Water.....................98" to 98,
+    "Wood, plywood.............82" to 82,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -752,7 +769,7 @@ private fun CameraSettingsSection(
     onEmissivityChange: (String) -> Unit,
     onEmissivityConfirm: () -> Unit,
     localGainMode: Int,
-    onGainModeChange: (Int) -> Unit
+    onGainModeChange: (Int) -> Unit,
 ) {
     val wifiInfo by viewModel.wifiInfo.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -765,7 +782,7 @@ private fun CameraSettingsSection(
     var showWifiDialog by remember { mutableStateOf(false) }
     var showSsidScanDialog by remember { mutableStateOf(false) }
     val ssidScanPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
+        ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) showSsidScanDialog = true }
 
     Text(
@@ -773,7 +790,7 @@ private fun CameraSettingsSection(
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 4.dp)
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 4.dp),
     )
 
     // AGC
@@ -782,7 +799,7 @@ private fun CameraSettingsSection(
         supportingContent = { Text(if (localAgc) "Enabled" else "Disabled") },
         trailingContent = {
             Switch(checked = localAgc, onCheckedChange = { onAgcChange(it) })
-        }
+        },
     )
 
     // Emissivity
@@ -790,7 +807,7 @@ private fun CameraSettingsSection(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         OutlinedTextField(
             value = localEmissivity,
@@ -802,39 +819,41 @@ private fun CameraSettingsSection(
             singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Done
+                imeAction = ImeAction.Done,
             ),
             keyboardActions = KeyboardActions(onDone = {
                 keyboardController?.hide()
                 onEmissivityConfirm()
-            })
+            }),
         )
         Spacer(modifier = Modifier.width(8.dp))
         FeedbackButton(
             onClick = { showEmissivityDialog = true },
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         ) { Text("Choose") }
     }
 
     // Gain Mode
     ListItem(
         headlineContent = { Text("Gain Mode") },
-        supportingContent = { Text("Controls sensor sensitivity range") }
+        supportingContent = { Text("Controls sensor sensitivity range") },
     )
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        listOf("High" to Constants.GAIN_MODE_HIGH,
+        listOf(
+            "High" to Constants.GAIN_MODE_HIGH,
             "Low" to Constants.GAIN_MODE_LOW,
-            "Auto" to Constants.GAIN_MODE_AUTO).forEach { (label, mode) ->
+            "Auto" to Constants.GAIN_MODE_AUTO,
+        ).forEach { (label, mode) ->
             Row(
                 modifier = Modifier
                     .selectable(selected = localGainMode == mode, onClick = { onGainModeChange(mode) })
                     .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = localGainMode == mode, onClick = { onGainModeChange(mode) })
                 Spacer(modifier = Modifier.width(4.dp))
@@ -854,9 +873,9 @@ private fun CameraSettingsSection(
                     viewModel.fetchWifiInfo()
                     showWifiDialog = true
                 },
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             ) { Text("Edit", fontSize = 12.sp) }
-        }
+        },
     )
 
     // --- Emissivity preset dialog ---
@@ -864,7 +883,7 @@ private fun CameraSettingsSection(
         var selectedIndex by remember {
             mutableStateOf(
                 EMISSIVITY_PRESETS.indexOfFirst { it.second == (localEmissivity.toIntOrNull() ?: 90) }
-                    .coerceAtLeast(0)
+                    .coerceAtLeast(0),
             )
         }
         AlertDialog(
@@ -878,7 +897,7 @@ private fun CameraSettingsSection(
                                 .fillMaxWidth()
                                 .selectable(selected = selectedIndex == index, onClick = { selectedIndex = index })
                                 .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             RadioButton(selected = selectedIndex == index, onClick = { selectedIndex = index })
                             Spacer(modifier = Modifier.width(8.dp))
@@ -897,7 +916,7 @@ private fun CameraSettingsSection(
             },
             dismissButton = {
                 TextButton(onClick = { showEmissivityDialog = false }) { Text("Cancel") }
-            }
+            },
         )
     }
 
@@ -938,34 +957,35 @@ private fun CameraSettingsSection(
                     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 "Camera is Access Point",
                                 fontSize = 14.sp,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                             Switch(
                                 checked = wifiIsAccessPoint,
-                                onCheckedChange = { wifiIsAccessPoint = it }
+                                onCheckedChange = { wifiIsAccessPoint = it },
                             )
                         }
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         ) {
                             OutlinedTextField(
                                 value = wifiSsid,
                                 onValueChange = { wifiSsid = it },
                                 label = { Text("SSID") },
                                 singleLine = true,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(onClick = {
                                 val granted = ContextCompat.checkSelfPermission(
-                                    context, Manifest.permission.ACCESS_FINE_LOCATION
+                                    context,
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
                                 ) == PackageManager.PERMISSION_GRANTED
                                 if (granted) {
                                     showSsidScanDialog = true
@@ -990,27 +1010,30 @@ private fun CameraSettingsSection(
                             trailingIcon = {
                                 IconButton(onClick = { wifiPasswordVisible = !wifiPasswordVisible }) {
                                     Icon(
-                                        imageVector = if (wifiPasswordVisible) Icons.Filled.VisibilityOff
-                                                      else Icons.Filled.Visibility,
-                                        contentDescription = if (wifiPasswordVisible) "Hide password" else "Show password"
+                                        imageVector = if (wifiPasswordVisible) {
+                                            Icons.Filled.VisibilityOff
+                                        } else {
+                                            Icons.Filled.Visibility
+                                        },
+                                        contentDescription = if (wifiPasswordVisible) "Hide password" else "Show password",
                                     )
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         )
 
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
                                 "Use Static IP when Client",
                                 fontSize = 14.sp,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
                             )
                             Switch(
                                 checked = wifiUseStaticIp,
-                                onCheckedChange = { wifiUseStaticIp = it }
+                                onCheckedChange = { wifiUseStaticIp = it },
                             )
                         }
 
@@ -1019,7 +1042,7 @@ private fun CameraSettingsSection(
                             onValueChange = { wifiStaticIp = it },
                             label = { Text("Client Static IP Address") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         )
 
                         OutlinedTextField(
@@ -1027,7 +1050,7 @@ private fun CameraSettingsSection(
                             onValueChange = { wifiStaticNetmask = it },
                             label = { Text("Client Static IP Netmask") },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         )
                     }
                 }
@@ -1035,12 +1058,12 @@ private fun CameraSettingsSection(
             confirmButton = {
                 TextButton(
                     enabled = wifiInfo != null,
-                    onClick = { showWifiSaveConfirm = true }
+                    onClick = { showWifiSaveConfirm = true },
                 ) { Text("Save") }
             },
             dismissButton = {
                 TextButton(onClick = { showWifiDialog = false }) { Text("Cancel") }
-            }
+            },
         )
 
         // --- Warn before applying — set_wifi restarts the camera's WiFi subsystem, which
@@ -1052,14 +1075,18 @@ private fun CameraSettingsSection(
                 text = {
                     Text(
                         "This will disconnect the camera. It will attempt to reconnect " +
-                            "on the new network."
+                            "on the new network.",
                     )
                 },
                 confirmButton = {
                     TextButton(onClick = {
                         viewModel.sendWifiConfig(
-                            wifiIsAccessPoint, wifiSsid, wifiPassword,
-                            wifiUseStaticIp, wifiStaticIp, wifiStaticNetmask
+                            wifiIsAccessPoint,
+                            wifiSsid,
+                            wifiPassword,
+                            wifiUseStaticIp,
+                            wifiStaticIp,
+                            wifiStaticNetmask,
                         )
                         val reconnectIp = when {
                             wifiIsAccessPoint -> wifiInfo?.get("ap_ip_addr") ?: "192.168.4.1"
@@ -1073,7 +1100,7 @@ private fun CameraSettingsSection(
                 },
                 dismissButton = {
                     TextButton(onClick = { showWifiSaveConfirm = false }) { Text("Cancel") }
-                }
+                },
             )
         }
 
@@ -1097,7 +1124,8 @@ private fun CameraSettingsSection(
                                 }
                             }
                             context.registerReceiver(
-                                receiver, IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION)
+                                receiver,
+                                IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION),
                             )
                             cont.invokeOnCancellation {
                                 runCatching { context.unregisterReceiver(receiver) }
@@ -1143,14 +1171,14 @@ private fun CameraSettingsSection(
                                             .fillMaxWidth()
                                             .selectable(
                                                 selected = selectedScannedSsid == ssid,
-                                                onClick = { selectedScannedSsid = ssid }
+                                                onClick = { selectedScannedSsid = ssid },
                                             )
                                             .padding(vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
                                         RadioButton(
                                             selected = selectedScannedSsid == ssid,
-                                            onClick = { selectedScannedSsid = ssid }
+                                            onClick = { selectedScannedSsid = ssid },
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(ssid)
@@ -1166,12 +1194,12 @@ private fun CameraSettingsSection(
                         onClick = {
                             selectedScannedSsid?.let { wifiSsid = it }
                             showSsidScanDialog = false
-                        }
+                        },
                     ) { Text("Select") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showSsidScanDialog = false }) { Text("Cancel") }
-                }
+                },
             )
         }
     }

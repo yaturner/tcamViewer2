@@ -4,35 +4,42 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    alias(libs.plugins.google.devtools.ksp)     // Apply KSP
-    alias(libs.plugins.dagger.hilt.android)     // Apply Hilt
+    alias(libs.plugins.google.devtools.ksp) // Apply KSP
+    alias(libs.plugins.dagger.hilt.android) // Apply Hilt
     alias(libs.plugins.kotlin.compose)
 }
 
 // Release signing credentials live outside the repo in keystore.properties
 // (gitignored) — see keystore.properties.template for the expected format.
 val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = Properties().apply {
-    if (keystorePropertiesFile.exists()) {
-        keystorePropertiesFile.inputStream().use { load(it) }
+val keystoreProperties =
+    Properties().apply {
+        if (keystorePropertiesFile.exists()) {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        }
     }
-}
 
 // Version scheme: major.minor.ddMMyyHHmm
 //  - major:  bumped by hand in version.properties whenever a build is marked as a GitHub Release
 //  - minor:  total commit count — advances automatically with every commit, no manual bookkeeping
 //  - suffix: this build's timestamp, so every build is uniquely identifiable
 val versionPropertiesFile = rootProject.file("version.properties")
-val versionProperties = Properties().apply {
-    if (versionPropertiesFile.exists()) {
-        versionPropertiesFile.inputStream().use { load(it) }
+val versionProperties =
+    Properties().apply {
+        if (versionPropertiesFile.exists()) {
+            versionPropertiesFile.inputStream().use { load(it) }
+        }
     }
-}
 val appVersionMajor = versionProperties.getProperty("major", "1").toInt()
-val appVersionMinor = providers.exec {
-    workingDir = rootDir
-    commandLine("git", "rev-list", "--count", "HEAD")
-}.standardOutput.asText.get().trim().toInt()
+val appVersionMinor =
+    providers
+        .exec {
+            workingDir = rootDir
+            commandLine("git", "rev-list", "--count", "HEAD")
+        }.standardOutput.asText
+        .get()
+        .trim()
+        .toInt()
 val appBuildTimestamp = SimpleDateFormat("ddMMyyHHmm").format(Date())
 val appVersionName = "$appVersionMajor.$appVersionMinor.$appBuildTimestamp"
 // Must stay monotonically increasing across releases for Android/Play update checks.
@@ -86,7 +93,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")

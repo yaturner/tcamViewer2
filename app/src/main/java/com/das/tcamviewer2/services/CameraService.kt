@@ -31,7 +31,6 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 class CameraService : Service() {
-
     companion object {
         // Bounds how long a read() call blocks so the listening loop stays responsive to
         // disconnect()/stopListening() instead of sitting in a blocking syscall indefinitely —
@@ -72,8 +71,10 @@ class CameraService : Service() {
     private var readBuffer = ByteArray(Constants.BUFFER_LENGTH)
     private var response = ByteArray(Constants.BUFFER_LENGTH)
     private var startFound = false
+
     // Create the private pipeline where the socket loop dumps raw data
     private val imageChannel = PublishSubject.create<JSONObject>()
+
     // Binder setup that gives the ViewModel access to this service instance
     private val binder = CameraServiceBinder()
 
@@ -83,6 +84,7 @@ class CameraService : Service() {
         // .hide() is an RxJava best-practice that prevents external classes
         // from calling .onNext() and tampering with your stream directly.
     }
+
     inner class CameraServiceBinder : Binder() {
         val service: CameraService
             get() = this@CameraService
@@ -120,22 +122,23 @@ class CameraService : Service() {
         // references around if a prior connect/read had failed without fully cleaning up.
         teardownConnection()
         running = true
-        val connected = withContext(Dispatchers.IO) {
-            try {
-                val socket = Socket()
-                socket.connect(java.net.InetSocketAddress(ipAddress, 5001), 5000)
-                socket.soTimeout = SOCKET_READ_TIMEOUT_MS
-                socket.keepAlive = true
-                cameraSocket = socket
-                inFromSocket = socket.getInputStream()
-                outToSocket = socket.getOutputStream()
-                true
-            } catch (e: Exception) {
-                Timber.e(e, "connect failed")
-                teardownConnection()
-                false
+        val connected =
+            withContext(Dispatchers.IO) {
+                try {
+                    val socket = Socket()
+                    socket.connect(java.net.InetSocketAddress(ipAddress, 5001), 5000)
+                    socket.soTimeout = SOCKET_READ_TIMEOUT_MS
+                    socket.keepAlive = true
+                    cameraSocket = socket
+                    inFromSocket = socket.getInputStream()
+                    outToSocket = socket.getOutputStream()
+                    true
+                } catch (e: Exception) {
+                    Timber.e(e, "connect failed")
+                    teardownConnection()
+                    false
+                }
             }
-        }
 
         connectedFlag = connected
         if (connected) startListening()
@@ -163,11 +166,26 @@ class CameraService : Service() {
      *  unconditionally instead of each needing its own "is there something to clean up" check. */
     private fun teardownConnection() {
         connectedFlag = false
-        try { cameraSocket?.shutdownInput() } catch (_: Exception) {}
-        try { cameraSocket?.shutdownOutput() } catch (_: Exception) {}
-        try { inFromSocket?.close() } catch (_: Exception) {}
-        try { outToSocket?.close() } catch (_: Exception) {}
-        try { cameraSocket?.close() } catch (_: Exception) {}
+        try {
+            cameraSocket?.shutdownInput()
+        } catch (_: Exception) {
+        }
+        try {
+            cameraSocket?.shutdownOutput()
+        } catch (_: Exception) {
+        }
+        try {
+            inFromSocket?.close()
+        } catch (_: Exception) {
+        }
+        try {
+            outToSocket?.close()
+        } catch (_: Exception) {
+        }
+        try {
+            cameraSocket?.close()
+        } catch (_: Exception) {
+        }
         cameraSocket = null
         inFromSocket = null
         outToSocket = null
@@ -207,7 +225,11 @@ class CameraService : Service() {
     }
 
     // A suspending function that executes a command AND awaits its response
-    suspend fun sendCmd(cmd: String, expectedKey: String, timeoutMillis: Long = 5000L): JSONObject {
+    suspend fun sendCmd(
+        cmd: String,
+        expectedKey: String,
+        timeoutMillis: Long = 5000L,
+    ): JSONObject {
         if (!isConnected) {
             return parseResponse(String.format(Constants.ERROR_RESPONSE, "Socket disconnected"))
         }
@@ -269,9 +291,10 @@ class CameraService : Service() {
         if (!isConnected) return null
         val deferred = CompletableDeferred<JSONObject>()
         singleImageDeferred = deferred
-        val sent = withContext(Dispatchers.IO) {
-            writeCommand(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
-        }
+        val sent =
+            withContext(Dispatchers.IO) {
+                writeCommand(Constants.CMD_GET_IMAGE.toByteArray(StandardCharsets.UTF_8))
+            }
         if (!sent) {
             singleImageDeferred = null
             return null
@@ -284,7 +307,12 @@ class CameraService : Service() {
         }
     }
 
-    fun setSpotmeter(c1: Int, c2: Int, r1: Int, r2: Int) {
+    fun setSpotmeter(
+        c1: Int,
+        c2: Int,
+        r1: Int,
+        r2: Int,
+    ) {
         serviceScope.launch {
             val args = String.format(Constants.ARGS_SET_SPOTMETER, c1, c2, r1, r2)
             val cmd = String.format(Constants.CMD_SET_SPOTMETER, args)
@@ -296,7 +324,11 @@ class CameraService : Service() {
 
     suspend fun getWifi(): JSONObject = sendCmd(Constants.CMD_GET_WIFI, expectedKey = "wifi")
 
-    fun setConfig(agcEnabled: Boolean, emissivity: Int, gainMode: Int) {
+    fun setConfig(
+        agcEnabled: Boolean,
+        emissivity: Int,
+        gainMode: Int,
+    ) {
         serviceScope.launch {
             val args = String.format(Constants.ARGS_SET_CONFIG, if (agcEnabled) 1 else 0, emissivity, gainMode)
             val cmd = String.format(Constants.CMD_SET_CONFIG, args)
@@ -315,62 +347,73 @@ class CameraService : Service() {
         running = true
         bytesRead = 0
 
-        listeningJob = serviceScope.launch {
-            val input = inFromSocket ?: return@launch
-            while (isConnected && running) {
-                try {
-                    bytesRead = input.read(readBuffer)
-                } catch (e: java.net.SocketTimeoutException) {
-                    // Just an idle link (e.g. camera modem-sleep) — not necessarily dead.
-                    // Looping back re-checks isConnected/running so a concurrent disconnect()
-                    // is noticed promptly instead of blocking another full read() cycle.
-                    continue
-                } catch (e: java.io.IOException) {
-                    Timber.e(e, "Socket read error — tearing down connection")
-                    running = false
-                    teardownConnection()
-                    failPendingRequests("Socket read error: ${e.message}")
-                    break
-                }
-                when {
-                    bytesRead < 0 -> {
-                        Timber.w("Socket read hit EOF — camera closed the connection")
+        listeningJob =
+            serviceScope.launch {
+                val input = inFromSocket ?: return@launch
+                while (isConnected && running) {
+                    try {
+                        bytesRead = input.read(readBuffer)
+                    } catch (e: java.net.SocketTimeoutException) {
+                        // Just an idle link (e.g. camera modem-sleep) — not necessarily dead.
+                        // Looping back re-checks isConnected/running so a concurrent disconnect()
+                        // is noticed promptly instead of blocking another full read() cycle.
+                        continue
+                    } catch (e: java.io.IOException) {
+                        Timber.e(e, "Socket read error — tearing down connection")
                         running = false
                         teardownConnection()
-                        failPendingRequests("Camera closed the connection")
+                        failPendingRequests("Socket read error: ${e.message}")
                         break
                     }
-                    bytesRead == 0 -> { delay(100); continue }
-                }
-                for (index in 0 until bytesRead) {
-                    val b = readBuffer[index]
                     when {
-                        b == 0x02.toByte() -> {
-                            if (startFound) responsePos = 0 else startFound = true
+                        bytesRead < 0 -> {
+                            Timber.w("Socket read hit EOF — camera closed the connection")
+                            running = false
+                            teardownConnection()
+                            failPendingRequests("Camera closed the connection")
+                            break
                         }
-                        startFound && b == 0x03.toByte() -> {
-                            val parsedJson = parseResponse(
-                                String(response, 0, responsePos, StandardCharsets.UTF_8)
-                            )
-                            if (!routeToPendingRequest(parsedJson)) {
-                                // Resolve a pending single-image capture (time lapse) if waiting
-                                val deferred = singleImageDeferred
-                                if (deferred != null && !deferred.isCompleted && parsedJson.has("radiometric")) {
-                                    singleImageDeferred = null
-                                    deferred.complete(parsedJson)
-                                }
-                                imageChannel.onNext(parsedJson)
+
+                        bytesRead == 0 -> {
+                            delay(100)
+                            continue
+                        }
+                    }
+                    for (index in 0 until bytesRead) {
+                        val b = readBuffer[index]
+                        when {
+                            b == 0x02.toByte() -> {
+                                if (startFound) responsePos = 0 else startFound = true
                             }
-                            resetBuffers()
-                        }
-                        startFound -> {
-                            if (responsePos < response.size) response[responsePos++] = b
-                            else resetBuffers()
+
+                            startFound && b == 0x03.toByte() -> {
+                                val parsedJson =
+                                    parseResponse(
+                                        String(response, 0, responsePos, StandardCharsets.UTF_8),
+                                    )
+                                if (!routeToPendingRequest(parsedJson)) {
+                                    // Resolve a pending single-image capture (time lapse) if waiting
+                                    val deferred = singleImageDeferred
+                                    if (deferred != null && !deferred.isCompleted && parsedJson.has("radiometric")) {
+                                        singleImageDeferred = null
+                                        deferred.complete(parsedJson)
+                                    }
+                                    imageChannel.onNext(parsedJson)
+                                }
+                                resetBuffers()
+                            }
+
+                            startFound -> {
+                                if (responsePos < response.size) {
+                                    response[responsePos++] = b
+                                } else {
+                                    resetBuffers()
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
     }
 
     // Inspects JSON keys to resolve waiting requests
@@ -410,7 +453,7 @@ class CameraService : Service() {
     }
 
     private fun handleError(e: Exception) {
-        //Sentry.captureException(e)
-        //mainActivity.getExecutor().shutdown()
+        // Sentry.captureException(e)
+        // mainActivity.getExecutor().shutdown()
     }
 }

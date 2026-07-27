@@ -19,7 +19,6 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class NavigationTest {
-
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
@@ -54,8 +53,11 @@ class NavigationTest {
         openDrawer()
         composeRule.onNodeWithText("Library").performClick()
         // Library screen shows its top-bar title
-        composeRule.onAllNodes(androidx.compose.ui.test.hasText("Library"))
-            .apply { fetchSemanticsNodes().isNotEmpty() }
+        composeRule
+            .onAllNodes(
+                androidx.compose.ui.test
+                    .hasText("Library"),
+            ).apply { fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test

@@ -25,7 +25,6 @@ import java.io.File
  */
 @RunWith(AndroidJUnit4::class)
 class VideoExporterInstrumentedTest {
-
     // Real per-frame gaps (ms) from an actual .mtjsn recording used to debug this feature,
     // including a genuine large gap (772ms) and a clamped-fallback gap (125ms).
     private val frameDurationsMs = listOf(110L, 340L, 120L, 110L, 110L, 350L, 110L, 340L, 120L, 772L, 125L)
@@ -48,9 +47,10 @@ class VideoExporterInstrumentedTest {
 
             val extractor = MediaExtractor()
             extractor.setDataSource(outFile.absolutePath)
-            val trackIndex = (0 until extractor.trackCount).first { i ->
-                extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
-            }
+            val trackIndex =
+                (0 until extractor.trackCount).first { i ->
+                    extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
+                }
             val trackFormat = extractor.getTrackFormat(trackIndex)
             extractor.selectTrack(trackIndex)
 
@@ -65,7 +65,8 @@ class VideoExporterInstrumentedTest {
 
             assertEquals(
                 "Sample count must match input frame count",
-                frameDurationsMs.size, presentationTimesUs.size
+                frameDurationsMs.size,
+                presentationTimesUs.size,
             )
 
             // Sort defensively: sample iteration order matches presentation order for this
@@ -85,7 +86,7 @@ class VideoExporterInstrumentedTest {
             val toleranceUs = (frameDurationsMs.max() + 200) * 1000L
             assertTrue(
                 "Track duration ($trackDurationUs us) should be close to expected total ($expectedTotalUs us)",
-                kotlin.math.abs(trackDurationUs - expectedTotalUs) < toleranceUs
+                kotlin.math.abs(trackDurationUs - expectedTotalUs) < toleranceUs,
             )
         } finally {
             outFile.delete()
@@ -93,7 +94,11 @@ class VideoExporterInstrumentedTest {
         }
     }
 
-    private fun solidColorBitmap(width: Int, height: Int, seed: Int): Bitmap {
+    private fun solidColorBitmap(
+        width: Int,
+        height: Int,
+        seed: Int,
+    ): Bitmap {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val colors = intArrayOf(Color.RED, Color.GREEN, Color.BLUE, Color.YELLOW, Color.CYAN)
         bitmap.eraseColor(colors[seed % colors.size])

@@ -25,24 +25,26 @@ import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
 
-
 data class RecordingHandle(val file: File, val stream: FileOutputStream)
 
 @Singleton
 class CameraUtils @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
 ) {
     // Pre-allocated per-frame buffers — eliminates ~153 KB of heap allocation per frame
-    private val pixels    = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
+    private val pixels = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
     private val imageData = IntArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT)
     private val imageBytes = ByteArray(Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT * 2)
-    private val telData  = IntArray(3 * 80) // 3 Lepton telemetry rows × 80 words
+    private val telData = IntArray(3 * 80) // 3 Lepton telemetry rows × 80 words
 
     // Cached settings — updated by CameraViewModel via flow observation to avoid
     // DataStore reads on the per-frame hot path.
     @Volatile var settingIsManualRange: Boolean = false
+
     @Volatile var settingManualMin: Float = 0f
+
     @Volatile var settingManualMax: Float = 100f
+
     @Volatile var settingIsCelsius: Boolean = true
 
     companion object {
@@ -51,17 +53,23 @@ class CameraUtils @Inject constructor(
         private const val offsetC: Int = 160
 
         private val paintBlack: Paint = Paint().apply {
-            color = Color.BLACK; style = Paint.Style.FILL; strokeWidth = 1.0f
+            color = Color.BLACK
+            style = Paint.Style.FILL
+            strokeWidth = 1.0f
         }
         private val paintWhite: Paint = Paint().apply {
-            color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.0f
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 1.0f
         }
         private val paint: Paint = Paint().apply {
-            color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.0f
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 1.0f
         }
 
         val IP_PATTERN: Pattern = Pattern.compile(
-            "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$"
+            "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$",
         )
         val sdf: SimpleDateFormat = SimpleDateFormat("MM/dd/yy HH:mm:ss", Locale.getDefault())
         val simpleDateFormatFolder: SimpleDateFormat = SimpleDateFormat("MM_dd_yyyy", Locale.getDefault())
@@ -92,14 +100,14 @@ class CameraUtils @Inject constructor(
         parseTelemetryData(telemetryString)
 
         val status = ((telData[4] and 0xffff) shl 16) or (telData[3] and 0xffff)
-        imageDto.isAGC          = (status and Constants.TELEMETRY_MASK_AGC)      == Constants.TELEMETRY_MASK_AGC
-        imageDto.isShutdown     = (status and Constants.TELEMETRY_MASK_SHUTDOWN) == Constants.TELEMETRY_MASK_SHUTDOWN
-        imageDto.emissivity     = telData[offsetB + 19]
-        imageDto.gainMode       = telData[offsetC + 5]
-        imageDto.autoGainMode   = telData[offsetC + 6]
-        imageDto.tLinearEnabled    = telData[offsetC + 48]
+        imageDto.isAGC = (status and Constants.TELEMETRY_MASK_AGC) == Constants.TELEMETRY_MASK_AGC
+        imageDto.isShutdown = (status and Constants.TELEMETRY_MASK_SHUTDOWN) == Constants.TELEMETRY_MASK_SHUTDOWN
+        imageDto.emissivity = telData[offsetB + 19]
+        imageDto.gainMode = telData[offsetC + 5]
+        imageDto.autoGainMode = telData[offsetC + 6]
+        imageDto.tLinearEnabled = telData[offsetC + 48]
         imageDto.tLinearResolution = telData[offsetC + 49]
-        imageDto.spotmeterMean  = telData[offsetC + 50]
+        imageDto.spotmeterMean = telData[offsetC + 50]
         val x1 = telData[offsetC + 55] and 0xffff
         val y1 = telData[offsetC + 54] and 0xffff
         val x2 = telData[offsetC + 57] and 0xffff
@@ -117,7 +125,7 @@ class CameraUtils @Inject constructor(
             if (v < minTemp) minTemp = v
             if (v > maxTemp) maxTemp = v
         }
-        imageDto.imageData      = imageData
+        imageDto.imageData = imageData
         imageDto.minTemperature = minTemp
         imageDto.maxTemperature = maxTemp
 
@@ -131,7 +139,11 @@ class CameraUtils @Inject constructor(
             }
         } else {
             val (rangeMin, rangeMax) = getRadiometricTemperatures(
-                imageDto, isManualRange, manualMin, manualMax, isCelsius
+                imageDto,
+                isManualRange,
+                manualMin,
+                manualMax,
+                isCelsius,
             )
             val diff = if (rangeMax > rangeMin) rangeMax - rangeMin else 1
             for (i in pixels.indices) {
@@ -150,9 +162,9 @@ class CameraUtils @Inject constructor(
     }
 
     private fun rgbToPixel(rgb: IntArray?): Int {
-        val red   = (rgb?.get(0) ?: 0).coerceIn(0, 255)
+        val red = (rgb?.get(0) ?: 0).coerceIn(0, 255)
         val green = (rgb?.get(1) ?: 0).coerceIn(0, 255)
-        val blue  = (rgb?.get(2) ?: 0).coerceIn(0, 255)
+        val blue = (rgb?.get(2) ?: 0).coerceIn(0, 255)
         return (0xFF shl 24) or (red shl 16) or (green shl 8) or blue
     }
 
@@ -172,7 +184,7 @@ class CameraUtils @Inject constructor(
         isManualRange: Boolean,
         manualMin: Float,
         manualMax: Float,
-        isCelsius: Boolean
+        isCelsius: Boolean,
     ): Bitmap? {
         val data = dto.imageData?.copyOf() ?: return null
         val out = IntArray(data.size)
@@ -200,16 +212,14 @@ class CameraUtils @Inject constructor(
         isManualRange: Boolean,
         manualMin: Float,
         manualMax: Float,
-        isCelsius: Boolean
-    ): kotlin.Pair<Int, Int> {
-        return if (isManualRange) {
-            kotlin.Pair(
-                convertToRadiometric(imageDto, manualMin, isCelsius),
-                convertToRadiometric(imageDto, manualMax, isCelsius)
-            )
-        } else {
-            kotlin.Pair(imageDto.minTemperature, imageDto.maxTemperature)
-        }
+        isCelsius: Boolean,
+    ): kotlin.Pair<Int, Int> = if (isManualRange) {
+        kotlin.Pair(
+            convertToRadiometric(imageDto, manualMin, isCelsius),
+            convertToRadiometric(imageDto, manualMax, isCelsius),
+        )
+    } else {
+        kotlin.Pair(imageDto.minTemperature, imageDto.maxTemperature)
     }
 
     fun convertToRadiometric(imageDto: ImageDto, value: Float, isCelsius: Boolean): Int {
@@ -240,7 +250,6 @@ class CameraUtils @Inject constructor(
         }
         return true
     }
-
 
     fun generateNewFilename(): String {
         val now = Date()
@@ -287,7 +296,7 @@ class CameraUtils @Inject constructor(
                 }
             } while (line != null)
         } catch (e: IOException) {
-            //TODO JMT Sentry.captureException(e)
+            // TODO JMT Sentry.captureException(e)
             json = ""
         }
 
@@ -296,10 +305,9 @@ class CameraUtils @Inject constructor(
                 fileReader!!.close()
                 bufferedReader.close()
             } catch (e: java.lang.Exception) {
-                //TODO JMT Sentry.captureException(e)
+                // TODO JMT Sentry.captureException(e)
             }
         }
         return json
     }
-
 }

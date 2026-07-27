@@ -10,7 +10,7 @@ object Constants {
     const val GAIN_MODE_AUTO: Int = 2
 
     val IP_PATTERN: Pattern = Pattern.compile(
-        "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$"
+        "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$",
     )
     val sdf: SimpleDateFormat = SimpleDateFormat("MM/dd/yy HH:mm:ss", Locale.getDefault())
     val sdfRecording: SimpleDateFormat =
@@ -35,13 +35,13 @@ object Constants {
     const val IMAGE_WIDTH: Int = 160
     const val IMAGE_HEIGHT: Int = 120
 
-    //Keys for Save/Restore instance
+    // Keys for Save/Restore instance
     const val KEY_CAMERAUTILS: String = "CameraUtils"
     const val KEY_UTILS: String = "Utils"
     const val KEY_SETTINGS: String = "Settings"
     const val KEY_CAMERA_SERVICE: String = "CameraService"
 
-    //Settings keys for SharedPrefs
+    // Settings keys for SharedPrefs
     const val KEY_AGC: String = "agc"
     const val KEY_EMISSIVITY: String = "emissivity"
     const val KEY_GAIN_AUTO: String = "gainAuto"
@@ -67,19 +67,19 @@ object Constants {
     const val KEY_WIFI_STATICIPADDRESS: String = "static_ip_address"
     const val KEY_WIFI_STATICNETMASK: String = "static_ip_netmask"
 
-    //Bundle keys
+    // Bundle keys
     const val KEY_IS_CAMERA_CONNECTED: String = "cam_connected"
     const val KEY_IS_SOCKET_CONNECTED: String = "soc_connected"
     const val KEY_CAMERA_IMAGE: String = "cam_image"
     const val KEY_SELECTED_PALETTE: String = "pal_selected"
     const val KEY_SELECTED_IMAGE: String = "image_selected"
 
-    //Record Summary Footer
+    // Record Summary Footer
     val RECORDING_FOOTER: String =
         "{\"video_info\":{\"start_time\":\"%12s\",\"start_date\":\"%8s\",\"end_time\":\"%12s\"," +
-                "\"end_date\":\"%8s\",\"num_frames\":%3d,\"version\":%2d}}\u0003"
+            "\"end_date\":\"%8s\",\"num_frames\":%3d,\"version\":%2d}}\u0003"
 
-    //Camera Commands
+    // Camera Commands
     const val CMD_GET_STATUS: String = "\u0002{\"cmd\":\"get_status\"}\u0003"
     const val CMD_GET_CONFIG: String = "\u0002{\"cmd\":\"get_config\"}\u0003"
     const val CMD_GET_WIFI: String = "\u0002{\"cmd\":\"get_wifi\"}\u0003"
@@ -91,54 +91,54 @@ object Constants {
     const val CMD_SET_WIFI: String = "\u0002{\"cmd\":\"set_wifi\", \"args\": %s}\u0003"
     const val CMD_GET_IMAGE: String = "\u0002{\"cmd\":\"get_image\"}\u0003"
 
-    //Camera Command args
+    // Camera Command args
     val ARGS_SET_TIME: String = "{" +
-            "    \"sec\":  %d," +
-            "    \"min\":  %d," +
-            "    \"hour\": %d," +
-            "    \"dow\":  %d," +
-            "    \"day\":  %d," +
-            "    \"mon\":  %d," +
-            "    \"year\": %d" +
-            "   }"
+        "    \"sec\":  %d," +
+        "    \"min\":  %d," +
+        "    \"hour\": %d," +
+        "    \"dow\":  %d," +
+        "    \"day\":  %d," +
+        "    \"mon\":  %d," +
+        "    \"year\": %d" +
+        "   }"
     val ARGS_SET_CONFIG: String = "{\n" +
-            "    \"agc_enabled\": %d,\n" +
-            "    \"emissivity\": %d,\n" +
-            "    \"gain_mode\": %d\n" +
-            "  }"
+        "    \"agc_enabled\": %d,\n" +
+        "    \"emissivity\": %d,\n" +
+        "    \"gain_mode\": %d\n" +
+        "  }"
     val ARGS_SET_SPOTMETER: String = "{\n" +
-            "    \"c1\": %d,\n" +
-            "    \"c2\": %d,\n" +
-            "    \"r1\": %d,\n" +
-            "    \"r2\": %d \n" +
-            "  }"
+        "    \"c1\": %d,\n" +
+        "    \"c2\": %d,\n" +
+        "    \"r1\": %d,\n" +
+        "    \"r2\": %d \n" +
+        "  }"
     val ARGS_SET_STREAM_ON: String = "{\n" +
-            "    \"delay_msec\":%d,\n" +
-            "    \"num_frames\":%d\n" +
-            "   }"
+        "    \"delay_msec\":%d,\n" +
+        "    \"num_frames\":%d\n" +
+        "   }"
 
     // If Camera is Access Point, send
     val ARGS_SET_WIFI_AP: String = "{\n" +
-            "    \"ap_ssid\": \"%s\",\n" +
-            "    \"ap_pw\": \"%s\",\n" +
-            "    \"flags\": 1\n" +
-            "    }"
+        "    \"ap_ssid\": \"%s\",\n" +
+        "    \"ap_pw\": \"%s\",\n" +
+        "    \"flags\": 1\n" +
+        "    }"
 
     // If Camera is NOT Access Point and NOT Use static IP when Client, send
     val ARGS_SET_WIFI_NOT_STATIC: String = "{\n" +
-            "    \"sta_ssid\": \"%s\",\n" +
-            "    \"sta_pw\": \"%s\",\n" +
-            "    \"flags\": 129\n" +
-            "    }"
+        "    \"sta_ssid\": \"%s\",\n" +
+        "    \"sta_pw\": \"%s\",\n" +
+        "    \"flags\": 129\n" +
+        "    }"
 
     // If Camera is NOT Access Point and Use static IP when Client, send
     val ARGS_SET_WIFI_STATIC: String = "{\n" +
-            "    \"sta_ssid\": \"%s\",\n" +
-            "    \"sta_pw\": \"%s\",\n" +
-            "    \"sta_ip_addr\": \"%s\",\n" +
-            "    \"sta_netmask\": \"%s\",\n" +
-            "    \"flags\": 145\n" +
-            "    }"
+        "    \"sta_ssid\": \"%s\",\n" +
+        "    \"sta_pw\": \"%s\",\n" +
+        "    \"sta_ip_addr\": \"%s\",\n" +
+        "    \"sta_netmask\": \"%s\",\n" +
+        "    \"flags\": 145\n" +
+        "    }"
 
     val TELEMETRY_MASK_AGC: Int = (1 shl 12)
     val TELEMETRY_MASK_SHUTDOWN: Int = (1 shl 20)
@@ -152,17 +152,17 @@ object Constants {
     const val ROTATE_FORWARD: Int = 1
     val ROTATE_BACKWARD: Int = -1
     val ERROR_RESPONSE: String = "{\n" +
-            "\"error\":{\n" +
-            "\"exception\":\"%s\"\n" +
-            "}\n" +
-            "}"
+        "\"error\":{\n" +
+        "\"exception\":\"%s\"\n" +
+        "}\n" +
+        "}"
     val CONNECTED_RESPONSE: String = "{\n" +
-            "\"connected\":{\n" +
-            "\"result\":\"%s\"\n" +
-            "}\n" +
-            "}"
+        "\"connected\":{\n" +
+        "\"result\":\"%s\"\n" +
+        "}\n" +
+        "}"
 
-    //Constants for playback fragment
+    // Constants for playback fragment
     var PLAYBACK_ACTION: String = "playback_action"
     const val PLAYBACK_ACTION_PLAY: Int = 0
     const val PLAYBACK_ACTION_ANALYZE: Int = 1

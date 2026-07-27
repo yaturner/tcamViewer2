@@ -28,7 +28,6 @@ import java.util.Base64
  */
 @RunWith(AndroidJUnit4::class)
 class LibraryDeleteConfirmationTest {
-
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
@@ -88,8 +87,12 @@ class LibraryDeleteConfirmationTest {
 
         // The thumbnail grid loads file list + decodes bitmaps asynchronously.
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodes(androidx.compose.ui.test.hasText("23:59:59"))
-                .fetchSemanticsNodes().isNotEmpty()
+            composeRule
+                .onAllNodes(
+                    androidx.compose.ui.test
+                        .hasText("23:59:59"),
+                ).fetchSemanticsNodes()
+                .isNotEmpty()
         }
         composeRule.onNodeWithText("23:59:59").performClick()
         composeRule.waitForIdle()
@@ -105,10 +108,11 @@ class LibraryDeleteConfirmationTest {
             radiometricBytes[i * 2 + 1] = 0x0A
         }
         val telBytes = ByteArray(480)
-        val metadata = JSONObject().apply {
-            put("Date", "01/01/99")
-            put("Time", "23:59:59.000")
-        }
+        val metadata =
+            JSONObject().apply {
+                put("Date", "01/01/99")
+                put("Time", "23:59:59.000")
+            }
         return JSONObject().apply {
             put("radiometric", Base64.getEncoder().encodeToString(radiometricBytes))
             put("telemetry", Base64.getEncoder().encodeToString(telBytes))

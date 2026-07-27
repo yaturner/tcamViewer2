@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class VideoExporterTest {
-
     // --- align16 ---
 
     @Test
@@ -42,8 +41,8 @@ class VideoExporterTest {
         val pts = VideoExporter.computeCumulativePtsUs(listOf(110L, 340L, 120L, 110L))
         assertEquals(0L, pts[0])
         assertEquals(110_000L, pts[1])
-        assertEquals(450_000L, pts[2])   // 110 + 340
-        assertEquals(570_000L, pts[3])   // 110 + 340 + 120
+        assertEquals(450_000L, pts[2]) // 110 + 340
+        assertEquals(570_000L, pts[3]) // 110 + 340 + 120
     }
 
     @Test
@@ -55,8 +54,8 @@ class VideoExporterTest {
         val pts = VideoExporter.computeCumulativePtsUs(durations)
         assertEquals(11, pts.size)
         assertEquals(0L, pts[0])
-        assertEquals(1_710_000L, pts[9])   // sum of first 9 durations = 1710ms
-        assertEquals(2_482_000L, pts[10])  // + 772ms
+        assertEquals(1_710_000L, pts[9]) // sum of first 9 durations = 1710ms
+        assertEquals(2_482_000L, pts[10]) // + 772ms
     }
 
     @Test

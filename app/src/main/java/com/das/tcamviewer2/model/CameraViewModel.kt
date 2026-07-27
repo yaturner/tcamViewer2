@@ -16,9 +16,9 @@ import com.das.tcamviewer2.settingsDataManager
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -39,11 +39,10 @@ import java.util.Locale
 data class CameraConfig(
     val agcEnabled: Boolean = false,
     val emissivity: Int = 90, // percentage 1-100, per tCam's set_config/get_config API
-    val gainMode: Int = Constants.GAIN_MODE_HIGH
+    val gainMode: Int = Constants.GAIN_MODE_HIGH,
 )
 
 class CameraViewModel : ViewModel() {
-
     private val _spotmeterTemp = MutableStateFlow("--")
     val spotmeterTemp: StateFlow<String> = _spotmeterTemp.asStateFlow()
 
@@ -92,7 +91,9 @@ class CameraViewModel : ViewModel() {
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
     @Volatile private var recordingStream: FileOutputStream? = null
+
     @Volatile private var recordingFile: File? = null
+
     @Volatile private var recordingFrameCount: Int = 0
     private var recordingStartMs: Long = 0L
     private var startedStreamingForRecord = false
@@ -107,6 +108,7 @@ class CameraViewModel : ViewModel() {
     val timeLapseMessage: SharedFlow<String> = _timeLapseMessage.asSharedFlow()
 
     private var timeLapseJob: Job? = null
+
     @Volatile private var discardTimeLapse = false
 
     private val _currentBitmap = MutableStateFlow<Bitmap?>(null)
@@ -123,6 +125,7 @@ class CameraViewModel : ViewModel() {
 
     private val _spotmeterRect = MutableStateFlow<Rect?>(null)
     val spotmeterRect: StateFlow<Rect?> = _spotmeterRect.asStateFlow()
+
     // Once the user manually moves the hotspot, telemetry no longer overwrites it;
     // reset to false on disconnect so the first new frame re-initialises the rect.
     @Volatile private var userMovedSpotmeter = false
@@ -136,7 +139,7 @@ class CameraViewModel : ViewModel() {
     @Volatile private var selectedPalette = "Rainbow"
 
     private var frameCount = 0
-    private var fpsWindowStart = -1L   // -1 = not yet started; initialised on first frame
+    private var fpsWindowStart = -1L // -1 = not yet started; initialised on first frame
 
     // 35mm-style shutter click — plays for on-demand single-frame reads (Get, time lapse
     // captures) but not for continuous streaming/recording frames, which would be constant noise.
@@ -152,7 +155,10 @@ class CameraViewModel : ViewModel() {
         try {
             val player = MediaPlayer.create(appContext, R.raw.camera_shutter)
             player.setOnCompletionListener { it.release() }
-            player.setOnErrorListener { mp, _, _ -> mp.release(); true }
+            player.setOnErrorListener { mp, _, _ ->
+                mp.release()
+                true
+            }
             player.start()
         } catch (e: Exception) {
             Timber.e(e, "Shutter sound playback failed")
@@ -161,11 +167,13 @@ class CameraViewModel : ViewModel() {
 
     init {
         observeSettings()
-        frameDisposable = cameraService.getImageChannel()
-            .subscribe(
-                { json -> frameChannel.trySend(json) },
-                { error -> Timber.e(error, "Frame stream error") }
-            )
+        frameDisposable =
+            cameraService
+                .getImageChannel()
+                .subscribe(
+                    { json -> frameChannel.trySend(json) },
+                    { error -> Timber.e(error, "Frame stream error") },
+                )
         viewModelScope.launch(Dispatchers.Default) {
             for (json in frameChannel) processFrame(json)
         }
@@ -222,9 +230,10 @@ class CameraViewModel : ViewModel() {
         val manualMin = if (isManualRange) cameraUtils.settingManualMin else 0f
         val manualMax = if (isManualRange) cameraUtils.settingManualMax else 0f
         val isCelsius = cameraUtils.settingIsCelsius
-        val bmp = withContext(Dispatchers.Default) {
-            cameraUtils.remapWithPalette(dto, palette, isManualRange, manualMin, manualMax, isCelsius)
-        }
+        val bmp =
+            withContext(Dispatchers.Default) {
+                cameraUtils.remapWithPalette(dto, palette, isManualRange, manualMin, manualMax, isCelsius)
+            }
         if (bmp != null) {
             // Write palette name into dto so saveTjsn (which saves dto.getJsonObject()) captures it
             dto.paletteName = paletteName
@@ -242,13 +251,14 @@ class CameraViewModel : ViewModel() {
         val celsius = cameraUtils.settingIsCelsius
         val scale = if (dto.tLinearResolution == 0) 10f else 100f
         val rect = _spotmeterRect.value
-        val (spotValue, spotText) = if (rect != null && dto.imageData != null) {
-            val cx = (rect.left + rect.right) / 2
-            val cy = (rect.top + rect.bottom) / 2
-            calcSpotTemp(dto.imageData!!, cx, cy, scale, celsius)
-        } else {
-            formatTemp(dto.spotmeterMean, scale, celsius)
-        }
+        val (spotValue, spotText) =
+            if (rect != null && dto.imageData != null) {
+                val cx = (rect.left + rect.right) / 2
+                val cy = (rect.top + rect.bottom) / 2
+                calcSpotTemp(dto.imageData!!, cx, cy, scale, celsius)
+            } else {
+                formatTemp(dto.spotmeterMean, scale, celsius)
+            }
         val (maxValue, maxText) = formatTemp(dto.maxTemperature, scale, celsius)
         val (minValue, minText) = formatTemp(dto.minTemperature, scale, celsius)
         _spotmeterTemp.value = spotText
@@ -272,7 +282,9 @@ class CameraViewModel : ViewModel() {
             if (connected) {
                 cameraService.getImage()
                 loadCameraConfig()
-            } else _showConnectError.value = true
+            } else {
+                _showConnectError.value = true
+            }
         } finally {
             _isConnecting.value = false
         }
@@ -296,7 +308,9 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    fun dismissConnectError() { _showConnectError.value = false }
+    fun dismissConnectError() {
+        _showConnectError.value = false
+    }
 
     /** Disconnects immediately (the set_wifi command that must have just been sent restarts the
      *  camera's WiFi subsystem on its own), then waits for it to rejoin the network and tries
@@ -314,12 +328,13 @@ class CameraViewModel : ViewModel() {
         _cameraConfig.value = null
         userMovedSpotmeter = false
         viewModelScope.launch(Dispatchers.IO) {
-            val ip = if (newIp != null) {
-                settingsDataManager.saveCameraIp(newIp)
-                newIp
-            } else {
-                settingsDataManager.getCameraIp()
-            }
+            val ip =
+                if (newIp != null) {
+                    settingsDataManager.saveCameraIp(newIp)
+                    newIp
+                } else {
+                    settingsDataManager.getCameraIp()
+                }
             delay(8_000L)
             connectToCamera(ip)
         }
@@ -347,7 +362,11 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    fun sendCameraConfig(agcEnabled: Boolean, emissivity: Int, gainMode: Int) {
+    fun sendCameraConfig(
+        agcEnabled: Boolean,
+        emissivity: Int,
+        gainMode: Int,
+    ) {
         cameraService.setConfig(agcEnabled, emissivity, gainMode)
     }
 
@@ -357,15 +376,28 @@ class CameraViewModel : ViewModel() {
         password: String,
         useStaticIp: Boolean,
         staticIp: String,
-        staticNetmask: String
+        staticNetmask: String,
     ) {
-        val args = when {
-            isAccessPoint -> String.format(Constants.ARGS_SET_WIFI_AP, ssid, password)
-            useStaticIp -> String.format(
-                Constants.ARGS_SET_WIFI_STATIC, ssid, password, staticIp, staticNetmask
-            )
-            else -> String.format(Constants.ARGS_SET_WIFI_NOT_STATIC, ssid, password)
-        }
+        val args =
+            when {
+                isAccessPoint -> {
+                    String.format(Constants.ARGS_SET_WIFI_AP, ssid, password)
+                }
+
+                useStaticIp -> {
+                    String.format(
+                        Constants.ARGS_SET_WIFI_STATIC,
+                        ssid,
+                        password,
+                        staticIp,
+                        staticNetmask,
+                    )
+                }
+
+                else -> {
+                    String.format(Constants.ARGS_SET_WIFI_NOT_STATIC, ssid, password)
+                }
+            }
         cameraService.setWifi(args)
     }
 
@@ -374,9 +406,11 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val response = cameraService.getWifi()
-                val wifi = response.optJSONObject("wifi") ?: run {
-                    _wifiInfo.value = emptyMap(); return@launch
-                }
+                val wifi =
+                    response.optJSONObject("wifi") ?: run {
+                        _wifiInfo.value = emptyMap()
+                        return@launch
+                    }
                 _wifiInfo.value = wifi.keys().asSequence().associateWith { wifi.optString(it) }
             } catch (e: Exception) {
                 Timber.e(e, "fetchWifiInfo failed")
@@ -389,57 +423,61 @@ class CameraViewModel : ViewModel() {
         if (_isConnected.value) cameraService.getImage()
     }
 
-    fun startTimeLapse(intervalSec: Int, durationSec: Int) {
+    fun startTimeLapse(
+        intervalSec: Int,
+        durationSec: Int,
+    ) {
         if (!_isConnected.value || _isTimeLapsing.value) return
         val intervalMs = intervalSec * 1000L
         val durationMs = durationSec * 1000L
         _isTimeLapsing.value = true
-        timeLapseJob = viewModelScope.launch(Dispatchers.IO) {
-            var stream: FileOutputStream? = null
-            var frameCount = 0
-            var naturalCompletion = false
-            val startMs = System.currentTimeMillis()
-            var file: File? = null
-            try {
-                val handle = cameraUtils.openTimeLapseFile()
-                stream = handle.stream
-                file = handle.file
-                val endTime = startMs + durationMs
-                while (isActive && System.currentTimeMillis() < endTime) {
-                    val frameStart = System.currentTimeMillis()
-                    _isTimeLapseCapturing.value = true
-                    val json = cameraService.getImageOnce() ?: break
+        timeLapseJob =
+            viewModelScope.launch(Dispatchers.IO) {
+                var stream: FileOutputStream? = null
+                var frameCount = 0
+                var naturalCompletion = false
+                val startMs = System.currentTimeMillis()
+                var file: File? = null
+                try {
+                    val handle = cameraUtils.openTimeLapseFile()
+                    stream = handle.stream
+                    file = handle.file
+                    val endTime = startMs + durationMs
+                    while (isActive && System.currentTimeMillis() < endTime) {
+                        val frameStart = System.currentTimeMillis()
+                        _isTimeLapseCapturing.value = true
+                        val json = cameraService.getImageOnce() ?: break
+                        _isTimeLapseCapturing.value = false
+                        stream.write(json.toString().toByteArray(Charsets.US_ASCII))
+                        stream.write(0x03)
+                        frameCount++
+                        val remaining = intervalMs - (System.currentTimeMillis() - frameStart)
+                        if (remaining > 0 && isActive) kotlinx.coroutines.delay(remaining)
+                    }
+                    naturalCompletion = isActive
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.e(e, "Time lapse error")
+                } finally {
+                    val endMs = System.currentTimeMillis()
+                    if (discardTimeLapse) {
+                        runCatching { stream?.close() }
+                        file?.delete()
+                    } else {
+                        runCatching {
+                            stream?.write(buildFooterJson(startMs, endMs, frameCount).toByteArray(Charsets.US_ASCII))
+                            stream?.close()
+                        }
+                    }
+                    discardTimeLapse = false
                     _isTimeLapseCapturing.value = false
-                    stream.write(json.toString().toByteArray(Charsets.US_ASCII))
-                    stream.write(0x03)
-                    frameCount++
-                    val remaining = intervalMs - (System.currentTimeMillis() - frameStart)
-                    if (remaining > 0 && isActive) kotlinx.coroutines.delay(remaining)
-                }
-                naturalCompletion = isActive
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.e(e, "Time lapse error")
-            } finally {
-                val endMs = System.currentTimeMillis()
-                if (discardTimeLapse) {
-                    runCatching { stream?.close() }
-                    file?.delete()
-                } else {
-                    runCatching {
-                        stream?.write(buildFooterJson(startMs, endMs, frameCount).toByteArray(Charsets.US_ASCII))
-                        stream?.close()
+                    _isTimeLapsing.value = false
+                    if (naturalCompletion) {
+                        _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured")
                     }
                 }
-                discardTimeLapse = false
-                _isTimeLapseCapturing.value = false
-                _isTimeLapsing.value = false
-                if (naturalCompletion) {
-                    _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured")
-                }
             }
-        }
     }
 
     fun stopTimeLapse(save: Boolean) {
@@ -504,7 +542,10 @@ class CameraViewModel : ViewModel() {
         toggleStreaming()
     }
 
-    private fun finishRecording(save: Boolean = true, stopStreamIfAutoStarted: Boolean = true) {
+    private fun finishRecording(
+        save: Boolean = true,
+        stopStreamIfAutoStarted: Boolean = true,
+    ) {
         val stream = recordingStream
         val file = recordingFile
         recordingStream = null
@@ -537,19 +578,30 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun buildFooterJson(startMs: Long, endMs: Long, numFrames: Int): String {
+    private fun buildFooterJson(
+        startMs: Long,
+        endMs: Long,
+        numFrames: Int,
+    ): String {
         val timeFmt = SimpleDateFormat("H:mm:ss.SSS", Locale.US)
         val dateFmt = SimpleDateFormat("M/d/yy", Locale.US)
         val start = Date(startMs)
         val end = Date(endMs)
-        return """{"video_info":{"start_time":"${timeFmt.format(start)}","start_date":"${dateFmt.format(start)}","end_time":"${timeFmt.format(end)}","end_date":"${dateFmt.format(end)}","num_frames":$numFrames,"version":1}}"""
+        return """{"video_info":{"start_time":"${timeFmt.format(
+            start,
+        )}","start_date":"${dateFmt.format(
+            start,
+        )}","end_time":"${timeFmt.format(end)}","end_date":"${dateFmt.format(end)}","num_frames":$numFrames,"version":1}}"""
     }
 
     fun setPalette(name: String) {
         viewModelScope.launch { settingsDataManager.saveSelectedPalette(name) }
     }
 
-    fun setSpotmeter(camX: Int, camY: Int) {
+    fun setSpotmeter(
+        camX: Int,
+        camY: Int,
+    ) {
         val c1 = (camX - 2).coerceAtLeast(0)
         val c2 = (camX + 2).coerceAtMost(Constants.IMAGE_WIDTH - 1)
         val r1 = (camY - 2).coerceAtLeast(0)
@@ -563,9 +615,14 @@ class CameraViewModel : ViewModel() {
         if (dto?.imageData != null && dto.tLinearEnabled != 0) {
             viewModelScope.launch {
                 val scale = if (dto.tLinearResolution == 0) 10f else 100f
-                val (spotValue, spotText) = calcSpotTemp(
-                    dto.imageData!!, camX, camY, scale, settingsDataManager.isUnitsCelsius()
-                )
+                val (spotValue, spotText) =
+                    calcSpotTemp(
+                        dto.imageData!!,
+                        camX,
+                        camY,
+                        scale,
+                        settingsDataManager.isUnitsCelsius(),
+                    )
                 _spotmeterTemp.value = spotText
                 _spotmeterTempValue.value = spotValue
             }
@@ -615,21 +672,35 @@ class CameraViewModel : ViewModel() {
     }
 
     /** Returns the temperature in the currently-selected display unit, alongside its formatted text. */
-    private fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): Pair<Float, String> {
+    private fun formatTemp(
+        rawValue: Int,
+        scale: Float,
+        isCelsius: Boolean,
+    ): Pair<Float, String> {
         val tempC = rawValue / scale - 273.15f
         val value = if (isCelsius) tempC else tempC * 9f / 5f + 32f
         val text = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
         return value to text
     }
 
-    private fun calcSpotTemp(imageData: IntArray, cx: Int, cy: Int, scale: Float, isCelsius: Boolean): Pair<Float, String> {
+    private fun calcSpotTemp(
+        imageData: IntArray,
+        cx: Int,
+        cy: Int,
+        scale: Float,
+        isCelsius: Boolean,
+    ): Pair<Float, String> {
         val c1 = cx.coerceIn(0, Constants.IMAGE_WIDTH - 1)
         val c2 = (cx + 1).coerceAtMost(Constants.IMAGE_WIDTH - 1)
         val r1 = cy.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
         val r2 = (cy + 1).coerceAtMost(Constants.IMAGE_HEIGHT - 1)
-        var sum = 0L; var count = 0
-        for (row in r1..r2) for (col in c1..c2) {
-            sum += imageData[row * Constants.IMAGE_WIDTH + col]; count++
+        var sum = 0L
+        var count = 0
+        for (row in r1..r2) {
+            for (col in c1..c2) {
+                sum += imageData[row * Constants.IMAGE_WIDTH + col]
+                count++
+            }
         }
         return formatTemp(if (count > 0) (sum / count).toInt() else 0, scale, isCelsius)
     }

@@ -9,7 +9,6 @@ import org.junit.Before
 import org.junit.Test
 
 class PaletteFactoryTest {
-
     private lateinit var factory: PaletteFactory
 
     @Before
@@ -19,10 +18,19 @@ class PaletteFactoryTest {
 
     @Test
     fun allTenPalettesArePresent() {
-        val names = listOf(
-            "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
-            "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia"
-        )
+        val names =
+            listOf(
+                "Arctic",
+                "Banded",
+                "Blackhot",
+                "DoubleRainbow",
+                "Fusion",
+                "Gray",
+                "Ironblack",
+                "Isotherm",
+                "Rainbow",
+                "Sepia",
+            )
         for (name in names) {
             assertNotNull("Palette '$name' should be found", factory.getPaletteByName(name))
         }
@@ -63,7 +71,7 @@ class PaletteFactoryTest {
                 for (channel in rgb) {
                     assertTrue(
                         "Palette '$name' entry $i: channel value $channel out of [0,255]",
-                        channel in 0..255
+                        channel in 0..255,
                     )
                 }
             }

@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
 enum class ScreenTab(val title: String, val icon: ImageVector) {
     Camera("Camera", Icons.Filled.CameraAlt),
     Settings("Settings", Icons.Filled.Settings),
-    Library("Library", Icons.Filled.PhotoLibrary)
+    Library("Library", Icons.Filled.PhotoLibrary),
 }
 
 @Composable
@@ -111,7 +111,7 @@ fun MainScreen() {
                 Text(
                     text = "tCam Viewer",
                     style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
                 )
                 HorizontalDivider()
                 tabs.forEachIndexed { index, tab ->
@@ -124,33 +124,33 @@ fun MainScreen() {
                             selectedTabItem = index
                             coroutineScope.launch { drawerState.close() }
                         },
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
                 }
             }
-        }
+        },
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (tabs[selectedTabItem]) {
                 ScreenTab.Camera -> CameraScreen(onOpenDrawer = openDrawer)
+
                 ScreenTab.Settings -> SettingsScreen(
                     onNavigateBack = { selectedTabItem = previousTabItem },
-                    onOpenDrawer = openDrawer
+                    onOpenDrawer = openDrawer,
                 )
+
                 ScreenTab.Library -> LibraryScreen(onOpenDrawer = openDrawer)
             }
         }
     }
 }
 
-
 @Composable
 fun GenericScreen(name: String) {
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         Text(text = "Hello $name Screen!", fontSize = 24.sp)
     }
 }
-

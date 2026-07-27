@@ -17,6 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-    rootProject.name = "tcamViewer2"
-    include(":app")
-
+rootProject.name = "tcamViewer2"
+include(":app")

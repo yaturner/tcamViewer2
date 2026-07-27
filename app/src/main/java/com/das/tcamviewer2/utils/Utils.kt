@@ -10,21 +10,22 @@ import android.provider.MediaStore
 import java.io.File
 import java.io.IOException
 
-
-class Utils(context: Context) {
+class Utils(
+    context: Context,
+) {
     private val appContext = context.applicationContext
 
     fun saveBitmap(
-    bitmap: Bitmap,
-    imageDirectory: String,
-    imageName: String
+        bitmap: Bitmap,
+        imageDirectory: String,
+        imageName: String,
     ): Uri? {
         val values = ContentValues()
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, imageName)
         values.put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
         values.put(
             MediaStore.MediaColumns.RELATIVE_PATH,
-            Environment.DIRECTORY_DCIM + "/" + imageDirectory
+            Environment.DIRECTORY_DCIM + "/" + imageDirectory,
         )
 
         val resolver: ContentResolver = appContext.contentResolver
@@ -41,9 +42,11 @@ class Utils(context: Context) {
                 if (!bitmap!!.compress(
                         Bitmap.CompressFormat.PNG,
                         95,
-                        stream
+                        stream,
                     )
-                ) throw IOException("Failed to save bitmap.")
+                ) {
+                    throw IOException("Failed to save bitmap.")
+                }
             }
             return uri
         } catch (e: IOException) {
@@ -58,14 +61,14 @@ class Utils(context: Context) {
     fun saveVideo(
         sourceFile: File,
         videoDirectory: String,
-        videoName: String
+        videoName: String,
     ): Uri? {
         val values = ContentValues()
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, videoName)
         values.put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
         values.put(
             MediaStore.MediaColumns.RELATIVE_PATH,
-            Environment.DIRECTORY_MOVIES + "/" + videoDirectory
+            Environment.DIRECTORY_MOVIES + "/" + videoDirectory,
         )
 
         val resolver: ContentResolver = appContext.contentResolver

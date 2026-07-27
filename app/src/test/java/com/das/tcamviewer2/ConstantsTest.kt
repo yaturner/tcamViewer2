@@ -7,20 +7,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ConstantsTest {
-
     // --- IP regex ---
 
     @Test
     fun validIpAddressesMatch() {
-        val valid = listOf(
-            "192.168.4.1",
-            "0.0.0.0",
-            "255.255.255.255",
-            "10.0.0.1",
-            "172.16.0.1",
-            "1.2.3.4",
-            "192.168.100.200"
-        )
+        val valid =
+            listOf(
+                "192.168.4.1",
+                "0.0.0.0",
+                "255.255.255.255",
+                "10.0.0.1",
+                "172.16.0.1",
+                "1.2.3.4",
+                "192.168.100.200",
+            )
         for (ip in valid) {
             assertTrue("Expected '$ip' to be a valid IP", Constants.IP_PATTERN.matcher(ip).matches())
         }
@@ -28,18 +28,19 @@ class ConstantsTest {
 
     @Test
     fun invalidIpAddressesDoNotMatch() {
-        val invalid = listOf(
-            "256.0.0.1",
-            "192.168.1",
-            "192.168.1.1.1",
-            "",
-            "abc.def.ghi.jkl",
-            "192.168.1.",
-            ".168.1.1",
-            "192..1.1",
-            " 192.168.1.1",
-            "192.168.1.1 "
-        )
+        val invalid =
+            listOf(
+                "256.0.0.1",
+                "192.168.1",
+                "192.168.1.1.1",
+                "",
+                "abc.def.ghi.jkl",
+                "192.168.1.",
+                ".168.1.1",
+                "192..1.1",
+                " 192.168.1.1",
+                "192.168.1.1 ",
+            )
         for (ip in invalid) {
             assertFalse("Expected '$ip' to be invalid", Constants.IP_PATTERN.matcher(ip).matches())
         }
@@ -51,13 +52,14 @@ class ConstantsTest {
     fun simpleCommandsHaveStxEtxFraming() {
         val stx = ''
         val etx = ''
-        val commands = listOf(
-            Constants.CMD_GET_STATUS,
-            Constants.CMD_GET_CONFIG,
-            Constants.CMD_GET_WIFI,
-            Constants.CMD_GET_IMAGE,
-            Constants.CMD_SET_STREAM_OFF
-        )
+        val commands =
+            listOf(
+                Constants.CMD_GET_STATUS,
+                Constants.CMD_GET_CONFIG,
+                Constants.CMD_GET_WIFI,
+                Constants.CMD_GET_IMAGE,
+                Constants.CMD_SET_STREAM_OFF,
+            )
         for (cmd in commands) {
             assertEquals("'$cmd' should start with STX", stx, cmd.first())
             assertEquals("'$cmd' should end with ETX", etx, cmd.last())
@@ -68,13 +70,14 @@ class ConstantsTest {
     fun templateCommandsHaveStxEtxFraming() {
         val stx = ''
         val etx = ''
-        val templates = listOf(
-            Constants.CMD_SET_TIME,
-            Constants.CMD_SET_CONFIG,
-            Constants.CMD_SET_SPOTMETER,
-            Constants.CMD_SET_STREAM_ON,
-            Constants.CMD_SET_WIFI
-        )
+        val templates =
+            listOf(
+                Constants.CMD_SET_TIME,
+                Constants.CMD_SET_CONFIG,
+                Constants.CMD_SET_SPOTMETER,
+                Constants.CMD_SET_STREAM_ON,
+                Constants.CMD_SET_WIFI,
+            )
         for (template in templates) {
             assertEquals("Template should start with STX: $template", stx, template.first())
             assertEquals("Template should end with ETX: $template", etx, template.last())

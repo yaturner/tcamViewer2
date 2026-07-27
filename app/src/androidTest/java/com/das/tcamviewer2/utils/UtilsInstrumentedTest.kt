@@ -25,7 +25,6 @@ private const val TEST_DIR = "tcamviewer2_instrumented_test"
 
 @RunWith(AndroidJUnit4::class)
 class UtilsInstrumentedTest {
-
     private lateinit var utils: Utils
     private val createdUris = mutableListOf<Uri>()
 
@@ -70,7 +69,8 @@ class UtilsInstrumentedTest {
         createdUris.add(uri!!)
 
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
-        resolver.query(uri!!, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.MIME_TYPE), null, null, null)
+        resolver
+            .query(uri!!, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.MIME_TYPE), null, null, null)
             .use { cursor ->
                 assertNotNull(cursor)
                 assertTrue(cursor!!.moveToFirst())
@@ -117,7 +117,8 @@ class UtilsInstrumentedTest {
             createdUris.add(uri!!)
 
             val resolver = context.contentResolver
-            resolver.query(uri!!, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.MIME_TYPE), null, null, null)
+            resolver
+                .query(uri!!, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.MIME_TYPE), null, null, null)
                 .use { cursor ->
                     assertNotNull(cursor)
                     assertTrue(cursor!!.moveToFirst())

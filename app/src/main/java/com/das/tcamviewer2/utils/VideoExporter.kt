@@ -8,9 +8,9 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Encodes a sequence of thermal-frame bitmaps into an H.264 MP4 file.
@@ -35,7 +35,7 @@ object VideoExporter {
         spotmeterRects: List<Rect?>,
         outputFile: File,
         width: Int,
-        height: Int
+        height: Int,
     ) = withContext(Dispatchers.Default) {
         require(frames.isNotEmpty()) { "No frames to export" }
         require(frames.size == frameDurationsMs.size) { "Frame/duration count mismatch" }
@@ -44,12 +44,13 @@ object VideoExporter {
         val fps = computeFps(frames.size, frameDurationsMs.sum())
         val bitRate = computeBitRate(width, height, fps)
 
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
-            setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
-            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-        }
+        val format =
+            MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+                setInteger(MediaFormat.KEY_BIT_RATE, bitRate)
+                setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            }
 
         // Prefer the software AVC encoder: vendor hardware encoders on some devices don't
         // reliably honor arbitrary (non-real-time-paced) presentationTimeUs values on input,
@@ -99,12 +100,14 @@ object VideoExporter {
                 val outIndex = codec.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
                 when {
                     outIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> { /* no output ready yet */ }
+
                     outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         check(!muxerStarted) { "Encoder output format changed more than once" }
                         muxerTrack = muxer.addTrack(codec.outputFormat)
                         muxer.start()
                         muxerStarted = true
                     }
+
                     outIndex >= 0 -> {
                         val encodedData = codec.getOutputBuffer(outIndex)
                         if (encodedData != null && bufferInfo.size != 0 && muxerStarted) {
@@ -128,7 +131,12 @@ object VideoExporter {
     }
 
     /** Writes an ARGB bitmap into a flexible YUV420 [Image] (BT.601 full-range), sized to match. */
-    private fun writeBitmapToYuvImage(bitmap: Bitmap, image: Image, width: Int, height: Int) {
+    private fun writeBitmapToYuvImage(
+        bitmap: Bitmap,
+        image: Image,
+        width: Int,
+        height: Int,
+    ) {
         val pixels = IntArray(width * height)
         bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 
@@ -186,12 +194,17 @@ object VideoExporter {
     }
 
     /** Average fps implied by [frameCount] frames spanning [totalDurationMs], clamped to a sane encoder range. */
-    internal fun computeFps(frameCount: Int, totalDurationMs: Long): Int =
-        (frameCount * 1000L / totalDurationMs.coerceAtLeast(1L)).toInt().coerceIn(1, 30)
+    internal fun computeFps(
+        frameCount: Int,
+        totalDurationMs: Long,
+    ): Int = (frameCount * 1000L / totalDurationMs.coerceAtLeast(1L)).toInt().coerceIn(1, 30)
 
     /** A simple resolution/frame-rate-scaled bitrate target; not critical to correctness. */
-    internal fun computeBitRate(width: Int, height: Int, fps: Int): Int =
-        width * height * fps * BITS_PER_PIXEL_PER_SECOND
+    internal fun computeBitRate(
+        width: Int,
+        height: Int,
+        fps: Int,
+    ): Int = width * height * fps * BITS_PER_PIXEL_PER_SECOND
 
     /**
      * Picks the AOSP software AVC encoder by name (present on all modern Android devices as the

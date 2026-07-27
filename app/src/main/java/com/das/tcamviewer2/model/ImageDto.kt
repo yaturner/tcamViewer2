@@ -44,9 +44,9 @@ class ImageDto {
     var bitmap: Bitmap? = null
     var histogram: IntArray? = null
 
-    //Constructor from camera response
+    // Constructor from camera response
 
-    //Constructor from file
+    // Constructor from file
     suspend fun initFromFile(filename: String?, paletteName: String?) {
         this.filename = filename
         tjsnString = cameraUtils.readTjsnFile(filename!!)
@@ -54,10 +54,10 @@ class ImageDto {
             try {
                 jsonObject = JSONObject(tjsnString!!)
             } catch (e: JSONException) {
-                //Sentry.captureException(e)
+                // Sentry.captureException(e)
             }
         } else {
-            //TODO Handle error
+            // TODO Handle error
             return
         }
         init(paletteName)
@@ -66,7 +66,7 @@ class ImageDto {
     companion object {
         suspend fun create(
             jsonObject: JSONObject,
-            paletteName: String?
+            paletteName: String?,
         ): ImageDto {
             val imageDto = ImageDto()
             imageDto.jsonObject = jsonObject
@@ -88,7 +88,7 @@ class ImageDto {
             val resolved = paletteName
                 ?: metadata!!.optString("palette").takeIf { it.isNotEmpty() && paletteFactory.getPaletteByName(it) != null }
                 ?: "Rainbow"
-            this.paletteName = resolved   // setter also writes resolved name into metadata["palette"]
+            this.paletteName = resolved // setter also writes resolved name into metadata["palette"]
             palette = paletteFactory.getPaletteByName(this.paletteName)
             if (bitmap != null) {
                 bitmap!!.recycle()
@@ -112,7 +112,7 @@ class ImageDto {
     /*                      Extensions                                    */
     /*                                                                    */
     /**********************************************************************/
-    //TODO JMT
+    // TODO JMT
 //    fun convertToRadiometric(value: Float): Int {
 //        return cameraUtils.convertToRadiometric(this, value)
 //    }

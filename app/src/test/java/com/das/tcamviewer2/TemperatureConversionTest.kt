@@ -9,9 +9,12 @@ import org.junit.Test
  * or 100 (tLinearResolution=1).
  */
 class TemperatureConversionTest {
-
     // Mirror of CameraUtils.convertToRadiometric
-    private fun toRadiometric(valueDegrees: Float, isCelsius: Boolean, resolution: Int): Int {
+    private fun toRadiometric(
+        valueDegrees: Float,
+        isCelsius: Boolean,
+        resolution: Int,
+    ): Int {
         val scale = if (resolution == 0) 10f else 100f
         return if (isCelsius) {
             Math.round((valueDegrees + 273.15f) * scale)
@@ -92,12 +95,12 @@ class TemperatureConversionTest {
         // 0°C == 32°F
         assertEquals(
             toRadiometric(0f, isCelsius = true, resolution = 0),
-            toRadiometric(32f, isCelsius = false, resolution = 0)
+            toRadiometric(32f, isCelsius = false, resolution = 0),
         )
         // 100°C == 212°F
         assertEquals(
             toRadiometric(100f, isCelsius = true, resolution = 0),
-            toRadiometric(212f, isCelsius = false, resolution = 0)
+            toRadiometric(212f, isCelsius = false, resolution = 0),
         )
     }
 }

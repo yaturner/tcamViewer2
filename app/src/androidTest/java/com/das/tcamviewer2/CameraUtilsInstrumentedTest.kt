@@ -19,7 +19,6 @@ import java.util.Base64
 
 @RunWith(AndroidJUnit4::class)
 class CameraUtilsInstrumentedTest {
-
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -109,7 +108,7 @@ class CameraUtilsInstrumentedTest {
         assertEquals(
             "Histogram bin total must equal total pixel count",
             Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT,
-            total
+            total,
         )
     }
 
@@ -141,23 +140,28 @@ class CameraUtilsInstrumentedTest {
         val dto = ImageDto.create(json, "Rainbow")
         assertEquals(
             "All pixels equal → minTemperature == pixelValue",
-            pixelValue, dto.minTemperature
+            pixelValue,
+            dto.minTemperature,
         )
         assertEquals(
             "All pixels equal → maxTemperature == pixelValue",
-            pixelValue, dto.maxTemperature
+            pixelValue,
+            dto.maxTemperature,
         )
     }
 
     // Builds a synthetic tCam JSON frame: all pixels set to pixelValue.
     // agc = true sets the AGC status bit in the telemetry.
-    private fun buildSyntheticFrame(pixelValue: Int, agc: Boolean): JSONObject {
+    private fun buildSyntheticFrame(
+        pixelValue: Int,
+        agc: Boolean,
+    ): JSONObject {
         val numPixels = Constants.IMAGE_WIDTH * Constants.IMAGE_HEIGHT
 
         // Radiometric: 16-bit little-endian, all pixels = pixelValue
         val radiometricBytes = ByteArray(numPixels * 2)
         for (i in 0 until numPixels) {
-            radiometricBytes[i * 2]     = (pixelValue and 0xFF).toByte()
+            radiometricBytes[i * 2] = (pixelValue and 0xFF).toByte()
             radiometricBytes[i * 2 + 1] = ((pixelValue shr 8) and 0xFF).toByte()
         }
 
@@ -166,15 +170,16 @@ class CameraUtilsInstrumentedTest {
         // telData[3] = (telBytes[7] << 8) | telBytes[6] (little-endian word at byte offset 6)
         val telBytes = ByteArray(480)
         if (agc) {
-            val agcMask = Constants.TELEMETRY_MASK_AGC  // 0x1000
+            val agcMask = Constants.TELEMETRY_MASK_AGC // 0x1000
             telBytes[6] = (agcMask and 0xFF).toByte()
             telBytes[7] = ((agcMask shr 8) and 0xFF).toByte()
         }
 
-        val metadata = JSONObject().apply {
-            put("Date", "06/27/26")
-            put("Time", "12:00:00.000")
-        }
+        val metadata =
+            JSONObject().apply {
+                put("Date", "06/27/26")
+                put("Time", "12:00:00.000")
+            }
 
         return JSONObject().apply {
             put("radiometric", Base64.getEncoder().encodeToString(radiometricBytes))
