@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,8 +94,10 @@ enum class ScreenTab(val title: String, val icon: ImageVector) {
 
 @Composable
 fun MainScreen() {
-    var selectedTabItem by remember { mutableIntStateOf(0) }
-    var previousTabItem by remember { mutableIntStateOf(0) }
+    // rememberSaveable so the selected tab (e.g. Settings) survives configuration changes
+    // like rotation, which recreate the Activity — plain remember would reset to Camera.
+    var selectedTabItem by rememberSaveable { mutableIntStateOf(0) }
+    var previousTabItem by rememberSaveable { mutableIntStateOf(0) }
     val tabs = ScreenTab.entries.toTypedArray()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
