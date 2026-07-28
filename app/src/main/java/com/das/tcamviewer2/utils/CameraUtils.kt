@@ -125,7 +125,10 @@ class CameraUtils @Inject constructor(
             if (v < minTemp) minTemp = v
             if (v > maxTemp) maxTemp = v
         }
-        imageDto.imageData = imageData
+        // Copy out of the shared per-frame buffer — imageData is reused on every call, so
+        // aliasing it directly would let a later frame silently mutate an ImageDto retained
+        // past this call (e.g. one shown on the Library/Browse screens).
+        imageDto.imageData = imageData.copyOf()
         imageDto.minTemperature = minTemp
         imageDto.maxTemperature = maxTemp
 

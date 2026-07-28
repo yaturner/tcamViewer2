@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -120,7 +121,16 @@ class CameraService : Service() {
         // Tear down anything left over from a previous attempt first — reconnecting without
         // this risked leaking the old socket's file descriptor and leaving stale stream
         // references around if a prior connect/read had failed without fully cleaning up.
+        // Closing the socket/streams is also what unblocks the old listening loop if it's
+        // sitting in a blocking read() (cancellation alone is cooperative and won't interrupt
+        // that); cancelAndJoin() then waits for it to actually exit before we reset the shared
+        // parse buffers and start a new loop — otherwise the old and new loops could briefly
+        // run concurrently and corrupt frame parsing by mutating those buffers together.
+        running = false
         teardownConnection()
+        listeningJob?.cancelAndJoin()
+        listeningJob = null
+        resetBuffers()
         running = true
         val connected =
             withContext(Dispatchers.IO) {

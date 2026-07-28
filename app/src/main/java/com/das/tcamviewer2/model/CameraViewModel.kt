@@ -35,6 +35,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.coroutines.coroutineContext
 
 data class CameraConfig(
     val agcEnabled: Boolean = false,
@@ -129,6 +130,11 @@ class CameraViewModel : ViewModel() {
     // Once the user manually moves the hotspot, telemetry no longer overwrites it;
     // reset to false on disconnect so the first new frame re-initialises the rect.
     @Volatile private var userMovedSpotmeter = false
+
+    // Tracks the in-flight connectToCamera() attempt so a disconnect (or a newer connect
+    // request) can cancel a stale one instead of letting it resolve later and silently
+    // resurrect a connection the user already tore down.
+    private var connectJob: Job? = null
 
     // CONFLATED: only keeps the latest frame; old frames are dropped when processing falls behind
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
@@ -277,6 +283,12 @@ class CameraViewModel : ViewModel() {
             cameraService.setIpAddress(ip)
             val connected = cameraService.connect()
             Timber.d("connectToCamera result=$connected")
+            if (!coroutineContext.isActive) {
+                // Superseded by a disconnect or a newer connect attempt while this one was in
+                // flight — don't resurrect a connection the user already moved past.
+                if (connected) cameraService.disconnect()
+                return
+            }
             _isConnected.value = connected
             _isStreaming.value = false
             if (connected) {
@@ -294,6 +306,8 @@ class CameraViewModel : ViewModel() {
 
     fun toggleConnection() {
         if (_isConnected.value || _isConnecting.value) {
+            connectJob?.cancel()
+            connectJob = null
             cameraService.disconnect()
             _isConnected.value = false
             _isConnecting.value = false
@@ -302,7 +316,7 @@ class CameraViewModel : ViewModel() {
             _cameraConfig.value = null
             userMovedSpotmeter = false
         } else {
-            viewModelScope.launch(Dispatchers.IO) {
+            connectJob = viewModelScope.launch(Dispatchers.IO) {
                 connectToCamera(settingsDataManager.getCameraIp())
             }
         }
@@ -321,13 +335,14 @@ class CameraViewModel : ViewModel() {
      *  surfaces through the normal _showConnectError flow — the user can retry via Connect or
      *  "Find cameras" (mDNS) once the camera settles on its new network. */
     fun reconnectAfterWifiChange(newIp: String?) {
+        connectJob?.cancel()
         cameraService.disconnect()
         _isConnected.value = false
         _isStreaming.value = false
         _spotmeterRect.value = null
         _cameraConfig.value = null
         userMovedSpotmeter = false
-        viewModelScope.launch(Dispatchers.IO) {
+        connectJob = viewModelScope.launch(Dispatchers.IO) {
             val ip =
                 if (newIp != null) {
                     settingsDataManager.saveCameraIp(newIp)
