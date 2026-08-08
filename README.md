@@ -98,6 +98,7 @@ All spotmeter-derived elements (temperature header, hotspot marker, and position
 
 The Camera screen's chart icon opens a **Temperature History** dialog: a rolling line chart of spot (green, bolder), max (red), and min (blue) temperature over the last 5 minutes, with a **Save** button alongside **Close**.
 
+- Styled after desktop thermal-camera charting tools: dark background, gridlines snapped to round numbers on both axes, a line-swatch legend, and markers along each line at the sampled points (thinned to a minimum on-screen spacing so per-frame sampling doesn't turn into a smear of overlapping dots)
 - Chart data is recorded continuously while connected (once per frame with valid radiometric data), independent of streaming/recording
 - Values are plotted exactly as recorded in whatever unit was active at sample time; only the axis labels reflect the *current* unit, so switching units mid-session doesn't retroactively relabel older samples
 - History resets when the camera is manually disconnected; a brief auto-reconnect drop does not clear it

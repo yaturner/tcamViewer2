@@ -2,6 +2,7 @@ package com.das.tcamviewer2.ui
 
 import android.app.Activity
 import android.content.res.Configuration
+import android.graphics.Paint
 import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -66,9 +68,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -89,7 +94,11 @@ import com.das.tcamviewer2.model.TempSample
 import com.das.tcamviewer2.paletteFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.hypot
+import kotlin.math.log10
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 private val PALETTE_OPTIONS = listOf(
@@ -922,15 +931,38 @@ private fun TempHistoryDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         },
         dismissButton = {
-            TextButton(onClick = onSave, enabled = samples.size >= 2) { Text("Save") }
+            TextButton(
+                onClick = {
+                    onSave()
+                    onDismiss()
+                },
+                enabled = samples.size >= 2,
+            ) { Text("Save") }
         },
     )
 }
 
-/** Rolling line chart of spot/max/min temperature over the last few minutes — max in red, spot
- *  in green (bolder, the primary signal to watch), min in blue. Values are plotted exactly as
- *  recorded (whatever unit was active at sample time); only the axis suffix reflects the
- *  *current* unit, so a mid-session unit change won't retroactively relabel older samples.
+/** Rounds a raw axis range up to a "nice" tick step (1/2/5 × a power of ten) so gridlines land on
+ *  round numbers instead of the raw sample min/max — same trick desktop charting tools use. */
+private fun niceAxisStep(rawRange: Float, targetTicks: Int = 5): Float {
+    val range = rawRange.takeIf { it > 0.01f } ?: 1f
+    val rawStep = range / targetTicks
+    val magnitude = 10.0.pow(floor(log10(rawStep.toDouble())))
+    val residual = rawStep / magnitude
+    val niceResidual = when {
+        residual <= 1 -> 1.0
+        residual <= 2 -> 2.0
+        residual <= 5 -> 5.0
+        else -> 10.0
+    }
+    return (niceResidual * magnitude).toFloat()
+}
+
+/** Rolling line chart of spot/max/min temperature over the last few minutes, styled after
+ *  desktop thermal-camera charting tools: dark background, gridlines, and labeled axes. Max is
+ *  red, spot is green (bolder, the primary signal to watch), min is blue. Values are plotted
+ *  exactly as recorded (whatever unit was active at sample time); only the axis suffix reflects
+ *  the *current* unit, so a mid-session unit change won't retroactively relabel older samples.
  *  Not private — reused by ChartsScreen to render saved charts identically. */
 @Composable
 fun TemperatureHistoryChart(
@@ -938,7 +970,16 @@ fun TemperatureHistoryChart(
     isCelsius: Boolean,
 ) {
     val unitSuffix = if (isCelsius) "°C" else "°F"
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val chartBackground = Color(0xFF1C1C1E)
+    val gridColor = Color(0xFF7A7A7E)
+    val axisTextColor = Color(0xFFAEAEB2)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(chartBackground, RoundedCornerShape(8.dp))
+            .padding(12.dp),
+    ) {
         if (samples.size < 2) {
             Box(
                 modifier = Modifier.fillMaxWidth().height(220.dp),
@@ -949,34 +990,121 @@ fun TemperatureHistoryChart(
             return@Column
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             LegendEntry(Color(0xFFE53935), "Max")
+            Spacer(modifier = Modifier.width(14.dp))
             LegendEntry(Color(0xFF43A047), "Spot")
+            Spacer(modifier = Modifier.width(14.dp))
             LegendEntry(Color(0xFF1E88E5), "Min")
         }
 
-        val yMin = samples.minOf { minOf(it.spot, it.max, it.min) }
-        val yMax = samples.maxOf { maxOf(it.spot, it.max, it.min) }
+        val rawYMin = samples.minOf { minOf(it.spot, it.max, it.min) }
+        val rawYMax = samples.maxOf { maxOf(it.spot, it.max, it.min) }
+        val yStep = niceAxisStep(rawYMax - rawYMin)
+        val yMin = floor(rawYMin / yStep) * yStep
+        val yMax = ceil(rawYMax / yStep) * yStep
         val yRange = (yMax - yMin).takeIf { it > 0.01f } ?: 1f
+        val yTicks = ((yMax - yMin) / yStep).roundToInt().coerceAtLeast(1)
+
         val tStart = samples.first().timestampMs
         val tEnd = samples.last().timestampMs
         val tRange = (tEnd - tStart).takeIf { it > 0L } ?: 1L
+        val totalMinutes = tRange / 60_000f
+        val xStep = niceAxisStep(totalMinutes)
+        val xTicks = (totalMinutes / xStep).roundToInt().coerceAtLeast(1)
+        val xDecimals = when {
+            xStep >= 1f -> 0
+            xStep >= 0.1f -> 1
+            else -> 2
+        }
+
+        val density = LocalDensity.current
+        val axisTextSizePx = with(density) { 10.sp.toPx() }
+        val axisTextColorArgb = axisTextColor.toArgb()
 
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .padding(vertical = 8.dp),
+                .padding(top = 6.dp),
         ) {
-            fun xOf(t: Long) = (t - tStart).toFloat() / tRange * size.width
-            fun yOf(v: Float) = size.height - ((v - yMin) / yRange * size.height)
+            val leftMargin = 34.dp.toPx()
+            val bottomMargin = 40.dp.toPx()
+            val plotWidth = size.width - leftMargin
+            val plotHeight = size.height - bottomMargin
+
+            fun xOf(t: Long) = leftMargin + (t - tStart).toFloat() / tRange * plotWidth
+            fun yOf(v: Float) = plotHeight - ((v - yMin) / yRange * plotHeight)
+
+            val axisPaint = Paint().apply {
+                color = axisTextColorArgb
+                textSize = axisTextSizePx
+                isAntiAlias = true
+            }
+
+            // Horizontal gridlines + y-axis labels.
+            for (i in 0..yTicks) {
+                val v = yMin + i * yStep
+                val y = yOf(v)
+                drawLine(gridColor, Offset(leftMargin, y), Offset(size.width, y), strokeWidth = 1f)
+                val label = "%.0f".format(v)
+                val labelWidth = axisPaint.measureText(label)
+                drawContext.canvas.nativeCanvas.drawText(
+                    label,
+                    leftMargin - labelWidth - 6.dp.toPx(),
+                    y + axisTextSizePx / 3,
+                    axisPaint,
+                )
+            }
+
+            // Vertical gridlines + x-axis (minutes) labels.
+            for (i in 0..xTicks) {
+                val minutesAt = i * xStep
+                val tAt = tStart + (minutesAt * 60_000f).toLong()
+                if (tAt > tEnd) break
+                val x = xOf(tAt)
+                drawLine(gridColor, Offset(x, 0f), Offset(x, plotHeight), strokeWidth = 1f)
+                val label = "%.${xDecimals}f".format(minutesAt)
+                val labelWidth = axisPaint.measureText(label)
+                drawContext.canvas.nativeCanvas.drawText(
+                    label,
+                    x - labelWidth / 2,
+                    plotHeight + axisTextSizePx + 6.dp.toPx(),
+                    axisPaint,
+                )
+            }
+
+            val axisTitle = "Minutes"
+            val titleWidth = axisPaint.measureText(axisTitle)
+            drawContext.canvas.nativeCanvas.drawText(
+                axisTitle,
+                leftMargin + (plotWidth - titleWidth) / 2,
+                size.height - 2.dp.toPx(),
+                axisPaint,
+            )
+
+            drawContext.canvas.nativeCanvas.drawText(unitSuffix, 0f, axisTextSizePx, axisPaint)
+
+            // Samples can arrive once per frame (many per second), far denser than a marker every
+            // few pixels would allow — so markers are thinned to whichever samples land at least
+            // markerSpacing apart, always including the first and last point, rather than one per
+            // sample. This keeps the "where a reading was taken" cue readable instead of a
+            // solid smear of overlapping dots.
+            val markerSpacing = 18.dp.toPx()
+            val markerRadius = 2.5.dp.toPx()
 
             fun drawSeries(pick: (TempSample) -> Float, color: Color, strokeWidth: Float) {
                 val path = Path()
+                var lastMarkerX = Float.NEGATIVE_INFINITY
                 samples.forEachIndexed { i, s ->
                     val px = xOf(s.timestampMs)
                     val py = yOf(pick(s))
                     if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                    val isLast = i == samples.lastIndex
+                    if (px - lastMarkerX >= markerSpacing || isLast) {
+                        drawCircle(color = color, radius = markerRadius, center = Offset(px, py))
+                        lastMarkerX = px
+                    }
                 }
                 drawPath(path, color = color, style = Stroke(width = strokeWidth))
             }
@@ -984,22 +1112,22 @@ fun TemperatureHistoryChart(
             drawSeries({ it.spot }, Color(0xFF43A047), 5f)
             drawSeries({ it.min }, Color(0xFF1E88E5), 3f)
         }
-
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("%.1f%s".format(yMin, unitSuffix), fontSize = 12.sp)
-            Text("%.1f%s".format(yMax, unitSuffix), fontSize = 12.sp)
-        }
     }
 }
 
 @Composable
 fun LegendEntry(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Canvas(modifier = Modifier.size(10.dp)) {
-            drawCircle(color = color)
+        Canvas(modifier = Modifier.size(width = 16.dp, height = 3.dp)) {
+            drawLine(
+                color = color,
+                start = Offset(0f, size.height / 2),
+                end = Offset(size.width, size.height / 2),
+                strokeWidth = size.height,
+            )
         }
         Spacer(modifier = Modifier.width(4.dp))
-        Text(label, fontSize = 12.sp)
+        Text(label, fontSize = 12.sp, color = Color(0xFFAEAEB2))
     }
 }
 
