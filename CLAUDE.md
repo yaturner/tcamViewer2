@@ -69,6 +69,8 @@ lateinit var cameraService: CameraService
 lateinit var settingsDataManager: SettingsDataManager
 lateinit var cameraUtils: CameraUtils
 lateinit var paletteFactory: PaletteFactory
+lateinit var utils: Utils
+lateinit var appContext: Context
 ```
 
 These are initialized in `MainActivity.onCreate()`. Note: Hilt DI is partially wired (`CameraUtils` has `@Singleton`/`@Inject` annotations) but the app currently instantiates everything manually — there is no `@HiltAndroidApp` Application class yet.
@@ -78,7 +80,7 @@ These are initialized in `MainActivity.onCreate()`. Note: Hilt DI is partially w
 | Class | Role |
 |-------|------|
 | `CameraService` | Android `Service` owning the TCP socket and all I/O. Two data paths: request/response via `sendCmd()` and push stream via RxJava `imageChannel`. |
-| `CameraViewModel` | ViewModel exposing `StateFlow` properties (`spotmeterTemp`, `maxTemp`, `minTemp`, `fpsCounter`) to the UI. Currently mostly empty — needs implementation. |
+| `CameraViewModel` | Fully implemented. Owns all Camera-screen state as `StateFlow`s (spot/max/min/region temps, histogram, connection state, streaming/recording/time-lapse, temperature-over-time history, temperature alerts) and drives frame processing, auto-reconnect, and Settings observation. |
 | `CameraUtils` | Image processing: decodes base64 radiometric/telemetry, maps pixel values through the active palette to produce an `IntArray` of ARGB pixels. |
 | `ImageDto` | Data model for a single thermal frame. The `create()` factory is `suspend` because `init()` calls `CameraUtils.processImageResponse()`. |
 | `PaletteFactory` | Provides 10 color palettes (Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia). Each palette is a `Array<IntArray?>` of 256 RGB triples. |
@@ -86,10 +88,11 @@ These are initialized in `MainActivity.onCreate()`. Note: Hilt DI is partially w
 
 ### UI Structure
 
-`MainActivity` hosts a bottom navigation bar with three tabs: **Camera**, **Settings**, **Library**. Each tab renders a Compose screen:
-- `CameraScreen` — live thermal view with spotmeter overlay, color bar, histogram, FPS counter
-- `SettingsScreen` — camera IP, palette, temperature units, AGC, manual range, etc.
-- Library tab — stub (`GenericScreen`)
+`MainActivity` hosts a `ModalNavigationDrawer` (not a bottom nav bar) with four tabs, defined in the `ScreenTab` enum: **Camera**, **Settings**, **Library**, **Charts**. Each tab renders a Compose screen:
+- `CameraScreen` — live thermal view; point spotmeter or resizable region measurement (mutually exclusive, toggled in Settings) overlaid on the image, color bar, histogram, FPS counter, temperature-history chart dialog
+- `SettingsScreen` — camera IP, palette, temperature units, AGC, manual range, spotmeter/region toggle, temperature alerts, WiFi, etc. All changes are staged locally and only persisted on **Save**; **Cancel** reverts via a `resetKey` bump
+- `LibraryScreen` — fully implemented: browses saved `.tjsn`/`.mtjsn`/`.tltjsn` files grouped by date, multi-select, sort, delete, date-range filter, full-screen browse/video-playback windows
+- `ChartsScreen` — browses saved `.tchart` temperature-history files, mirroring Library's grouping/select/sort/delete UX
 
 ### Image Processing Pipeline
 
@@ -102,8 +105,6 @@ In `CameraUtils.processImageResponse()`:
 
 ### WIP / Known Incomplete Areas
 
-- `CameraViewModel` body is empty; StateFlow state is declared but never populated
-- `ImageDto.initFromFile()` is fully commented out (file-based playback not yet implemented)
-- Hilt injection not complete — no `@HiltAndroidApp`, services/activities not annotated
-- `viewModelScope` is set to `null` in `MainActivity` (line 52)
-- Several `ImageDto` extension methods are commented out (color bar, histogram, hotspot drawing, save)
+- Hilt injection not complete — no `@HiltAndroidApp` Application class; services/activities aren't annotated, and everything is still instantiated manually via the global singletons above (`CameraUtils` is the only class with `@Singleton`/`@Inject`, unused in practice)
+- A handful of `ImageDto` extension methods are commented out (`convertToRadiometric`, `createColorBar`, `remapImage`, `drawHotspot`) — dead code left over from before the equivalent logic moved into `CameraUtils`/`CameraScreen`/`LibraryScreen`; safe to delete rather than implement
+- No multi-camera support — the app is built around the single global `cameraService` singleton; switching between multiple saved cameras would need an architectural change, not just a UI addition
