@@ -148,7 +148,7 @@ When connected, a **Camera Settings** section appears at the top with AGC, emiss
 - Shutter sound toggle
 - Spotmeter enable / disable
 - Region Measurement enable / disable — switches the Camera screen between the point spotmeter and the resizable [region measurement](#region-measurement) box; mutually exclusive with Spotmeter and persists across sessions
-- **Temperature Alert** — fires an in-app message (Snackbar on the Camera screen) the moment a chosen metric (Spot/Max/Min) crosses a threshold in the current unit, in a chosen direction (Above/Below); edge-triggered, so it fires once per crossing rather than every frame
+- **Temperature Alert** — fires an in-app message (Snackbar on the Camera screen) the moment a chosen metric (Spot/Max/Min) crosses a threshold in the current unit, in a chosen direction (Above/Below); edge-triggered, so it fires once per crossing rather than every frame. The Spot metric only alerts while the point hotspot marker is actually visible on screen — it stays silent if Spotmeter is disabled or Region Measurement mode is active, since no marker is drawn in either case
 - Export resolution for shared/exported video (`.mtjsn` / `.tltjsn` playback → MP4)
 - All settings are deferred until **Save** is pressed; **Cancel** discards changes and returns to the previous tab
 
