@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -81,6 +82,7 @@ import com.das.tcamviewer2.R
 import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.CameraViewModel
+import com.das.tcamviewer2.model.TempSample
 import com.das.tcamviewer2.paletteFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -128,12 +130,15 @@ fun CameraScreen(
     val currentImageDto by viewModel.currentImageDto.collectAsState()
     val spotmeterRect by viewModel.spotmeterRect.collectAsState()
     val showConnectError by viewModel.showConnectError.collectAsState()
+    val tempHistory by viewModel.tempHistory.collectAsState()
+    val isCelsius by viewModel.isCelsius.collectAsState()
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
     var streamMenuExpanded by remember { mutableStateOf(false) }
     var showTimeLapseDialog by remember { mutableStateOf(false) }
     var showStopSaveDialog by remember { mutableStateOf(false) }
+    var showTempChart by remember { mutableStateOf(false) }
     // rememberSaveable so fullscreen mode survives rotation instead of dropping back to
     // the normal view — the same class of bug as the tab reset fixed for issue #2.
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
@@ -213,6 +218,14 @@ fun CameraScreen(
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissConnectError() }) { Text("OK") }
             },
+        )
+    }
+
+    if (showTempChart) {
+        TempHistoryDialog(
+            samples = tempHistory,
+            isCelsius = isCelsius,
+            onDismiss = { showTempChart = false },
         )
     }
 
@@ -502,6 +515,15 @@ fun CameraScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(16.dp),
                     )
+                }
+
+                if (imageBitmap != null && !isFullscreen) {
+                    IconButton(onClick = { showTempChart = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.ShowChart,
+                            contentDescription = "Temperature history",
+                        )
+                    }
                 }
 
                 if (imageBitmap != null) {
@@ -817,4 +839,95 @@ private fun TimeLapseDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
+}
+
+@Composable
+private fun TempHistoryDialog(
+    samples: List<TempSample>,
+    isCelsius: Boolean,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Temperature History") },
+        text = { TemperatureHistoryChart(samples = samples, isCelsius = isCelsius) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    )
+}
+
+/** Rolling line chart of spot/max/min temperature over the last few minutes — max in red, spot
+ *  in green (bolder, the primary signal to watch), min in blue. Values are plotted exactly as
+ *  recorded (whatever unit was active at sample time); only the axis suffix reflects the
+ *  *current* unit, so a mid-session unit change won't retroactively relabel older samples. */
+@Composable
+private fun TemperatureHistoryChart(
+    samples: List<TempSample>,
+    isCelsius: Boolean,
+) {
+    val unitSuffix = if (isCelsius) "°C" else "°F"
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (samples.size < 2) {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(220.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Collecting data…", color = Color.Gray)
+            }
+            return@Column
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            LegendEntry(Color(0xFFE53935), "Max")
+            LegendEntry(Color(0xFF43A047), "Spot")
+            LegendEntry(Color(0xFF1E88E5), "Min")
+        }
+
+        val yMin = samples.minOf { minOf(it.spot, it.max, it.min) }
+        val yMax = samples.maxOf { maxOf(it.spot, it.max, it.min) }
+        val yRange = (yMax - yMin).takeIf { it > 0.01f } ?: 1f
+        val tStart = samples.first().timestampMs
+        val tEnd = samples.last().timestampMs
+        val tRange = (tEnd - tStart).takeIf { it > 0L } ?: 1L
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .padding(vertical = 8.dp),
+        ) {
+            fun xOf(t: Long) = (t - tStart).toFloat() / tRange * size.width
+            fun yOf(v: Float) = size.height - ((v - yMin) / yRange * size.height)
+
+            fun drawSeries(pick: (TempSample) -> Float, color: Color, strokeWidth: Float) {
+                val path = Path()
+                samples.forEachIndexed { i, s ->
+                    val px = xOf(s.timestampMs)
+                    val py = yOf(pick(s))
+                    if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                }
+                drawPath(path, color = color, style = Stroke(width = strokeWidth))
+            }
+            drawSeries({ it.max }, Color(0xFFE53935), 3f)
+            drawSeries({ it.spot }, Color(0xFF43A047), 5f)
+            drawSeries({ it.min }, Color(0xFF1E88E5), 3f)
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("%.1f%s".format(yMin, unitSuffix), fontSize = 12.sp)
+            Text("%.1f%s".format(yMax, unitSuffix), fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun LegendEntry(color: Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Canvas(modifier = Modifier.size(10.dp)) {
+            drawCircle(color = color)
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(label, fontSize = 12.sp)
+    }
 }

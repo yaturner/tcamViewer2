@@ -44,6 +44,15 @@ data class CameraConfig(
     val gainMode: Int = Constants.GAIN_MODE_HIGH,
 )
 
+/** One point in the rolling temperature-over-time history. Values are in whatever unit was
+ *  currently selected when the sample was taken (same as the on-screen spot/max/min text). */
+data class TempSample(
+    val timestampMs: Long,
+    val spot: Float,
+    val max: Float,
+    val min: Float,
+)
+
 class CameraViewModel : ViewModel() {
     private val _spotmeterTemp = MutableStateFlow("--")
     val spotmeterTemp: StateFlow<String> = _spotmeterTemp.asStateFlow()
@@ -128,6 +137,16 @@ class CameraViewModel : ViewModel() {
     private val _spotmeterRect = MutableStateFlow<Rect?>(null)
     val spotmeterRect: StateFlow<Rect?> = _spotmeterRect.asStateFlow()
 
+    private val _isCelsius = MutableStateFlow(true)
+    val isCelsius: StateFlow<Boolean> = _isCelsius.asStateFlow()
+
+    // Rolling spot/max/min history for the temperature-over-time chart, trimmed to the last
+    // TEMP_HISTORY_WINDOW_MS. Mutated from both the frame-processing dispatcher and the Main
+    // dispatcher (a unit-change re-render also records a point), so access is synchronized.
+    private val tempHistoryBuffer = ArrayDeque<TempSample>()
+    private val _tempHistory = MutableStateFlow<List<TempSample>>(emptyList())
+    val tempHistory: StateFlow<List<TempSample>> = _tempHistory.asStateFlow()
+
     // Once the user manually moves the hotspot, telemetry no longer overwrites it;
     // reset to false on disconnect so the first new frame re-initialises the rect.
     @Volatile private var userMovedSpotmeter = false
@@ -148,6 +167,8 @@ class CameraViewModel : ViewModel() {
 
     private var frameCount = 0
     private var fpsWindowStart = -1L // -1 = not yet started; initialised on first frame
+
+    private val tempHistoryWindowMs = 5 * 60_000L // keep the last 5 minutes of samples
 
     // 35mm-style shutter click — plays for on-demand single-frame reads (Get, time lapse
     // captures) but not for continuous streaming/recording frames, which would be constant noise.
@@ -219,6 +240,7 @@ class CameraViewModel : ViewModel() {
         }
         viewModelScope.launch {
             settingsDataManager.temperatureUnitFlow.collect { v ->
+                _isCelsius.value = (v == "Celsius")
                 cameraUtils.settingIsCelsius = (v == "Celsius")
                 // Re-render the already-displayed frame in the new unit immediately, rather
                 // than waiting for the next Get/stream frame to happen to pick it up.
@@ -282,6 +304,32 @@ class CameraViewModel : ViewModel() {
         _spotmeterTempValue.value = spotValue
         _maxTempValue.value = maxValue
         _minTempValue.value = minValue
+        recordTempSample(spotValue, maxValue, minValue)
+    }
+
+    /** Appends a temperature-over-time sample and trims anything older than
+     *  [tempHistoryWindowMs]. Called from both the frame-processing dispatcher and Main (a
+     *  unit change re-renders and records immediately), so the buffer mutation is synchronized. */
+    private fun recordTempSample(
+        spot: Float,
+        max: Float,
+        min: Float,
+    ) {
+        val now = System.currentTimeMillis()
+        val snapshot = synchronized(tempHistoryBuffer) {
+            tempHistoryBuffer.addLast(TempSample(now, spot, max, min))
+            val cutoff = now - tempHistoryWindowMs
+            while (tempHistoryBuffer.isNotEmpty() && tempHistoryBuffer.first().timestampMs < cutoff) {
+                tempHistoryBuffer.removeFirst()
+            }
+            tempHistoryBuffer.toList()
+        }
+        _tempHistory.value = snapshot
+    }
+
+    private fun clearTempHistory() {
+        synchronized(tempHistoryBuffer) { tempHistoryBuffer.clear() }
+        _tempHistory.value = emptyList()
     }
 
     private suspend fun connectToCamera(ip: String, showErrorOnFailure: Boolean = true) {
@@ -361,6 +409,7 @@ class CameraViewModel : ViewModel() {
             _spotmeterRect.value = null
             _cameraConfig.value = null
             userMovedSpotmeter = false
+            clearTempHistory()
         } else {
             connectJob?.cancel()
             connectJob = viewModelScope.launch(Dispatchers.IO) {
