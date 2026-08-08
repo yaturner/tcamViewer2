@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Menu
@@ -49,12 +50,15 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -63,6 +67,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -107,6 +112,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.util.Date
 import com.das.tcamviewer2.utils as globalUtils
 
 // File isn't directly saveable, but its path is — lets browseFiles survive rotation so the
@@ -128,6 +134,10 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
     var menuExpanded by remember { mutableStateOf(false) }
     var browseFiles by rememberSaveable(stateSaver = FileListSaver) { mutableStateOf<List<File>>(emptyList()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var filterFromMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var filterToMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    val dateFilterActive = filterFromMillis != null || filterToMillis != null
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -155,11 +165,16 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
         }
     }
 
-    val displayGroups = remember(fileGroups, sortAscending) {
+    val displayGroups = remember(fileGroups, sortAscending, filterFromMillis, filterToMillis) {
+        val filtered = fileGroups.filter { (folder, _) ->
+            val folderMillis = parseFolderDateMillis(folder) ?: return@filter true
+            (filterFromMillis == null || folderMillis >= filterFromMillis!!) &&
+                (filterToMillis == null || folderMillis <= filterToMillis!!)
+        }
         val sortedFolders = if (sortAscending) {
-            fileGroups.sortedBy { it.first }
+            filtered.sortedBy { it.first }
         } else {
-            fileGroups.sortedByDescending { it.first }
+            filtered.sortedByDescending { it.first }
         }
         sortedFolders.map { (folder, files) ->
             folder to if (sortAscending) {
@@ -200,6 +215,17 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                             IconButton(onClick = { showDeleteConfirm = true }) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete")
                             }
+                        }
+                        IconButton(onClick = { showFilterDialog = true }) {
+                            Icon(
+                                Icons.Default.FilterList,
+                                contentDescription = if (dateFilterActive) "Date filter (active)" else "Filter by date",
+                                tint = if (dateFilterActive) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    LocalContentColor.current
+                                },
+                            )
                         }
                         Box {
                             IconButton(onClick = { menuExpanded = true }) {
@@ -332,6 +358,129 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                 },
             )
         }
+
+        if (showFilterDialog) {
+            DateFilterDialog(
+                fromMillis = filterFromMillis,
+                toMillis = filterToMillis,
+                onApply = { from, to ->
+                    filterFromMillis = from
+                    filterToMillis = to
+                    showFilterDialog = false
+                },
+                onDismiss = { showFilterDialog = false },
+            )
+        }
+    }
+}
+
+/** MM_dd_yyyy folder name → local midnight epoch millis, or null if it doesn't match that format
+ *  (defensively lets any unexpected folder name pass every filter rather than being hidden). */
+internal fun parseFolderDateMillis(folderName: String): Long? = runCatching {
+    java.text.SimpleDateFormat("MM_dd_yyyy", java.util.Locale.getDefault())
+        .apply { isLenient = false }
+        .parse(folderName)
+        ?.time
+}.getOrNull()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DateFilterDialog(
+    fromMillis: Long?,
+    toMillis: Long?,
+    onApply: (from: Long?, to: Long?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var pendingFrom by remember { mutableStateOf(fromMillis) }
+    var pendingTo by remember { mutableStateOf(toMillis) }
+    var showFromPicker by remember { mutableStateOf(false) }
+    var showToPicker by remember { mutableStateOf(false) }
+    val dateFmt = remember { java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filter by Date") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Only show files saved within this range.", style = MaterialTheme.typography.bodySmall)
+                // enabled=false on the field itself would visually gray it out AND (a Compose
+                // gotcha) swallow touches before an externally-chained .clickable ever sees them
+                // — so instead keep it enabled/read-only for normal styling and overlay a
+                // transparent Box to catch the tap and open the date picker.
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = pendingFrom?.let { dateFmt.format(Date(it)) } ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("From") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { showFromPicker = true },
+                    )
+                }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = pendingTo?.let { dateFmt.format(Date(it)) } ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("To") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { showToPicker = true },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(pendingFrom, pendingTo) }) { Text("Apply") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = {
+                    pendingFrom = null
+                    pendingTo = null
+                }) { Text("Clear") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+
+    if (showFromPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = pendingFrom)
+        DatePickerDialog(
+            onDismissRequest = { showFromPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingFrom = state.selectedDateMillis
+                    showFromPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFromPicker = false }) { Text("Cancel") }
+            },
+        ) { DatePicker(state = state) }
+    }
+
+    if (showToPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = pendingTo)
+        DatePickerDialog(
+            onDismissRequest = { showToPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingTo = state.selectedDateMillis
+                    showToPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showToPicker = false }) { Text("Cancel") }
+            },
+        ) { DatePicker(state = state) }
     }
 }
 
