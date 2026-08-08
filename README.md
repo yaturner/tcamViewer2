@@ -28,6 +28,8 @@ The live view above shows a thermal image using the Rainbow palette. The spotmet
 - Live colour histogram and colour bar scale, with a position arrow tracking where the spotmeter reading falls between max and min
 - Frame-rate counter shown while streaming
 - 10 colour palettes selectable from a drop-down: Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia
+- **Auto-reconnect** — if an active connection drops unexpectedly (as opposed to the user disconnecting), the app retries the last-known IP a few times, then falls back to mDNS discovery in case the camera's DHCP lease handed out a new address
+- **Temperature history chart** — a chart icon (top-right, next to fullscreen) opens a rolling chart of spot/max/min temperature over the last 5 minutes; see [Temperature history / Charts](#temperature-history--charts) below
 - **Get** — captures a single frame from the camera
 - **Save** — saves the current frame to disk as a `.tjsn` file
 - **Stream → Start** — starts continuous streaming (frames displayed, not saved)
@@ -75,6 +77,25 @@ Full thermal image with colour bar, temperature labels, and spotmeter hotspot ma
 - A footer with gain mode and emissivity on the top row, and capture time and date on the bottom row, left/right-justified to the image width
 
 All spotmeter-derived elements (temperature header, hotspot marker, and position arrow) are omitted when the **Spotmeter** setting is disabled.
+
+### Temperature history / Charts
+
+The Camera screen's chart icon opens a **Temperature History** dialog: a rolling line chart of spot (green, bolder), max (red), and min (blue) temperature over the last 5 minutes, with a **Save** button alongside **Close**.
+
+- Chart data is recorded continuously while connected (once per frame with valid radiometric data), independent of streaming/recording
+- Values are plotted exactly as recorded in whatever unit was active at sample time; only the axis labels reflect the *current* unit, so switching units mid-session doesn't retroactively relabel older samples
+- History resets when the camera is manually disconnected; a brief auto-reconnect drop does not clear it
+- **Save** writes the chart to disk as a `.tchart` file, viewable later in the **Charts** tab
+
+### Charts screen
+
+The Charts tab lists saved temperature-history charts, grouped by date, mirroring the Library screen's UX:
+
+- Mini line-chart thumbnails (no legend/axis labels — full detail is one tap away) grouped by date
+- Multi-select with visual highlight and checkmark badge
+- Ascending / descending sort and Select All / Clear via overflow menu
+- Delete selected charts from disk
+- View button opens a full-screen chart (same renderer as the live Temperature History dialog) with **Previous / Next** navigation across selected charts and per-chart delete
 
 ### Video player
 
@@ -192,6 +213,23 @@ Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/tl_<HH_mm_ss>.tltjsn`. Playback
 
 Exported gallery images (PNG composites) use the MediaStore API and require no storage permission on Android 10+.
 
+#### `.tchart` — saved temperature history
+
+A single JSON object holding the raw spot/max/min samples behind a saved chart:
+
+```json
+{
+  "saved_time": "H:mm:ss",
+  "unit": "Celsius",
+  "samples": [
+    { "t": 1753699200000, "spot": 35.1, "max": 37.0, "min": 34.0 },
+    ...
+  ]
+}
+```
+
+`t` is the sample's `System.currentTimeMillis()` timestamp; `spot`/`max`/`min` are in whatever unit was active when the chart was saved (recorded in `unit`). Saved to `<externalFilesDir>/Charts/<MM_dd_yyyy>/chart_<HH_mm_ss>.tchart`.
+
 ### Key classes
 
 | Class | Role |
@@ -202,6 +240,7 @@ Exported gallery images (PNG composites) use the MediaStore API and require no s
 | `ImageDto` | Data model for a single frame. `create(JSONObject, palette)` for live frames; `create(path, palette)` for file playback. |
 | `PaletteFactory` | Provides 10 palettes, each a 256-entry RGB triple array. |
 | `SettingsDataManager` | Jetpack DataStore wrapper. Exposes `Flow<T>` properties for reactive collection and `suspend` one-shot getters. |
+| `discoverTcamCameras` (`utils/DiscoveredCamera.kt`) | mDNS (`_tcam-socket._tcp.`) scan-and-resolve helper shared by the Settings "Find cameras" dialog and auto-reconnect. |
 
 ## Building
 
