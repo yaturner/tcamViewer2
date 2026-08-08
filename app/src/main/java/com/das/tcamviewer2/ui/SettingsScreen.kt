@@ -631,6 +631,16 @@ For questions about this privacy statement, please contact the developer through
                 }
             }
 
+            // NsdManager is supposed to handle multicast reception on the app's behalf, but on
+            // some devices/Android versions mDNS packets never reach the socket unless the app
+            // holds its own multicast lock — a long-standing platform quirk, not something
+            // NsdManager reliably covers on its own.
+            val multicastWifiManager = context.applicationContext.getSystemService(WifiManager::class.java)
+            val multicastLock = multicastWifiManager?.createMulticastLock("tcamDiscovery")?.apply {
+                setReferenceCounted(true)
+                acquire()
+            }
+
             nsdManager.discoverServices(Constants.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
 
             try {
@@ -661,6 +671,9 @@ For questions about this privacy statement, please contact the developer through
             } finally {
                 try {
                     nsdManager.stopServiceDiscovery(discoveryListener)
+                } catch (_: Exception) {}
+                try {
+                    if (multicastLock?.isHeld == true) multicastLock.release()
                 } catch (_: Exception) {}
                 isDiscovering = false
             }

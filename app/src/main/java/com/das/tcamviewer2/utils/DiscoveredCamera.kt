@@ -3,6 +3,7 @@ package com.das.tcamviewer2.utils
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import com.das.tcamviewer2.constants.Constants
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -38,6 +39,15 @@ suspend fun discoverTcamCameras(
         }
     }
 
+    // NsdManager is supposed to handle multicast reception on the app's behalf, but on some
+    // devices/Android versions mDNS packets never reach the socket unless the app holds its own
+    // multicast lock — a long-standing platform quirk, not something NsdManager reliably covers.
+    val wifiManager = context.applicationContext.getSystemService(WifiManager::class.java)
+    val multicastLock = wifiManager?.createMulticastLock("tcamDiscovery")?.apply {
+        setReferenceCounted(true)
+        acquire()
+    }
+
     nsdManager.discoverServices(Constants.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
     try {
         withTimeoutOrNull(timeoutMs) {
@@ -66,6 +76,10 @@ suspend fun discoverTcamCameras(
     } finally {
         try {
             nsdManager.stopServiceDiscovery(discoveryListener)
+        } catch (_: Exception) {
+        }
+        try {
+            if (multicastLock?.isHeld == true) multicastLock.release()
         } catch (_: Exception) {
         }
     }
