@@ -29,10 +29,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.AlertDialog
@@ -581,20 +579,6 @@ fun CameraScreen(
                         Icon(
                             imageVector = Icons.Filled.ShowChart,
                             contentDescription = "Temperature history",
-                        )
-                    }
-                    IconButton(onClick = { viewModel.toggleMeasurementMode() }) {
-                        Icon(
-                            imageVector = if (measurementMode == MeasurementMode.REGION) {
-                                Icons.Filled.GpsFixed
-                            } else {
-                                Icons.Filled.CropFree
-                            },
-                            contentDescription = if (measurementMode == MeasurementMode.REGION) {
-                                "Switch to point spotmeter"
-                            } else {
-                                "Switch to region measurement"
-                            },
                         )
                     }
                 }

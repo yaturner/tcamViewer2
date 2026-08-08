@@ -31,6 +31,7 @@ class SettingsDataManager(
         val SELECTED_PALETTE_KEY = stringPreferencesKey("selected_palette")
         val SHUTTER_SOUND_KEY = booleanPreferencesKey("shutter_sound")
         val SPOTMETER_KEY = booleanPreferencesKey("spotmeter")
+        val REGION_MEASUREMENT_KEY = booleanPreferencesKey("region_measurement")
         val TEMPERATURE_UNIT_KEY = stringPreferencesKey("temperature_unit")
         val CAMERA_AGC_KEY = booleanPreferencesKey("camera_agc")
         val CAMERA_EMISSIVITY_KEY = stringPreferencesKey("camera_emissivity")
@@ -85,6 +86,11 @@ class SettingsDataManager(
     val spotmeterFlow: Flow<Boolean> =
         appContext.dataStore.data.map { prefs ->
             prefs[SPOTMETER_KEY] != false // Default palette
+        }
+
+    val regionMeasurementFlow: Flow<Boolean> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[REGION_MEASUREMENT_KEY] == true // Default off — point spotmeter is the default mode
         }
 
     val temperatureUnitFlow: Flow<String> =
@@ -148,6 +154,10 @@ class SettingsDataManager(
         appContext.dataStore.edit { prefs -> prefs[SPOTMETER_KEY] = enabled }
     }
 
+    suspend fun saveRegionMeasurement(enabled: Boolean) {
+        appContext.dataStore.edit { prefs -> prefs[REGION_MEASUREMENT_KEY] = enabled }
+    }
+
     suspend fun saveTemperatureUnit(unit: String) {
         appContext.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
     }
@@ -184,6 +194,8 @@ class SettingsDataManager(
     suspend fun getShutterSound(): Boolean = shutterSoundFlow.first()
 
     suspend fun getSpotmeter(): Boolean = spotmeterFlow.first()
+
+    suspend fun getRegionMeasurement(): Boolean = regionMeasurementFlow.first()
 
     suspend fun getTemperatureUnit(): String = temperatureUnitFlow.first()
 

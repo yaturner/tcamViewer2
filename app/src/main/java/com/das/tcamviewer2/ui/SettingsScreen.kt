@@ -141,6 +141,7 @@ fun SettingsScreen(
     val savedMax by dataManager.maxValueFlow.collectAsState(initial = "100")
     val savedShutter by dataManager.shutterSoundFlow.collectAsState(initial = true)
     val savedSpotmeter by dataManager.spotmeterFlow.collectAsState(initial = true)
+    val savedRegionMeasurement by dataManager.regionMeasurementFlow.collectAsState(initial = false)
     val savedUnit by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val savedPalette by dataManager.selectedPaletteFlow.collectAsState(initial = "Rainbow")
 
@@ -157,6 +158,7 @@ fun SettingsScreen(
     var localMax by remember(savedMax, resetKey) { mutableStateOf(savedMax) }
     var localShutter by remember(savedShutter, resetKey) { mutableStateOf(savedShutter) }
     var localSpotmeter by remember(savedSpotmeter, resetKey) { mutableStateOf(savedSpotmeter) }
+    var localRegionMeasurement by remember(savedRegionMeasurement, resetKey) { mutableStateOf(savedRegionMeasurement) }
     var localUnit by remember(savedUnit, resetKey) { mutableStateOf(savedUnit) }
     var localPalette by remember(savedPalette, resetKey) { mutableStateOf(savedPalette) }
 
@@ -170,6 +172,7 @@ fun SettingsScreen(
         dataManager.saveMaxValue(localMax)
         dataManager.saveShutterSound(localShutter)
         dataManager.saveSpotmeter(localSpotmeter)
+        dataManager.saveRegionMeasurement(localRegionMeasurement)
         dataManager.saveTemperatureUnit(localUnit)
         dataManager.saveSelectedPalette(localPalette)
         dataManager.saveCameraAgc(localAgc)
@@ -472,6 +475,21 @@ fun SettingsScreen(
                         checked = localSpotmeter,
                         onCheckedChange = { localSpotmeter = it },
                         modifier = Modifier.testTag("switch_spotmeter"),
+                    )
+                },
+            )
+
+            // Region Measurement — mutually exclusive with the point spotmeter above; when on,
+            // the Camera screen shows a resizable box (avg/min/max) instead of the single-point
+            // reading. The box's own position is session-only regardless of this setting.
+            ListItem(
+                headlineContent = { Text("Region Measurement") },
+                supportingContent = { Text(if (localRegionMeasurement) "Enabled" else "Disabled") },
+                trailingContent = {
+                    Switch(
+                        checked = localRegionMeasurement,
+                        onCheckedChange = { localRegionMeasurement = it },
+                        modifier = Modifier.testTag("switch_region_measurement"),
                     )
                 },
             )

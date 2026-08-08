@@ -279,6 +279,28 @@ class CameraViewModel : ViewModel() {
                 shutterSoundEnabled = v
             }
         }
+        // Region-vs-point mode is a persisted Settings preference rather than a Camera-screen
+        // toggle; the region box's own position stays session-only regardless (reset on
+        // disconnect, seeded fresh here the first time this session it's needed).
+        viewModelScope.launch {
+            settingsDataManager.regionMeasurementFlow.collect { enabled ->
+                _measurementMode.value = if (enabled) MeasurementMode.REGION else MeasurementMode.POINT
+                seedDefaultRegionIfNeeded()
+                refreshTempDisplays()
+            }
+        }
+    }
+
+    /** Seeds a default centered region box the first time it's needed in a session — either
+     *  because the setting just turned on, or a fresh connection cleared the previous session's
+     *  box while the setting was already on. No-op if a box already exists or REGION isn't active. */
+    private fun seedDefaultRegionIfNeeded() {
+        if (_measurementMode.value != MeasurementMode.REGION || _measurementRegion.value != null) return
+        val w = Constants.IMAGE_WIDTH / 4
+        val h = Constants.IMAGE_HEIGHT / 4
+        val cx = Constants.IMAGE_WIDTH / 2
+        val cy = Constants.IMAGE_HEIGHT / 2
+        _measurementRegion.value = Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
     }
 
     private suspend fun remapCurrentFrame(paletteName: String) {
@@ -336,26 +358,6 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    /** Switches between the point spotmeter and the resizable region measurement box. Entering
-     *  REGION mode for the first time in a session seeds a default box centered in the frame. */
-    fun toggleMeasurementMode() {
-        _measurementMode.value = when (_measurementMode.value) {
-            MeasurementMode.POINT -> {
-                if (_measurementRegion.value == null) {
-                    val w = Constants.IMAGE_WIDTH / 4
-                    val h = Constants.IMAGE_HEIGHT / 4
-                    val cx = Constants.IMAGE_WIDTH / 2
-                    val cy = Constants.IMAGE_HEIGHT / 2
-                    _measurementRegion.value = Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-                }
-                MeasurementMode.REGION
-            }
-
-            MeasurementMode.REGION -> MeasurementMode.POINT
-        }
-        refreshTempDisplays()
-    }
-
     /** Updates the region box (from drag/resize gestures), clamped to the frame bounds with a
      *  minimum 4×4-camera-pixel size so it can never collapse to nothing. */
     fun setMeasurementRegion(rect: Rect) {
@@ -411,6 +413,7 @@ class CameraViewModel : ViewModel() {
             if (connected) {
                 cameraService.getImage()
                 loadCameraConfig()
+                seedDefaultRegionIfNeeded()
             } else if (showErrorOnFailure) {
                 _showConnectError.value = true
             }
@@ -470,7 +473,8 @@ class CameraViewModel : ViewModel() {
             _cameraConfig.value = null
             userMovedSpotmeter = false
             clearTempHistory()
-            _measurementMode.value = MeasurementMode.POINT
+            // Region ON/OFF is a persisted Settings preference and stays as-is; only the box's
+            // own position is session-only.
             _measurementRegion.value = null
         } else {
             connectJob?.cancel()
