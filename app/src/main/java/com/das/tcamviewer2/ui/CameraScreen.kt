@@ -824,6 +824,10 @@ private val TIMELAPSE_DURATIONS = listOf(
     1800 to "30 minutes",
     3600 to "1 hour",
     7200 to "2 hours",
+    14400 to "4 hours",
+    28800 to "8 hours",
+    43200 to "12 hours",
+    86400 to "24 hours",
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
