@@ -725,7 +725,10 @@ class CameraViewModel : ViewModel() {
                     _isTimeLapseCapturing.value = false
                     _isTimeLapsing.value = false
                     if (naturalCompletion) {
-                        _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured")
+                        val samples = _tempHistory.value
+                        val chartSaved = samples.size >= 2 && cameraUtils.saveTempChart(samples, cameraUtils.settingIsCelsius)
+                        val suffix = if (chartSaved) ", chart saved" else ""
+                        _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured$suffix")
                     }
                 }
             }

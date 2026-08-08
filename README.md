@@ -35,7 +35,7 @@ The live view above shows a thermal image using the Rainbow palette. The spotmet
 - **Save** — saves the current frame to disk as a `.tjsn` file
 - **Stream → Start** — starts continuous streaming (frames displayed, not saved)
 - **Stream → Record** — starts streaming and simultaneously records every frame to a `.mtjsn` file
-- **Stream → Time Lapse** — opens a dialog to select capture interval (1 second – 5 minutes) and total duration (30 seconds – 2 hours); sends a `get_image` command at each interval and saves the frames to a `.tltjsn` file. The button shows **Rec** while each frame is being captured and **Stream** while waiting for the next interval. A notification appears when the duration expires.
+- **Stream → Time Lapse** — opens a dialog to select capture interval (1 second – 5 minutes) and total duration (30 seconds – 2 hours); sends a `get_image` command at each interval and saves the frames to a `.tltjsn` file. The button shows **Rec** while each frame is being captured and **Stream** while waiting for the next interval. Each captured frame also feeds the Temperature History chart, same as streaming. When the duration expires naturally, the chart is auto-saved as a `.tchart` file (no prompt) alongside the completion notification; manually stopping or discarding a time lapse does not trigger this.
 - **Stop** — stops streaming, recording, or an in-progress time lapse
 
 ### Region measurement
