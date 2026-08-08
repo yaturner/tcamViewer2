@@ -50,13 +50,15 @@ An alternative to the point spotmeter: a resizable box with corner handles repla
 
 ### Library screen
 
-![Library](screenshots/library.png)
+| Library | Filter by date |
+|---|---|
+| ![Library](screenshots/library.png) | ![Library date filter](screenshots/library_date_filter.png) |
 
 The library groups saved files by date. Video recordings show a white camera badge and time lapse files show a yellow timer badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the browse window.
 
 - Browses all saved `.tjsn` (image), `.mtjsn` (video), and `.tltjsn` (time lapse) files grouped by date
 - Thumbnail preview loaded lazily per visible row; video recordings show a white camera badge; time lapse files show a yellow timer badge
-- **Filter by date** — a filter icon in the toolbar (tinted when active) opens a From/To date-range picker; only file groups saved within that range are shown
+- **Filter by date** — a filter icon in the toolbar (tinted when active) opens a From/To date-range picker; only file groups saved within that range are shown. The filter and overflow icons are disabled when there's nothing to filter
 - Multi-select with visual highlight and checkmark badge
 - Ascending / descending sort and Select All / Clear via overflow menu
 - Delete selected files from disk
@@ -132,7 +134,9 @@ The Charts tab lists saved temperature-history charts, grouped by date, mirrorin
 |---|---|
 | ![Settings connected top](screenshots/settings_connected_top.png) | ![Settings connected bottom](screenshots/settings_connected_bottom.png) |
 
-![Region Measurement toggle](screenshots/settings_region_measurement.png)
+| Region Measurement toggle | Temperature Alert |
+|---|---|
+| ![Region Measurement toggle](screenshots/settings_region_measurement.png) | ![Temperature Alert](screenshots/settings_temperature_alert.png) |
 
 When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
 
