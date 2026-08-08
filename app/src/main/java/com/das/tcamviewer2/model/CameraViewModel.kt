@@ -53,6 +53,10 @@ data class TempSample(
     val min: Float,
 )
 
+/** POINT is today's single-pixel-neighborhood spotmeter; REGION is a user-resizable box showing
+ *  avg/min/max within it. Mutually exclusive in the UI — only one overlay/readout at a time. */
+enum class MeasurementMode { POINT, REGION }
+
 class CameraViewModel : ViewModel() {
     private val _spotmeterTemp = MutableStateFlow("--")
     val spotmeterTemp: StateFlow<String> = _spotmeterTemp.asStateFlow()
@@ -136,6 +140,23 @@ class CameraViewModel : ViewModel() {
 
     private val _spotmeterRect = MutableStateFlow<Rect?>(null)
     val spotmeterRect: StateFlow<Rect?> = _spotmeterRect.asStateFlow()
+
+    // Region measurement — mutually exclusive with the point spotmeter above (only one is shown/
+    // interactive at a time in the UI); session-only, reset to POINT/null on manual disconnect.
+    private val _measurementMode = MutableStateFlow(MeasurementMode.POINT)
+    val measurementMode: StateFlow<MeasurementMode> = _measurementMode.asStateFlow()
+
+    private val _measurementRegion = MutableStateFlow<Rect?>(null)
+    val measurementRegion: StateFlow<Rect?> = _measurementRegion.asStateFlow()
+
+    private val _regionAvgTemp = MutableStateFlow("--")
+    val regionAvgTemp: StateFlow<String> = _regionAvgTemp.asStateFlow()
+
+    private val _regionMinTemp = MutableStateFlow("--")
+    val regionMinTemp: StateFlow<String> = _regionMinTemp.asStateFlow()
+
+    private val _regionMaxTemp = MutableStateFlow("--")
+    val regionMaxTemp: StateFlow<String> = _regionMaxTemp.asStateFlow()
 
     private val _isCelsius = MutableStateFlow(true)
     val isCelsius: StateFlow<Boolean> = _isCelsius.asStateFlow()
@@ -305,6 +326,45 @@ class CameraViewModel : ViewModel() {
         _maxTempValue.value = maxValue
         _minTempValue.value = minValue
         recordTempSample(spotValue, maxValue, minValue)
+
+        val region = _measurementRegion.value
+        if (_measurementMode.value == MeasurementMode.REGION && region != null && dto.imageData != null) {
+            val (avgText, regionMinText, regionMaxText) = calcRegionStats(dto.imageData!!, region, scale, celsius)
+            _regionAvgTemp.value = avgText
+            _regionMinTemp.value = regionMinText
+            _regionMaxTemp.value = regionMaxText
+        }
+    }
+
+    /** Switches between the point spotmeter and the resizable region measurement box. Entering
+     *  REGION mode for the first time in a session seeds a default box centered in the frame. */
+    fun toggleMeasurementMode() {
+        _measurementMode.value = when (_measurementMode.value) {
+            MeasurementMode.POINT -> {
+                if (_measurementRegion.value == null) {
+                    val w = Constants.IMAGE_WIDTH / 4
+                    val h = Constants.IMAGE_HEIGHT / 4
+                    val cx = Constants.IMAGE_WIDTH / 2
+                    val cy = Constants.IMAGE_HEIGHT / 2
+                    _measurementRegion.value = Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                }
+                MeasurementMode.REGION
+            }
+
+            MeasurementMode.REGION -> MeasurementMode.POINT
+        }
+        refreshTempDisplays()
+    }
+
+    /** Updates the region box (from drag/resize gestures), clamped to the frame bounds with a
+     *  minimum 4×4-camera-pixel size so it can never collapse to nothing. */
+    fun setMeasurementRegion(rect: Rect) {
+        val left = rect.left.coerceIn(0, Constants.IMAGE_WIDTH - 4)
+        val top = rect.top.coerceIn(0, Constants.IMAGE_HEIGHT - 4)
+        val right = rect.right.coerceIn(left + 4, Constants.IMAGE_WIDTH)
+        val bottom = rect.bottom.coerceIn(top + 4, Constants.IMAGE_HEIGHT)
+        _measurementRegion.value = Rect(left, top, right, bottom)
+        refreshTempDisplays()
     }
 
     /** Appends a temperature-over-time sample and trims anything older than
@@ -410,6 +470,8 @@ class CameraViewModel : ViewModel() {
             _cameraConfig.value = null
             userMovedSpotmeter = false
             clearTempHistory()
+            _measurementMode.value = MeasurementMode.POINT
+            _measurementRegion.value = null
         } else {
             connectJob?.cancel()
             connectJob = viewModelScope.launch(Dispatchers.IO) {
@@ -814,6 +876,40 @@ class CameraViewModel : ViewModel() {
             }
         }
         return formatTemp(if (count > 0) (sum / count).toInt() else 0, scale, isCelsius)
+    }
+
+    /** Average/min/max formatted temperature text over an arbitrary region, computed client-side
+     *  from the raw per-frame imageData — the camera's own set_spotmeter command only reports a
+     *  mean for whatever region it was last told about, not min/max, so those need local math. */
+    private fun calcRegionStats(
+        imageData: IntArray,
+        rect: Rect,
+        scale: Float,
+        isCelsius: Boolean,
+    ): Triple<String, String, String> {
+        val c1 = rect.left.coerceIn(0, Constants.IMAGE_WIDTH - 1)
+        val c2 = rect.right.coerceIn(c1, Constants.IMAGE_WIDTH - 1)
+        val r1 = rect.top.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+        val r2 = rect.bottom.coerceIn(r1, Constants.IMAGE_HEIGHT - 1)
+        var sum = 0L
+        var count = 0
+        var minRaw = Int.MAX_VALUE
+        var maxRaw = Int.MIN_VALUE
+        for (row in r1..r2) {
+            for (col in c1..c2) {
+                val v = imageData[row * Constants.IMAGE_WIDTH + col]
+                sum += v
+                count++
+                if (v < minRaw) minRaw = v
+                if (v > maxRaw) maxRaw = v
+            }
+        }
+        if (count == 0) return Triple("--", "--", "--")
+        return Triple(
+            formatTemp((sum / count).toInt(), scale, isCelsius).second,
+            formatTemp(minRaw, scale, isCelsius).second,
+            formatTemp(maxRaw, scale, isCelsius).second,
+        )
     }
 
     private fun updateFps() {

@@ -2,10 +2,12 @@ package com.das.tcamviewer2.ui
 
 import android.app.Activity
 import android.content.res.Configuration
+import android.graphics.Rect
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,8 +29,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CropFree
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.AlertDialog
@@ -82,10 +86,13 @@ import com.das.tcamviewer2.R
 import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.CameraViewModel
+import com.das.tcamviewer2.model.MeasurementMode
 import com.das.tcamviewer2.model.TempSample
 import com.das.tcamviewer2.paletteFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
@@ -117,6 +124,11 @@ fun CameraScreen(
     val maxTempValue by viewModel.maxTempValue.collectAsState()
     val minTempValue by viewModel.minTempValue.collectAsState()
     val spotmeterEnabled by viewModel.spotmeterEnabled.collectAsState()
+    val measurementMode by viewModel.measurementMode.collectAsState()
+    val measurementRegion by viewModel.measurementRegion.collectAsState()
+    val regionAvgText by viewModel.regionAvgTemp.collectAsState()
+    val regionMinText by viewModel.regionMinTemp.collectAsState()
+    val regionMaxText by viewModel.regionMaxTemp.collectAsState()
     val fpsText by viewModel.fpsCounter.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
@@ -324,11 +336,19 @@ fun CameraScreen(
                                 modifier = Modifier.width(imgW).height(headerH),
                                 contentAlignment = Alignment.BottomCenter,
                             ) {
-                                Text(
-                                    text = spotmeterText,
-                                    fontSize = 12.sp,
-                                    textAlign = TextAlign.Center,
-                                )
+                                if (measurementMode == MeasurementMode.REGION) {
+                                    Text(
+                                        text = "avg $regionAvgText  min $regionMinText  max $regionMaxText",
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                } else {
+                                    Text(
+                                        text = spotmeterText,
+                                        fontSize = 12.sp,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
                             }
 
                             Box(
@@ -339,21 +359,55 @@ fun CameraScreen(
                                     contentDescription = "Thermal Camera Feed",
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .pointerInput(isConnected) {
-                                            if (!isConnected) return@pointerInput
-                                            detectTapGestures { offset ->
-                                                val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
-                                                    .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
-                                                val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
-                                                    .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-                                                viewModel.setSpotmeter(camX, camY)
-                                            }
-                                        },
+                                        .then(
+                                            if (measurementMode == MeasurementMode.POINT) {
+                                                Modifier.pointerInput(isConnected) {
+                                                    if (!isConnected) return@pointerInput
+                                                    detectTapGestures { offset ->
+                                                        val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
+                                                            .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                                        val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
+                                                            .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                                        viewModel.setSpotmeter(camX, camY)
+                                                    }
+                                                }
+                                            } else {
+                                                // Keyed only on isConnected/mode (not the region itself, which
+                                                // changes every drag step) — always reads/writes the ViewModel's
+                                                // StateFlow.value directly so the gesture never restarts mid-drag.
+                                                Modifier.pointerInput(isConnected, measurementMode) {
+                                                    if (!isConnected) return@pointerInput
+                                                    var dragTarget = RegionDragTarget.NONE
+                                                    detectDragGestures(
+                                                        onDragStart = { start ->
+                                                            val region = viewModel.measurementRegion.value
+                                                                ?: return@detectDragGestures
+                                                            val camX = start.x / size.width * Constants.IMAGE_WIDTH
+                                                            val camY = start.y / size.height * Constants.IMAGE_HEIGHT
+                                                            dragTarget = resolveRegionDragTarget(region, camX, camY)
+                                                        },
+                                                        onDrag = { change, dragAmount ->
+                                                            change.consume()
+                                                            if (dragTarget == RegionDragTarget.NONE) return@detectDragGestures
+                                                            val region = viewModel.measurementRegion.value
+                                                                ?: return@detectDragGestures
+                                                            val dCamX = dragAmount.x / size.width * Constants.IMAGE_WIDTH
+                                                            val dCamY = dragAmount.y / size.height * Constants.IMAGE_HEIGHT
+                                                            viewModel.setMeasurementRegion(
+                                                                applyRegionDrag(region, dragTarget, dCamX, dCamY),
+                                                            )
+                                                        },
+                                                    )
+                                                }
+                                            },
+                                        ),
                                     contentScale = ContentScale.FillBounds,
                                 )
 
-                                // Spotmeter rectangle overlay
-                                if (spotmeterEnabled) {
+                                // Spotmeter / region overlay — mutually exclusive with each other
+                                if (measurementMode == MeasurementMode.REGION) {
+                                    RegionOverlay(measurementRegion)
+                                } else if (spotmeterEnabled) {
                                     SpotmeterOverlay(spotmeterRect)
                                 }
 
@@ -527,6 +581,20 @@ fun CameraScreen(
                         Icon(
                             imageVector = Icons.Filled.ShowChart,
                             contentDescription = "Temperature history",
+                        )
+                    }
+                    IconButton(onClick = { viewModel.toggleMeasurementMode() }) {
+                        Icon(
+                            imageVector = if (measurementMode == MeasurementMode.REGION) {
+                                Icons.Filled.GpsFixed
+                            } else {
+                                Icons.Filled.CropFree
+                            },
+                            contentDescription = if (measurementMode == MeasurementMode.REGION) {
+                                "Switch to point spotmeter"
+                            } else {
+                                "Switch to region measurement"
+                            },
                         )
                     }
                 }
@@ -939,5 +1007,107 @@ fun LegendEntry(color: Color, label: String) {
         }
         Spacer(modifier = Modifier.width(4.dp))
         Text(label, fontSize = 12.sp)
+    }
+}
+
+/** Which part of the region box a drag gesture is manipulating. */
+private enum class RegionDragTarget { NONE, MOVE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+
+// Camera-pixel radius around each corner treated as a resize handle, rather than a plain move.
+private const val REGION_HANDLE_HIT_PX = 10f
+
+private fun resolveRegionDragTarget(region: Rect, camX: Float, camY: Float): RegionDragTarget {
+    fun near(x: Int, y: Int) = hypot((camX - x).toDouble(), (camY - y).toDouble()) <= REGION_HANDLE_HIT_PX
+    return when {
+        near(region.left, region.top) -> RegionDragTarget.TOP_LEFT
+
+        near(region.right, region.top) -> RegionDragTarget.TOP_RIGHT
+
+        near(region.left, region.bottom) -> RegionDragTarget.BOTTOM_LEFT
+
+        near(region.right, region.bottom) -> RegionDragTarget.BOTTOM_RIGHT
+
+        camX >= region.left && camX <= region.right && camY >= region.top && camY <= region.bottom ->
+            RegionDragTarget.MOVE
+
+        else -> RegionDragTarget.NONE
+    }
+}
+
+private fun applyRegionDrag(region: Rect, target: RegionDragTarget, dx: Float, dy: Float): Rect {
+    var left = region.left
+    var top = region.top
+    var right = region.right
+    var bottom = region.bottom
+    when (target) {
+        RegionDragTarget.MOVE -> {
+            left += dx.roundToInt()
+            right += dx.roundToInt()
+            top += dy.roundToInt()
+            bottom += dy.roundToInt()
+        }
+
+        RegionDragTarget.TOP_LEFT -> {
+            left += dx.roundToInt()
+            top += dy.roundToInt()
+        }
+
+        RegionDragTarget.TOP_RIGHT -> {
+            right += dx.roundToInt()
+            top += dy.roundToInt()
+        }
+
+        RegionDragTarget.BOTTOM_LEFT -> {
+            left += dx.roundToInt()
+            bottom += dy.roundToInt()
+        }
+
+        RegionDragTarget.BOTTOM_RIGHT -> {
+            right += dx.roundToInt()
+            bottom += dy.roundToInt()
+        }
+
+        RegionDragTarget.NONE -> {}
+    }
+    return Rect(left, top, right, bottom)
+}
+
+/** Draws the resizable region box — a hollow rectangle (same black+white outline style as
+ *  SpotmeterOverlay) plus small corner handles marking the resize grab points. The image here is
+ *  always shown with ContentScale.FillBounds inside a Box already sized to the image's aspect
+ *  ratio, so no letterboxing correction is needed — size.width/height map directly to
+ *  IMAGE_WIDTH/HEIGHT, the same assumption the drag gesture's own coordinate math uses. */
+@Composable
+private fun RegionOverlay(region: Rect?, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val r = region ?: return@Canvas
+        val sx = size.width / Constants.IMAGE_WIDTH
+        val sy = size.height / Constants.IMAGE_HEIGHT
+        val left = r.left * sx
+        val top = r.top * sy
+        val w = (r.right - r.left) * sx
+        val h = (r.bottom - r.top) * sy
+        val topLeft = Offset(left, top)
+        val regionSize = Size(w, h)
+        drawRect(color = Color.Black, topLeft = topLeft, size = regionSize, style = Stroke(width = 3.dp.toPx()))
+        drawRect(color = Color.White, topLeft = topLeft, size = regionSize, style = Stroke(width = 1.dp.toPx()))
+
+        val handleSize = 10.dp.toPx()
+        listOf(
+            Offset(left, top),
+            Offset(left + w, top),
+            Offset(left, top + h),
+            Offset(left + w, top + h),
+        ).forEach { c ->
+            val handleTopLeft = Offset(c.x - handleSize / 2, c.y - handleSize / 2)
+            val handleBoxSize = Size(handleSize, handleSize)
+            drawRect(color = Color.White, topLeft = handleTopLeft, size = handleBoxSize)
+            drawRect(
+                color = Color.Black,
+                topLeft = handleTopLeft,
+                size = handleBoxSize,
+                style = Stroke(width = 1.dp.toPx()),
+            )
+        }
     }
 }
