@@ -32,6 +32,10 @@ class SettingsDataManager(
         val SHUTTER_SOUND_KEY = booleanPreferencesKey("shutter_sound")
         val SPOTMETER_KEY = booleanPreferencesKey("spotmeter")
         val REGION_MEASUREMENT_KEY = booleanPreferencesKey("region_measurement")
+        val ALERT_ENABLED_KEY = booleanPreferencesKey("alert_enabled")
+        val ALERT_METRIC_KEY = stringPreferencesKey("alert_metric")
+        val ALERT_COMPARISON_KEY = stringPreferencesKey("alert_comparison")
+        val ALERT_THRESHOLD_KEY = stringPreferencesKey("alert_threshold")
         val TEMPERATURE_UNIT_KEY = stringPreferencesKey("temperature_unit")
         val CAMERA_AGC_KEY = booleanPreferencesKey("camera_agc")
         val CAMERA_EMISSIVITY_KEY = stringPreferencesKey("camera_emissivity")
@@ -91,6 +95,26 @@ class SettingsDataManager(
     val regionMeasurementFlow: Flow<Boolean> =
         appContext.dataStore.data.map { prefs ->
             prefs[REGION_MEASUREMENT_KEY] == true // Default off — point spotmeter is the default mode
+        }
+
+    val alertEnabledFlow: Flow<Boolean> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[ALERT_ENABLED_KEY] == true // Default off
+        }
+
+    val alertMetricFlow: Flow<String> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[ALERT_METRIC_KEY] ?: "Spot" // "Spot" | "Max" | "Min"
+        }
+
+    val alertComparisonFlow: Flow<String> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[ALERT_COMPARISON_KEY] ?: "Above" // "Above" | "Below"
+        }
+
+    val alertThresholdFlow: Flow<String> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[ALERT_THRESHOLD_KEY] ?: "100"
         }
 
     val temperatureUnitFlow: Flow<String> =
@@ -158,6 +182,22 @@ class SettingsDataManager(
         appContext.dataStore.edit { prefs -> prefs[REGION_MEASUREMENT_KEY] = enabled }
     }
 
+    suspend fun saveAlertEnabled(enabled: Boolean) {
+        appContext.dataStore.edit { prefs -> prefs[ALERT_ENABLED_KEY] = enabled }
+    }
+
+    suspend fun saveAlertMetric(metric: String) {
+        appContext.dataStore.edit { prefs -> prefs[ALERT_METRIC_KEY] = metric }
+    }
+
+    suspend fun saveAlertComparison(comparison: String) {
+        appContext.dataStore.edit { prefs -> prefs[ALERT_COMPARISON_KEY] = comparison }
+    }
+
+    suspend fun saveAlertThreshold(value: String) {
+        appContext.dataStore.edit { prefs -> prefs[ALERT_THRESHOLD_KEY] = value }
+    }
+
     suspend fun saveTemperatureUnit(unit: String) {
         appContext.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
     }
@@ -196,6 +236,14 @@ class SettingsDataManager(
     suspend fun getSpotmeter(): Boolean = spotmeterFlow.first()
 
     suspend fun getRegionMeasurement(): Boolean = regionMeasurementFlow.first()
+
+    suspend fun getAlertEnabled(): Boolean = alertEnabledFlow.first()
+
+    suspend fun getAlertMetric(): String = alertMetricFlow.first()
+
+    suspend fun getAlertComparison(): String = alertComparisonFlow.first()
+
+    suspend fun getAlertThreshold(): String = alertThresholdFlow.first()
 
     suspend fun getTemperatureUnit(): String = temperatureUnitFlow.first()
 

@@ -122,6 +122,25 @@ class CameraViewModel : ViewModel() {
     private val _timeLapseMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val timeLapseMessage: SharedFlow<String> = _timeLapseMessage.asSharedFlow()
 
+    private val _alertMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val alertMessage: SharedFlow<String> = _alertMessage.asSharedFlow()
+
+    // Temperature-alert settings, cached from DataStore the same way as the other per-frame
+    // hot-path settings above (avoids a suspend read on every frame).
+    @Volatile private var alertEnabled = false
+
+    @Volatile private var alertMetric = "Spot"
+
+    // "Spot" | "Max" | "Min"
+    @Volatile private var alertComparison = "Above"
+
+    // "Above" | "Below"
+    @Volatile private var alertThreshold = 100f
+
+    // Edge-triggered: fires once when the condition first becomes true, not on every frame
+    // while it remains true, and rearms once the value crosses back.
+    @Volatile private var alertCurrentlyTriggered = false
+
     private var timeLapseJob: Job? = null
 
     @Volatile private var discardTimeLapse = false
@@ -289,6 +308,23 @@ class CameraViewModel : ViewModel() {
                 refreshTempDisplays()
             }
         }
+        viewModelScope.launch {
+            settingsDataManager.alertEnabledFlow.collect { enabled ->
+                alertEnabled = enabled
+                alertCurrentlyTriggered = false // re-arm whenever the feature is toggled
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.alertMetricFlow.collect { alertMetric = it }
+        }
+        viewModelScope.launch {
+            settingsDataManager.alertComparisonFlow.collect { alertComparison = it }
+        }
+        viewModelScope.launch {
+            settingsDataManager.alertThresholdFlow.collect { v ->
+                alertThreshold = v.toFloatOrNull() ?: 100f
+            }
+        }
     }
 
     /** Seeds a default centered region box the first time it's needed in a session — either
@@ -348,6 +384,7 @@ class CameraViewModel : ViewModel() {
         _maxTempValue.value = maxValue
         _minTempValue.value = minValue
         recordTempSample(spotValue, maxValue, minValue)
+        checkTemperatureAlert(spotValue, maxValue, minValue, celsius)
 
         val region = _measurementRegion.value
         if (_measurementMode.value == MeasurementMode.REGION && region != null && dto.imageData != null) {
@@ -355,6 +392,37 @@ class CameraViewModel : ViewModel() {
             _regionAvgTemp.value = avgText
             _regionMinTemp.value = regionMinText
             _regionMaxTemp.value = regionMaxText
+        }
+    }
+
+    /** Edge-triggered temperature alert: fires an in-app message the moment the selected metric
+     *  crosses the threshold, then stays quiet until it crosses back — otherwise it would fire
+     *  on every single frame while the condition holds. */
+    private fun checkTemperatureAlert(
+        spotValue: Float,
+        maxValue: Float,
+        minValue: Float,
+        isCelsius: Boolean,
+    ) {
+        if (!alertEnabled) {
+            alertCurrentlyTriggered = false
+            return
+        }
+        val value = when (alertMetric) {
+            "Max" -> maxValue
+            "Min" -> minValue
+            else -> spotValue
+        }
+        val crossed = if (alertComparison == "Above") value > alertThreshold else value < alertThreshold
+        if (crossed && !alertCurrentlyTriggered) {
+            alertCurrentlyTriggered = true
+            val unit = if (isCelsius) "°C" else "°F"
+            val comparisonWord = if (alertComparison == "Above") "above" else "below"
+            _alertMessage.tryEmit(
+                "$alertMetric temperature $comparisonWord threshold: %.1f%s".format(value, unit),
+            )
+        } else if (!crossed) {
+            alertCurrentlyTriggered = false
         }
     }
 
@@ -476,6 +544,7 @@ class CameraViewModel : ViewModel() {
             // Region ON/OFF is a persisted Settings preference and stays as-is; only the box's
             // own position is session-only.
             _measurementRegion.value = null
+            alertCurrentlyTriggered = false
         } else {
             connectJob?.cancel()
             connectJob = viewModelScope.launch(Dispatchers.IO) {

@@ -142,6 +142,10 @@ fun SettingsScreen(
     val savedShutter by dataManager.shutterSoundFlow.collectAsState(initial = true)
     val savedSpotmeter by dataManager.spotmeterFlow.collectAsState(initial = true)
     val savedRegionMeasurement by dataManager.regionMeasurementFlow.collectAsState(initial = false)
+    val savedAlertEnabled by dataManager.alertEnabledFlow.collectAsState(initial = false)
+    val savedAlertMetric by dataManager.alertMetricFlow.collectAsState(initial = "Spot")
+    val savedAlertComparison by dataManager.alertComparisonFlow.collectAsState(initial = "Above")
+    val savedAlertThreshold by dataManager.alertThresholdFlow.collectAsState(initial = "100")
     val savedUnit by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val savedPalette by dataManager.selectedPaletteFlow.collectAsState(initial = "Rainbow")
 
@@ -159,6 +163,10 @@ fun SettingsScreen(
     var localShutter by remember(savedShutter, resetKey) { mutableStateOf(savedShutter) }
     var localSpotmeter by remember(savedSpotmeter, resetKey) { mutableStateOf(savedSpotmeter) }
     var localRegionMeasurement by remember(savedRegionMeasurement, resetKey) { mutableStateOf(savedRegionMeasurement) }
+    var localAlertEnabled by remember(savedAlertEnabled, resetKey) { mutableStateOf(savedAlertEnabled) }
+    var localAlertMetric by remember(savedAlertMetric, resetKey) { mutableStateOf(savedAlertMetric) }
+    var localAlertComparison by remember(savedAlertComparison, resetKey) { mutableStateOf(savedAlertComparison) }
+    var localAlertThreshold by remember(savedAlertThreshold, resetKey) { mutableStateOf(savedAlertThreshold) }
     var localUnit by remember(savedUnit, resetKey) { mutableStateOf(savedUnit) }
     var localPalette by remember(savedPalette, resetKey) { mutableStateOf(savedPalette) }
 
@@ -173,6 +181,10 @@ fun SettingsScreen(
         dataManager.saveShutterSound(localShutter)
         dataManager.saveSpotmeter(localSpotmeter)
         dataManager.saveRegionMeasurement(localRegionMeasurement)
+        dataManager.saveAlertEnabled(localAlertEnabled)
+        dataManager.saveAlertMetric(localAlertMetric)
+        dataManager.saveAlertComparison(localAlertComparison)
+        dataManager.saveAlertThreshold(localAlertThreshold)
         dataManager.saveTemperatureUnit(localUnit)
         dataManager.saveSelectedPalette(localPalette)
         dataManager.saveCameraAgc(localAgc)
@@ -493,6 +505,80 @@ fun SettingsScreen(
                     )
                 },
             )
+
+            // Temperature Alert — fires an in-app message (Snackbar on the Camera screen) the
+            // moment the selected metric crosses the threshold, then rearms once it crosses back.
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ListItem(
+                    headlineContent = { Text("Temperature Alert") },
+                    supportingContent = { Text(if (localAlertEnabled) "Enabled" else "Disabled") },
+                    trailingContent = {
+                        Switch(
+                            checked = localAlertEnabled,
+                            onCheckedChange = { localAlertEnabled = it },
+                            modifier = Modifier.testTag("switch_alert_enabled"),
+                        )
+                    },
+                )
+                if (localAlertEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        listOf("Spot", "Max", "Min").forEach { metric ->
+                            Row(
+                                modifier = Modifier
+                                    .selectable(
+                                        selected = localAlertMetric == metric,
+                                        onClick = { localAlertMetric = metric },
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = localAlertMetric == metric,
+                                    onClick = { localAlertMetric = metric },
+                                )
+                                Text(metric, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        listOf("Above", "Below").forEach { comparison ->
+                            Row(
+                                modifier = Modifier
+                                    .selectable(
+                                        selected = localAlertComparison == comparison,
+                                        onClick = { localAlertComparison = comparison },
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                RadioButton(
+                                    selected = localAlertComparison == comparison,
+                                    onClick = { localAlertComparison = comparison },
+                                )
+                                Text(comparison, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value = localAlertThreshold,
+                        onValueChange = { localAlertThreshold = it },
+                        label = { Text(if (localUnit == "Celsius") "Threshold (°C)" else "Threshold (°F)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+            }
 
             // Temperature Units
             Column(modifier = Modifier.fillMaxWidth()) {

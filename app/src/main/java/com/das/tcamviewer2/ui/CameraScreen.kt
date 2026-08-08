@@ -179,6 +179,12 @@ fun CameraScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.alertMessage.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
     // Auto-dismiss the AGC hint after 10s; re-shows if AGC toggles off then on again.
     val isAGC = currentImageDto?.isAGC == true
     var showAgcHint by remember { mutableStateOf(false) }
