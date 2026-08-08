@@ -216,11 +216,16 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete")
                             }
                         }
-                        IconButton(onClick = { showFilterDialog = true }) {
+                        IconButton(
+                            onClick = { showFilterDialog = true },
+                            enabled = fileGroups.isNotEmpty(),
+                        ) {
                             Icon(
                                 Icons.Default.FilterList,
                                 contentDescription = if (dateFilterActive) "Date filter (active)" else "Filter by date",
-                                tint = if (dateFilterActive) {
+                                tint = if (!dateFilterActive) {
+                                    LocalContentColor.current
+                                } else if (fileGroups.isNotEmpty()) {
                                     MaterialTheme.colorScheme.primary
                                 } else {
                                     LocalContentColor.current
@@ -228,7 +233,10 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                             )
                         }
                         Box {
-                            IconButton(onClick = { menuExpanded = true }) {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                enabled = fileGroups.isNotEmpty(),
+                            ) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "More options")
                             }
                             DropdownMenu(
@@ -383,9 +391,10 @@ internal fun parseFolderDateMillis(folderName: String): Long? = runCatching {
         ?.time
 }.getOrNull()
 
+// Not private — reused by ChartsScreen for the same date-range filter.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateFilterDialog(
+fun DateFilterDialog(
     fromMillis: Long?,
     toMillis: Long?,
     onApply: (from: Long?, to: Long?) -> Unit,

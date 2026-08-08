@@ -581,7 +581,10 @@ fun CameraScreen(
                 }
 
                 if (imageBitmap != null && !isFullscreen) {
-                    IconButton(onClick = { showTempChart = true }) {
+                    IconButton(
+                        onClick = { showTempChart = true },
+                        enabled = tempHistory.size > 2,
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.ShowChart,
                             contentDescription = "Temperature history",

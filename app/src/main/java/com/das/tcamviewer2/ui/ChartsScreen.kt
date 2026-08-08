@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NavigateBefore
@@ -33,6 +34,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -112,6 +114,10 @@ fun ChartsScreen(onOpenDrawer: () -> Unit = {}) {
     var menuExpanded by remember { mutableStateOf(false) }
     var browseFiles by rememberSaveable(stateSaver = ChartFileListSaver) { mutableStateOf<List<File>>(emptyList()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var filterFromMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var filterToMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    val dateFilterActive = filterFromMillis != null || filterToMillis != null
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -133,11 +139,16 @@ fun ChartsScreen(onOpenDrawer: () -> Unit = {}) {
         }
     }
 
-    val displayGroups = remember(fileGroups, sortAscending) {
+    val displayGroups = remember(fileGroups, sortAscending, filterFromMillis, filterToMillis) {
+        val filtered = fileGroups.filter { (folder, _) ->
+            val folderMillis = parseFolderDateMillis(folder) ?: return@filter true
+            (filterFromMillis == null || folderMillis >= filterFromMillis!!) &&
+                (filterToMillis == null || folderMillis <= filterToMillis!!)
+        }
         val sortedFolders = if (sortAscending) {
-            fileGroups.sortedBy { it.first }
+            filtered.sortedBy { it.first }
         } else {
-            fileGroups.sortedByDescending { it.first }
+            filtered.sortedByDescending { it.first }
         }
         sortedFolders.map { (folder, files) ->
             folder to if (sortAscending) {
@@ -179,8 +190,25 @@ fun ChartsScreen(onOpenDrawer: () -> Unit = {}) {
                                 Icon(Icons.Default.Delete, contentDescription = "Delete")
                             }
                         }
+                        IconButton(
+                            onClick = { showFilterDialog = true },
+                            enabled = fileGroups.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Default.FilterList,
+                                contentDescription = if (dateFilterActive) "Date filter (active)" else "Filter by date",
+                                tint = if (dateFilterActive && fileGroups.isNotEmpty()) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    LocalContentColor.current
+                                },
+                            )
+                        }
                         Box {
-                            IconButton(onClick = { menuExpanded = true }) {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                enabled = fileGroups.isNotEmpty(),
+                            ) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "More options")
                             }
                             DropdownMenu(
@@ -309,6 +337,19 @@ fun ChartsScreen(onOpenDrawer: () -> Unit = {}) {
                 dismissButton = {
                     TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
                 },
+            )
+        }
+
+        if (showFilterDialog) {
+            DateFilterDialog(
+                fromMillis = filterFromMillis,
+                toMillis = filterToMillis,
+                onApply = { from, to ->
+                    filterFromMillis = from
+                    filterToMillis = to
+                    showFilterDialog = false
+                },
+                onDismiss = { showFilterDialog = false },
             )
         }
     }
