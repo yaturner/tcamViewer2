@@ -262,6 +262,7 @@ class CameraUtils @Inject constructor(
     fun saveTempChart(
         samples: List<TempSample>,
         isCelsius: Boolean,
+        primaryLabel: String = "Spot",
     ): Boolean {
         if (samples.isEmpty()) return false
         val rootDir: File = context.getExternalFilesDir(null) ?: context.filesDir
@@ -283,6 +284,7 @@ class CameraUtils @Inject constructor(
         val json = JSONObject().apply {
             put("saved_time", sdf.format(Date()))
             put("unit", if (isCelsius) "Celsius" else "Fahrenheit")
+            put("primary_label", primaryLabel)
             put("samples", samplesArray)
         }
         FileOutputStream(file).use { stream ->

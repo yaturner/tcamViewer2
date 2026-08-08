@@ -68,6 +68,7 @@ import java.nio.charset.StandardCharsets
 private data class SavedChart(
     val savedTime: String,
     val isCelsius: Boolean,
+    val primaryLabel: String,
     val samples: List<TempSample>,
 )
 
@@ -75,6 +76,8 @@ private fun loadTempChart(file: File): SavedChart? = runCatching {
     val json = JSONObject(file.readText(StandardCharsets.US_ASCII))
     val isCelsius = json.optString("unit", "Celsius") == "Celsius"
     val savedTime = json.optString("saved_time", "")
+    // Older files predate the primary-label field — they're always point-mode "Spot" charts.
+    val primaryLabel = json.optString("primary_label", "Spot")
     val arr = json.getJSONArray("samples")
     val samples = (0 until arr.length()).map { i ->
         val o = arr.getJSONObject(i)
@@ -85,7 +88,7 @@ private fun loadTempChart(file: File): SavedChart? = runCatching {
             min = o.getDouble("min").toFloat(),
         )
     }
-    SavedChart(savedTime, isCelsius, samples)
+    SavedChart(savedTime, isCelsius, primaryLabel, samples)
 }.getOrNull()
 
 /** chart_HH_mm_ss.tchart → "HH:mm:ss" */
@@ -520,6 +523,7 @@ private fun ChartBrowseWindow(
                         TemperatureHistoryChart(
                             samples = currentChart.samples,
                             isCelsius = currentChart.isCelsius,
+                            primaryLabel = currentChart.primaryLabel,
                         )
                     }
                 }

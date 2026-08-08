@@ -247,11 +247,13 @@ fun CameraScreen(
     }
 
     if (showTempChart) {
+        val chartPrimaryLabel = if (measurementMode == MeasurementMode.REGION) "Avg" else "Spot"
         TempHistoryDialog(
             samples = tempHistory,
             isCelsius = isCelsius,
+            primaryLabel = chartPrimaryLabel,
             onSave = {
-                if (cameraUtils.saveTempChart(tempHistory, isCelsius)) {
+                if (cameraUtils.saveTempChart(tempHistory, isCelsius, chartPrimaryLabel)) {
                     coroutineScope.launch { snackbarHostState.showSnackbar("Chart saved") }
                 }
             },
@@ -920,13 +922,14 @@ private fun TimeLapseDialog(
 private fun TempHistoryDialog(
     samples: List<TempSample>,
     isCelsius: Boolean,
+    primaryLabel: String,
     onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Temperature History") },
-        text = { TemperatureHistoryChart(samples = samples, isCelsius = isCelsius) },
+        text = { TemperatureHistoryChart(samples = samples, isCelsius = isCelsius, primaryLabel = primaryLabel) },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
         },
@@ -960,14 +963,17 @@ private fun niceAxisStep(rawRange: Float, targetTicks: Int = 5): Float {
 
 /** Rolling line chart of spot/max/min temperature over the last few minutes, styled after
  *  desktop thermal-camera charting tools: dark background, gridlines, and labeled axes. Max is
- *  red, spot is green (bolder, the primary signal to watch), min is blue. Values are plotted
- *  exactly as recorded (whatever unit was active at sample time); only the axis suffix reflects
- *  the *current* unit, so a mid-session unit change won't retroactively relabel older samples.
+ *  red, the primary metric is green (bolder, the primary signal to watch), min is blue. Values
+ *  are plotted exactly as recorded (whatever unit was active at sample time); only the axis
+ *  suffix reflects the *current* unit, so a mid-session unit change won't retroactively relabel
+ *  older samples. [primaryLabel] names the green line/field — "Spot" in Point mode, "Avg" in
+ *  Region mode (max/min mean the region's own max/min in that case, not the whole frame's).
  *  Not private — reused by ChartsScreen to render saved charts identically. */
 @Composable
 fun TemperatureHistoryChart(
     samples: List<TempSample>,
     isCelsius: Boolean,
+    primaryLabel: String = "Spot",
 ) {
     val unitSuffix = if (isCelsius) "°C" else "°F"
     val chartBackground = Color(0xFF1C1C1E)
@@ -993,7 +999,7 @@ fun TemperatureHistoryChart(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             LegendEntry(Color(0xFFE53935), "Max")
             Spacer(modifier = Modifier.width(14.dp))
-            LegendEntry(Color(0xFF43A047), "Spot")
+            LegendEntry(Color(0xFF43A047), primaryLabel)
             Spacer(modifier = Modifier.width(14.dp))
             LegendEntry(Color(0xFF1E88E5), "Min")
         }

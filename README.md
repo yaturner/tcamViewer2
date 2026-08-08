@@ -102,7 +102,8 @@ The Camera screen's chart icon opens a **Temperature History** dialog: a rolling
 - Chart data is recorded continuously while connected (once per frame with valid radiometric data), independent of streaming/recording
 - Values are plotted exactly as recorded in whatever unit was active at sample time; only the axis labels reflect the *current* unit, so switching units mid-session doesn't retroactively relabel older samples
 - History resets when the camera is manually disconnected; a brief auto-reconnect drop does not clear it
-- **Save** writes the chart to disk as a `.tchart` file, viewable later in the **Charts** tab
+- Tracks whichever measurement mode is active: in Point mode the green line is **Spot** and max/min are the whole frame's; in Region mode it becomes **Avg** and max/min are the region box's own max/min instead. Toggling between Point and Region also resets the rolling history, since the two modes' values aren't comparable on one chart
+- **Save** writes the chart to disk as a `.tchart` file (including which mode it was recorded in), viewable later in the **Charts** tab
 
 ### Charts screen
 

@@ -305,6 +305,10 @@ class CameraViewModel : ViewModel() {
             settingsDataManager.regionMeasurementFlow.collect { enabled ->
                 _measurementMode.value = if (enabled) MeasurementMode.REGION else MeasurementMode.POINT
                 seedDefaultRegionIfNeeded()
+                // Point and region samples aren't comparable on the same chart (whole-frame
+                // spot/max/min vs. a box's own avg/min/max), so switching modes starts the
+                // rolling history fresh rather than plotting both halves as one continuous line.
+                clearTempHistory()
                 refreshTempDisplays()
             }
         }
@@ -383,15 +387,21 @@ class CameraViewModel : ViewModel() {
         _spotmeterTempValue.value = spotValue
         _maxTempValue.value = maxValue
         _minTempValue.value = minValue
-        recordTempSample(spotValue, maxValue, minValue)
         checkTemperatureAlert(spotValue, maxValue, minValue, celsius)
 
+        // In Region mode the chart tracks the box's own avg/min/max instead of the whole-frame
+        // spot/max/min — reusing the same TempSample fields (avg standing in for "spot") rather
+        // than adding mode-specific ones, since [clearTempHistory] above already guarantees a
+        // chart never mixes samples from both modes.
         val region = _measurementRegion.value
         if (_measurementMode.value == MeasurementMode.REGION && region != null && dto.imageData != null) {
-            val (avgText, regionMinText, regionMaxText) = calcRegionStats(dto.imageData!!, region, scale, celsius)
-            _regionAvgTemp.value = avgText
-            _regionMinTemp.value = regionMinText
-            _regionMaxTemp.value = regionMaxText
+            val (avg, regionMin, regionMax) = calcRegionStats(dto.imageData!!, region, scale, celsius)
+            _regionAvgTemp.value = avg.second
+            _regionMinTemp.value = regionMin.second
+            _regionMaxTemp.value = regionMax.second
+            recordTempSample(avg.first, regionMax.first, regionMin.first)
+        } else {
+            recordTempSample(spotValue, maxValue, minValue)
         }
     }
 
@@ -726,7 +736,10 @@ class CameraViewModel : ViewModel() {
                     _isTimeLapsing.value = false
                     if (naturalCompletion) {
                         val samples = _tempHistory.value
-                        val chartSaved = samples.size >= 2 && cameraUtils.saveTempChart(samples, cameraUtils.settingIsCelsius)
+                        val primaryLabel = if (_measurementMode.value == MeasurementMode.REGION) "Avg" else "Spot"
+                        val chartSaved =
+                            samples.size >= 2 &&
+                                cameraUtils.saveTempChart(samples, cameraUtils.settingIsCelsius, primaryLabel)
                         val suffix = if (chartSaved) ", chart saved" else ""
                         _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured$suffix")
                     }
@@ -959,15 +972,17 @@ class CameraViewModel : ViewModel() {
         return formatTemp(if (count > 0) (sum / count).toInt() else 0, scale, isCelsius)
     }
 
-    /** Average/min/max formatted temperature text over an arbitrary region, computed client-side
-     *  from the raw per-frame imageData — the camera's own set_spotmeter command only reports a
-     *  mean for whatever region it was last told about, not min/max, so those need local math. */
+    /** Average/min/max temperature (value + formatted text) over an arbitrary region, computed
+     *  client-side from the raw per-frame imageData — the camera's own set_spotmeter command only
+     *  reports a mean for whatever region it was last told about, not min/max, so those need
+     *  local math. Raw values (not just text) are returned so callers can feed them into the
+     *  temperature-history chart alongside the whole-frame spot/max/min. */
     private fun calcRegionStats(
         imageData: IntArray,
         rect: Rect,
         scale: Float,
         isCelsius: Boolean,
-    ): Triple<String, String, String> {
+    ): Triple<Pair<Float, String>, Pair<Float, String>, Pair<Float, String>> {
         val c1 = rect.left.coerceIn(0, Constants.IMAGE_WIDTH - 1)
         val c2 = rect.right.coerceIn(c1, Constants.IMAGE_WIDTH - 1)
         val r1 = rect.top.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
@@ -985,11 +1000,11 @@ class CameraViewModel : ViewModel() {
                 if (v > maxRaw) maxRaw = v
             }
         }
-        if (count == 0) return Triple("--", "--", "--")
+        if (count == 0) return Triple(0f to "--", 0f to "--", 0f to "--")
         return Triple(
-            formatTemp((sum / count).toInt(), scale, isCelsius).second,
-            formatTemp(minRaw, scale, isCelsius).second,
-            formatTemp(maxRaw, scale, isCelsius).second,
+            formatTemp((sum / count).toInt(), scale, isCelsius),
+            formatTemp(minRaw, scale, isCelsius),
+            formatTemp(maxRaw, scale, isCelsius),
         )
     }
 
