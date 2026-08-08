@@ -8,7 +8,9 @@ import android.graphics.Rect
 import android.os.Environment
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.model.ImageDto
+import com.das.tcamviewer2.model.TempSample
 import dagger.hilt.android.qualifiers.ApplicationContext
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -250,6 +252,41 @@ class CameraUtils @Inject constructor(
         imageDto.filename = tjsn.name
         FileOutputStream(tjsn).use { stream ->
             stream.write(imageDto.getJsonObject().toString().toByteArray(StandardCharsets.US_ASCII))
+        }
+        return true
+    }
+
+    /** Saves the temperature-over-time history as a `.tchart` JSON file, mirroring saveTjsn's
+     *  layout (app-private external storage, grouped into date folders). */
+    @Throws(IOException::class)
+    fun saveTempChart(
+        samples: List<TempSample>,
+        isCelsius: Boolean,
+    ): Boolean {
+        if (samples.isEmpty()) return false
+        val rootDir: File = context.getExternalFilesDir(null) ?: context.filesDir
+        val dir = File(rootDir, "Charts" + File.separator + generateNewPath())
+        if (!dir.exists() && !dir.mkdirs()) return false
+
+        val file = File(dir, "chart_" + simpleDateFormatFile.format(Date()) + ".tchart")
+        val samplesArray = JSONArray()
+        samples.forEach { s ->
+            samplesArray.put(
+                JSONObject().apply {
+                    put("t", s.timestampMs)
+                    put("spot", s.spot)
+                    put("max", s.max)
+                    put("min", s.min)
+                },
+            )
+        }
+        val json = JSONObject().apply {
+            put("saved_time", sdf.format(Date()))
+            put("unit", if (isCelsius) "Celsius" else "Fahrenheit")
+            put("samples", samplesArray)
+        }
+        FileOutputStream(file).use { stream ->
+            stream.write(json.toString().toByteArray(StandardCharsets.US_ASCII))
         }
         return true
     }

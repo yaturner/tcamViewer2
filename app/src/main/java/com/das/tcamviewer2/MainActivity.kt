@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.das.tcamviewer2.factory.PaletteFactory
 import com.das.tcamviewer2.services.CameraService
 import com.das.tcamviewer2.ui.CameraScreen
+import com.das.tcamviewer2.ui.ChartsScreen
 import com.das.tcamviewer2.ui.LibraryScreen
 import com.das.tcamviewer2.ui.SettingsScreen
 import com.das.tcamviewer2.ui.theme.TcamViewer2Theme
@@ -90,6 +92,7 @@ enum class ScreenTab(val title: String, val icon: ImageVector) {
     Camera("Camera", Icons.Filled.CameraAlt),
     Settings("Settings", Icons.Filled.Settings),
     Library("Library", Icons.Filled.PhotoLibrary),
+    Charts("Charts", Icons.Filled.ShowChart),
 }
 
 @Composable
@@ -140,6 +143,8 @@ fun MainScreen() {
                 )
 
                 ScreenTab.Library -> LibraryScreen(onOpenDrawer = openDrawer)
+
+                ScreenTab.Charts -> ChartsScreen(onOpenDrawer = openDrawer)
             }
         }
     }

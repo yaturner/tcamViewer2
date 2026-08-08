@@ -225,6 +225,11 @@ fun CameraScreen(
         TempHistoryDialog(
             samples = tempHistory,
             isCelsius = isCelsius,
+            onSave = {
+                if (cameraUtils.saveTempChart(tempHistory, isCelsius)) {
+                    coroutineScope.launch { snackbarHostState.showSnackbar("Chart saved") }
+                }
+            },
             onDismiss = { showTempChart = false },
         )
     }
@@ -845,6 +850,7 @@ private fun TimeLapseDialog(
 private fun TempHistoryDialog(
     samples: List<TempSample>,
     isCelsius: Boolean,
+    onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -854,15 +860,19 @@ private fun TempHistoryDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
         },
+        dismissButton = {
+            TextButton(onClick = onSave, enabled = samples.size >= 2) { Text("Save") }
+        },
     )
 }
 
 /** Rolling line chart of spot/max/min temperature over the last few minutes — max in red, spot
  *  in green (bolder, the primary signal to watch), min in blue. Values are plotted exactly as
  *  recorded (whatever unit was active at sample time); only the axis suffix reflects the
- *  *current* unit, so a mid-session unit change won't retroactively relabel older samples. */
+ *  *current* unit, so a mid-session unit change won't retroactively relabel older samples.
+ *  Not private — reused by ChartsScreen to render saved charts identically. */
 @Composable
-private fun TemperatureHistoryChart(
+fun TemperatureHistoryChart(
     samples: List<TempSample>,
     isCelsius: Boolean,
 ) {
@@ -922,7 +932,7 @@ private fun TemperatureHistoryChart(
 }
 
 @Composable
-private fun LegendEntry(color: Color, label: String) {
+fun LegendEntry(color: Color, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Canvas(modifier = Modifier.size(10.dp)) {
             drawCircle(color = color)
