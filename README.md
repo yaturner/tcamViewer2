@@ -80,6 +80,8 @@ All spotmeter-derived elements (temperature header, hotspot marker, and position
 
 ### Temperature history / Charts
 
+![Temperature history dialog](screenshots/temp_history_dialog.png)
+
 The Camera screen's chart icon opens a **Temperature History** dialog: a rolling line chart of spot (green, bolder), max (red), and min (blue) temperature over the last 5 minutes, with a **Save** button alongside **Close**.
 
 - Chart data is recorded continuously while connected (once per frame with valid radiometric data), independent of streaming/recording
@@ -88,6 +90,10 @@ The Camera screen's chart icon opens a **Temperature History** dialog: a rolling
 - **Save** writes the chart to disk as a `.tchart` file, viewable later in the **Charts** tab
 
 ### Charts screen
+
+| Charts tab | Chart detail |
+|---|---|
+| ![Charts screen](screenshots/charts_screen.png) | ![Chart detail](screenshots/chart_detail.png) |
 
 The Charts tab lists saved temperature-history charts, grouped by date, mirroring the Library screen's UX:
 
