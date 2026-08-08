@@ -404,7 +404,12 @@ class CameraViewModel : ViewModel() {
         minValue: Float,
         isCelsius: Boolean,
     ) {
-        if (!alertEnabled) {
+        // "Spot" only fires while the point hotspot marker is actually visible — Spotmeter
+        // disabled or Region Measurement mode active both mean nothing is drawn at that
+        // location, even though the value itself is still being computed underneath. Max/Min
+        // aren't tied to a marker at all, so they're unaffected.
+        val spotVisible = spotmeterEnabled.value && measurementMode.value == MeasurementMode.POINT
+        if (!alertEnabled || (alertMetric == "Spot" && !spotVisible)) {
             alertCurrentlyTriggered = false
             return
         }
