@@ -56,6 +56,7 @@ The library groups saved files by date. Video recordings show a white camera bad
 
 - Browses all saved `.tjsn` (image), `.mtjsn` (video), and `.tltjsn` (time lapse) files grouped by date
 - Thumbnail preview loaded lazily per visible row; video recordings show a white camera badge; time lapse files show a yellow timer badge
+- **Filter by date** — a filter icon in the toolbar (tinted when active) opens a From/To date-range picker; only file groups saved within that range are shown
 - Multi-select with visual highlight and checkmark badge
 - Ascending / descending sort and Select All / Clear via overflow menu
 - Delete selected files from disk
@@ -143,6 +144,7 @@ When connected, a **Camera Settings** section appears at the top with AGC, emiss
 - Shutter sound toggle
 - Spotmeter enable / disable
 - Region Measurement enable / disable — switches the Camera screen between the point spotmeter and the resizable [region measurement](#region-measurement) box; mutually exclusive with Spotmeter and persists across sessions
+- **Temperature Alert** — fires an in-app message (Snackbar on the Camera screen) the moment a chosen metric (Spot/Max/Min) crosses a threshold in the current unit, in a chosen direction (Above/Below); edge-triggered, so it fires once per crossing rather than every frame
 - Export resolution for shared/exported video (`.mtjsn` / `.tltjsn` playback → MP4)
 - All settings are deferred until **Save** is pressed; **Cancel** discards changes and returns to the previous tab
 
