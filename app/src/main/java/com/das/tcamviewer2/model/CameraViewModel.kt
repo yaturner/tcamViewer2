@@ -210,6 +210,12 @@ class CameraViewModel : ViewModel() {
 
     private val tempHistoryWindowMs = 5 * 60_000L // keep the last 5 minutes of samples
 
+    // Widened to the full requested duration while a time lapse is running (time lapses can now
+    // run up to 24 hours), so the chart auto-saved on completion covers the whole capture instead
+    // of just whatever's left in a 5-minute trailing window. Null outside of an active time lapse,
+    // which restores the normal rolling-window behavior for live streaming.
+    @Volatile private var tempHistoryWindowOverrideMs: Long? = null
+
     // 35mm-style shutter click — plays for on-demand single-frame reads (Get, time lapse
     // captures) but not for continuous streaming/recording frames, which would be constant noise.
     //
@@ -453,8 +459,9 @@ class CameraViewModel : ViewModel() {
     }
 
     /** Appends a temperature-over-time sample and trims anything older than
-     *  [tempHistoryWindowMs]. Called from both the frame-processing dispatcher and Main (a
-     *  unit change re-renders and records immediately), so the buffer mutation is synchronized. */
+     *  [tempHistoryWindowMs] (or [tempHistoryWindowOverrideMs] during a time lapse). Called from
+     *  both the frame-processing dispatcher and Main (a unit change re-renders and records
+     *  immediately), so the buffer mutation is synchronized. */
     private fun recordTempSample(
         spot: Float,
         max: Float,
@@ -463,7 +470,7 @@ class CameraViewModel : ViewModel() {
         val now = System.currentTimeMillis()
         val snapshot = synchronized(tempHistoryBuffer) {
             tempHistoryBuffer.addLast(TempSample(now, spot, max, min))
-            val cutoff = now - tempHistoryWindowMs
+            val cutoff = now - (tempHistoryWindowOverrideMs ?: tempHistoryWindowMs)
             while (tempHistoryBuffer.isNotEmpty() && tempHistoryBuffer.first().timestampMs < cutoff) {
                 tempHistoryBuffer.removeFirst()
             }
@@ -692,6 +699,7 @@ class CameraViewModel : ViewModel() {
         val intervalMs = intervalSec * 1000L
         val durationMs = durationSec * 1000L
         _isTimeLapsing.value = true
+        tempHistoryWindowOverrideMs = durationMs
         timeLapseJob =
             viewModelScope.launch(Dispatchers.IO) {
                 var stream: FileOutputStream? = null
@@ -743,6 +751,9 @@ class CameraViewModel : ViewModel() {
                         val suffix = if (chartSaved) ", chart saved" else ""
                         _timeLapseMessage.tryEmit("Time lapse complete — $frameCount frames captured$suffix")
                     }
+                    // Restore the normal 5-minute rolling window for whatever streaming/viewing
+                    // happens next, now that the full-duration chart has been read and saved.
+                    tempHistoryWindowOverrideMs = null
                 }
             }
     }
