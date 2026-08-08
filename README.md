@@ -30,12 +30,23 @@ The live view above shows a thermal image using the Rainbow palette. The spotmet
 - 10 colour palettes selectable from a drop-down: Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia
 - **Auto-reconnect** — if an active connection drops unexpectedly (as opposed to the user disconnecting), the app retries the last-known IP a few times, then falls back to mDNS discovery in case the camera's DHCP lease handed out a new address
 - **Temperature history chart** — a chart icon (top-right, next to fullscreen) opens a rolling chart of spot/max/min temperature over the last 5 minutes; see [Temperature history / Charts](#temperature-history--charts) below
+- **Region measurement** — an alternative to the point spotmeter showing avg/min/max within a resizable box; see [Region measurement](#region-measurement) below
 - **Get** — captures a single frame from the camera
 - **Save** — saves the current frame to disk as a `.tjsn` file
 - **Stream → Start** — starts continuous streaming (frames displayed, not saved)
 - **Stream → Record** — starts streaming and simultaneously records every frame to a `.mtjsn` file
 - **Stream → Time Lapse** — opens a dialog to select capture interval (1 second – 5 minutes) and total duration (30 seconds – 2 hours); sends a `get_image` command at each interval and saves the frames to a `.tltjsn` file. The button shows **Rec** while each frame is being captured and **Stream** while waiting for the next interval. A notification appears when the duration expires.
 - **Stop** — stops streaming, recording, or an in-progress time lapse
+
+### Region measurement
+
+![Region measurement](screenshots/camera_region_measurement.png)
+
+An alternative to the point spotmeter: a resizable box with corner handles replaces the single hollow-square marker, and the header readout shows the average, minimum, and maximum temperature within it instead of a single spot value. Drag the box's body to move it, or drag a corner handle to resize.
+
+- Enabled via the **Region Measurement** toggle in Settings (see below) — mutually exclusive with the point spotmeter, so only one is ever shown/interactive at a time
+- Avg/min/max are computed entirely on-device from the raw per-frame radiometric data; no extra command is sent to the camera
+- The **on/off preference** persists across sessions; the box's own position is session-only and re-centers on each connect
 
 ### Library screen
 
@@ -120,6 +131,8 @@ The Charts tab lists saved temperature-history charts, grouped by date, mirrorin
 |---|---|
 | ![Settings connected top](screenshots/settings_connected_top.png) | ![Settings connected bottom](screenshots/settings_connected_bottom.png) |
 
+![Region Measurement toggle](screenshots/settings_region_measurement.png)
+
 When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
 
 - Camera IP address — changing it while connected and pressing **Save** first shows a confirmation dialog (this will disconnect the camera); confirming disconnects only, and the new address is persisted on the next **Save** press
@@ -129,6 +142,7 @@ When connected, a **Camera Settings** section appears at the top with AGC, emiss
 - Manual temperature range (min / max)
 - Shutter sound toggle
 - Spotmeter enable / disable
+- Region Measurement enable / disable — switches the Camera screen between the point spotmeter and the resizable [region measurement](#region-measurement) box; mutually exclusive with Spotmeter and persists across sessions
 - Export resolution for shared/exported video (`.mtjsn` / `.tltjsn` playback → MP4)
 - All settings are deferred until **Save** is pressed; **Cancel** discards changes and returns to the previous tab
 
