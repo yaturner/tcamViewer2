@@ -62,7 +62,10 @@ class CameraService : Service() {
     // Resolved with the next radiometric frame; used by getImageOnce() for time lapse capture
     @Volatile private var singleImageDeferred: CompletableDeferred<JSONObject>? = null
 
-    private var running = false
+    // Volatile: read from the listening-loop coroutine, written from disconnect() on whatever
+    // coroutine calls it — needs to be visible across threads so a read failure caused by our
+    // own deliberate teardown isn't mistaken for an unexpected drop (see notifyConnectionLost).
+    @Volatile private var running = false
     private var bytesRead = 0
     private var responsePos = 0
 
@@ -75,6 +78,14 @@ class CameraService : Service() {
 
     // Create the private pipeline where the socket loop dumps raw data
     private val imageChannel = PublishSubject.create<JSONObject>()
+
+    // Emits when a previously-good connection dies on its own (read/write failure, camera-side
+    // close) — as opposed to disconnect(), which is the user/ViewModel asking to disconnect.
+    // Lets the ViewModel distinguish "the user meant to disconnect" from "we should try to
+    // reconnect automatically" without polling isConnected.
+    private val connectionLostSubject = PublishSubject.create<Unit>()
+
+    fun getConnectionLostSignal(): Observable<Unit> = connectionLostSubject.hide()
 
     // Binder setup that gives the ViewModel access to this service instance
     private val binder = CameraServiceBinder()
@@ -228,8 +239,10 @@ class CameraService : Service() {
             true
         } catch (e: IOException) {
             Timber.e(e, "Command write failed — tearing down connection")
+            val wasConnected = connectedFlag
             teardownConnection()
             failPendingRequests("Socket write failed: ${e.message}")
+            if (wasConnected) connectionLostSubject.onNext(Unit)
             false
         }
     }
@@ -370,17 +383,21 @@ class CameraService : Service() {
                         continue
                     } catch (e: java.io.IOException) {
                         Timber.e(e, "Socket read error — tearing down connection")
+                        val wasRunning = running
                         running = false
                         teardownConnection()
                         failPendingRequests("Socket read error: ${e.message}")
+                        if (wasRunning) connectionLostSubject.onNext(Unit)
                         break
                     }
                     when {
                         bytesRead < 0 -> {
                             Timber.w("Socket read hit EOF — camera closed the connection")
+                            val wasRunning = running
                             running = false
                             teardownConnection()
                             failPendingRequests("Camera closed the connection")
+                            if (wasRunning) connectionLostSubject.onNext(Unit)
                             break
                         }
 

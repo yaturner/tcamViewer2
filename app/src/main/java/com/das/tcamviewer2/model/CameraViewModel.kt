@@ -13,6 +13,7 @@ import com.das.tcamviewer2.cameraUtils
 import com.das.tcamviewer2.constants.Constants
 import com.das.tcamviewer2.paletteFactory
 import com.das.tcamviewer2.settingsDataManager
+import com.das.tcamviewer2.utils.discoverTcamCameras
 import io.reactivex.rxjava3.disposables.Disposable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -139,6 +140,7 @@ class CameraViewModel : ViewModel() {
     // CONFLATED: only keeps the latest frame; old frames are dropped when processing falls behind
     private val frameChannel = Channel<JSONObject>(Channel.CONFLATED)
     private var frameDisposable: Disposable? = null
+    private var connectionLostDisposable: Disposable? = null
 
     // selectedPalette drives currentPalette StateFlow and is passed as a hint to ImageDto.create
     // @Volatile ensures writes on Main are immediately visible to processFrame on Dispatchers.Default
@@ -179,6 +181,13 @@ class CameraViewModel : ViewModel() {
                 .subscribe(
                     { json -> frameChannel.trySend(json) },
                     { error -> Timber.e(error, "Frame stream error") },
+                )
+        connectionLostDisposable =
+            cameraService
+                .getConnectionLostSignal()
+                .subscribe(
+                    { onConnectionLost() },
+                    { error -> Timber.e(error, "Connection-lost signal error") },
                 )
         viewModelScope.launch(Dispatchers.Default) {
             for (json in frameChannel) processFrame(json)
@@ -275,7 +284,7 @@ class CameraViewModel : ViewModel() {
         _minTempValue.value = minValue
     }
 
-    private suspend fun connectToCamera(ip: String) {
+    private suspend fun connectToCamera(ip: String, showErrorOnFailure: Boolean = true) {
         Timber.d("connectToCamera ip=$ip")
         _isConnecting.value = true
         try {
@@ -294,11 +303,48 @@ class CameraViewModel : ViewModel() {
             if (connected) {
                 cameraService.getImage()
                 loadCameraConfig()
-            } else {
+            } else if (showErrorOnFailure) {
                 _showConnectError.value = true
             }
         } finally {
             _isConnecting.value = false
+        }
+    }
+
+    /** Called when CameraService reports a previously-good connection died on its own (as
+     *  opposed to the user disconnecting). Only meaningful if we still think we're connected —
+     *  guards against a signal arriving after the user already disconnected/reconnected. */
+    private fun onConnectionLost() {
+        if (!_isConnected.value) return
+        _isConnected.value = false
+        _isStreaming.value = false
+        startAutoReconnect()
+    }
+
+    /** Retries the last-known address a few times first — most drops are transient (WiFi
+     *  hiccup, camera modem-sleep) and clear up without the address changing. If those all
+     *  fail, falls back to mDNS discovery in case the camera's DHCP lease handed out a new
+     *  address, and retries once more against whatever it finds. Suppresses the normal
+     *  connect-error dialog for every attempt but the last, so a background retry loop doesn't
+     *  pop it repeatedly. */
+    private fun startAutoReconnect() {
+        connectJob?.cancel()
+        connectJob = viewModelScope.launch(Dispatchers.IO) {
+            val lastIp = settingsDataManager.getCameraIp()
+            repeat(3) { attempt ->
+                delay(3_000L * (attempt + 1))
+                if (!isActive) return@launch
+                connectToCamera(lastIp, showErrorOnFailure = false)
+                if (_isConnected.value) return@launch
+            }
+            if (!isActive) return@launch
+            val camera = discoverTcamCameras(appContext, timeoutMs = 8_000L).firstOrNull()
+            if (!isActive) return@launch
+            if (camera != null) {
+                if (camera.ip != lastIp) settingsDataManager.saveCameraIp(camera.ip)
+                connectToCamera(camera.ip, showErrorOnFailure = false)
+            }
+            if (!_isConnected.value && isActive) _showConnectError.value = true
         }
     }
 
@@ -316,6 +362,7 @@ class CameraViewModel : ViewModel() {
             _cameraConfig.value = null
             userMovedSpotmeter = false
         } else {
+            connectJob?.cancel()
             connectJob = viewModelScope.launch(Dispatchers.IO) {
                 connectToCamera(settingsDataManager.getCameraIp())
             }
@@ -741,6 +788,7 @@ class CameraViewModel : ViewModel() {
         super.onCleared()
         frameChannel.close()
         frameDisposable?.dispose()
+        connectionLostDisposable?.dispose()
         cameraService.disconnect()
     }
 }
