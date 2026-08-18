@@ -1550,11 +1550,13 @@ suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
     // follow the "Export Resolution" setting rather than always rendering at 640×480.
     val (imgW, imgH) = parseResolution(settingsDataManager.getExportResolution()) ?: (640 to 480)
     val scale = imgW / 640f
-    val headerH = (64 * scale).toInt() // room for the centred spotmeter temperature
+    // With Export Metadata off, the export is just the plain colorized picture at the
+    // selected resolution — no header/sidebar/footer chrome around it.
+    val headerH = if (exportMetadata) (64 * scale).toInt() else 0 // room for the centred spotmeter temperature
     val footerRow1Y = 34f * scale // baseline of the gain/emissivity row, relative to footer top
     val footerRow2Y = 72f * scale // baseline of the date/time row, relative to footer top
-    val bottomPad = (96 * scale).toInt() // room for both footer rows below the image
-    val sidebarW = if (hasThermal) (120 * scale).toInt() else 0
+    val bottomPad = if (exportMetadata) (96 * scale).toInt() else 0 // room for both footer rows below the image
+    val sidebarW = if (hasThermal && exportMetadata) (120 * scale).toInt() else 0
     val totalW = imgW + sidebarW
     val totalH = headerH + imgH + bottomPad
 
@@ -1563,7 +1565,7 @@ suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
     canvas.drawColor(android.graphics.Color.BLACK)
 
     // ── Header: centred spotmeter temperature (only when Spotmeter setting is on) ──
-    if (hasThermal && spotmeterEnabled) {
+    if (exportMetadata && hasThermal && spotmeterEnabled) {
         val headerPaint = android.graphics.Paint().apply {
             color = android.graphics.Color.WHITE
             textSize = 40f * scale
@@ -1586,7 +1588,7 @@ suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
         scaled.recycle()
     }
 
-    if (hasThermal) {
+    if (hasThermal && exportMetadata) {
         // Hotspot marker — same fixed 4x4-camera-pixel square shown on-screen, only when enabled.
         if (spotmeterEnabled) {
             dto.spotmeterLocation?.let { rect ->
