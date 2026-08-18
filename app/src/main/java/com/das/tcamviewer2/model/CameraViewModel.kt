@@ -216,8 +216,10 @@ class CameraViewModel : ViewModel() {
     // which restores the normal rolling-window behavior for live streaming.
     @Volatile private var tempHistoryWindowOverrideMs: Long? = null
 
-    // 35mm-style shutter click — plays for on-demand single-frame reads (Get, time lapse
-    // captures) but not for continuous streaming/recording frames, which would be constant noise.
+    // 35mm-style shutter click — plays only when the user manually taps the "Get" button
+    // (see getImage() below), not for the auto-Get on connect, the spotmeter-drag re-Get,
+    // streaming/recording frames, or time-lapse captures — all of which would be constant
+    // or surprising noise (https://github.com/yaturner/tcamViewer2/issues/15).
     //
     // Bundled as a PCM WAV (res/raw) and played via MediaPlayer rather than through
     // MediaActionSound/SoundPool: SoundPool has a long-standing bug decoding short OGG Vorbis
@@ -225,6 +227,9 @@ class CameraViewModel : ViewModel() {
     // instead of a clean sound — a plain PCM WAV through MediaPlayer's full decode pipeline
     // sidesteps that entirely.
     @Volatile private var shutterSoundEnabled = true
+
+    // Set right before a manual Get request goes out, consumed by the next processFrame().
+    @Volatile private var manualGetPending = false
 
     private fun playShutterSound() {
         try {
@@ -688,7 +693,9 @@ class CameraViewModel : ViewModel() {
     }
 
     fun getImage() {
-        if (_isConnected.value) cameraService.getImage()
+        if (!_isConnected.value) return
+        manualGetPending = true
+        cameraService.getImage()
     }
 
     fun startTimeLapse(
@@ -914,10 +921,11 @@ class CameraViewModel : ViewModel() {
 
     private suspend fun processFrame(json: JSONObject) {
         if (!json.has("radiometric")) return
-        // Only single on-demand reads (Get, time lapse captures) click — continuous
-        // streaming/recording frames arrive too fast for a per-frame shutter sound to make sense.
-        if (shutterSoundEnabled && !_isStreaming.value) {
-            playShutterSound()
+        // Only the frame that answers a manually-tapped Get clicks — not the auto-Get on
+        // connect, the spotmeter-drag re-Get, streaming/recording frames, or time-lapse captures.
+        if (manualGetPending) {
+            manualGetPending = false
+            if (shutterSoundEnabled) playShutterSound()
         }
         try {
             val stream = recordingStream
