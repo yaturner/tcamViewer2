@@ -362,7 +362,7 @@ fun CameraScreen(
                                         fontSize = 11.sp,
                                         textAlign = TextAlign.Center,
                                     )
-                                } else {
+                                } else if (spotmeterEnabled) {
                                     Text(
                                         text = spotmeterText,
                                         fontSize = 12.sp,
@@ -381,15 +381,20 @@ fun CameraScreen(
                                         .fillMaxSize()
                                         .then(
                                             if (measurementMode == MeasurementMode.POINT) {
-                                                Modifier.pointerInput(isConnected) {
-                                                    if (!isConnected) return@pointerInput
-                                                    detectTapGestures { offset ->
-                                                        val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
-                                                            .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
-                                                        val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
-                                                            .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-                                                        viewModel.setSpotmeter(camX, camY)
+                                                if (spotmeterEnabled) {
+                                                    Modifier.pointerInput(isConnected) {
+                                                        if (!isConnected) return@pointerInput
+                                                        detectTapGestures { offset ->
+                                                            val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
+                                                                .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                                            val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
+                                                                .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                                            viewModel.setSpotmeter(camX, camY)
+                                                        }
                                                     }
+                                                } else {
+                                                    // Spotmeter disabled — the image isn't interactive at all.
+                                                    Modifier
                                                 }
                                             } else {
                                                 // Keyed only on isConnected/mode (not the region itself, which
