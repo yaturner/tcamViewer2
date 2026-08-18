@@ -691,10 +691,9 @@ For questions about this privacy statement, please contact the developer through
 
     // --- Warn before changing the camera IP while connected — set_config/get_image etc. all
     // target the old address, so switching it out from under an active connection would just
-    // leave the app pointed at a socket to nowhere. OK only disconnects — nothing is saved here;
-    // the edited fields stay on screen and are only persisted by a subsequent Save press (which
-    // by then sees isConnected == false and proceeds straight to performSave). Cancel disconnects
-    // nothing and leaves the unsaved edits untouched. ---
+    // leave the app pointed at a socket to nowhere. OK disconnects (synchronously — toggleConnection's
+    // disconnect branch updates isConnected before returning) and then saves immediately, same as a
+    // normal Save press. Cancel disconnects nothing and leaves the unsaved edits untouched. ---
     if (showIpChangeConfirm) {
         AlertDialog(
             onDismissRequest = { showIpChangeConfirm = false },
@@ -704,6 +703,7 @@ For questions about this privacy statement, please contact the developer through
                 TextButton(onClick = {
                     viewModel.toggleConnection() // isConnected is true here, so this disconnects
                     showIpChangeConfirm = false
+                    coroutineScope.launch { performSave(sendConfigIfConnected = true) }
                 }) { Text("OK") }
             },
             dismissButton = {
