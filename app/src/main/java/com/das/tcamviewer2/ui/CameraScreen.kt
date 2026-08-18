@@ -92,14 +92,18 @@ import com.das.tcamviewer2.model.CameraViewModel
 import com.das.tcamviewer2.model.MeasurementMode
 import com.das.tcamviewer2.model.TempSample
 import com.das.tcamviewer2.paletteFactory
+import com.das.tcamviewer2.settingsDataManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import com.das.tcamviewer2.utils as globalUtils
 
 private val PALETTE_OPTIONS = listOf(
     "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
@@ -151,6 +155,7 @@ fun CameraScreen(
     val showConnectError by viewModel.showConnectError.collectAsState()
     val tempHistory by viewModel.tempHistory.collectAsState()
     val isCelsius by viewModel.isCelsius.collectAsState()
+    val exportPictureOnSave by settingsDataManager.exportPictureFlow.collectAsState(initial = false)
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
     var paletteMenuExpanded by remember { mutableStateOf(false) }
@@ -658,6 +663,21 @@ fun CameraScreen(
                                 if (cameraUtils.saveTjsn(dto)) {
                                     coroutineScope.launch {
                                         snackbarHostState.showSnackbar("Image saved as ${dto.filename}")
+                                    }
+                                    if (exportPictureOnSave) {
+                                        coroutineScope.launch {
+                                            val exportBitmap = withContext(Dispatchers.Default) {
+                                                buildShareBitmap(dto, isCelsius)
+                                            }
+                                            val folder = cameraUtils.generateNewPath()
+                                            val name = dto.filename.orEmpty().removeSuffix(".tjsn").removePrefix("img_")
+                                            val saved = withContext(Dispatchers.IO) {
+                                                globalUtils.saveBitmap(exportBitmap, folder, name) != null
+                                            }
+                                            if (saved) {
+                                                snackbarHostState.showSnackbar("Exported to gallery")
+                                            }
+                                        }
                                     }
                                 }
                             }

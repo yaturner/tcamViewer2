@@ -592,7 +592,7 @@ private fun BrowseWindow(
                                 val currentDto = dto ?: return@IconButton
                                 coroutineScope.launch {
                                     val shareBitmap = withContext(Dispatchers.Default) {
-                                        buildShareBitmap(currentDto, file, isCelsius)
+                                        buildShareBitmap(currentDto, isCelsius)
                                     }
                                     val shareDir = File(context.cacheDir, "share")
                                         .also { it.mkdirs() }
@@ -627,7 +627,7 @@ private fun BrowseWindow(
                                 val currentDto = dto ?: return@IconButton
                                 coroutineScope.launch {
                                     val exportBitmap = withContext(Dispatchers.Default) {
-                                        buildShareBitmap(currentDto, file, isCelsius)
+                                        buildShareBitmap(currentDto, isCelsius)
                                     }
                                     val folder = file.parentFile?.name ?: "tCam"
                                     val name = file.nameWithoutExtension.removePrefix("img_")
@@ -1539,7 +1539,7 @@ private suspend fun readFirstMtjsnFrame(file: File): JSONObject? = withContext(D
  * sidebar + temperature labels + spotmeter overlay + gain/emissivity/date-time footer.
  * All rendering via Android Canvas (no Compose layer).
  */
-private suspend fun buildShareBitmap(dto: ImageDto, file: File, isCelsius: Boolean): Bitmap {
+suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
     val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
     val hasThermal = dto.tLinearEnabled != 0
     val spotmeterEnabled = settingsDataManager.getSpotmeter()
