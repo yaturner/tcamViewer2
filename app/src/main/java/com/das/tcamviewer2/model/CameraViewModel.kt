@@ -489,6 +489,11 @@ class CameraViewModel : ViewModel() {
         _tempHistory.value = emptyList()
     }
 
+    /** User-triggered reset from the Temperature History dialog's Clear button — the buffer
+     *  otherwise just keeps rolling, with no way to start a fresh window short of toggling
+     *  Region Measurement (which resets it as a side effect). */
+    fun clearChartHistory() = clearTempHistory()
+
     private suspend fun connectToCamera(ip: String, showErrorOnFailure: Boolean = true) {
         Timber.d("connectToCamera ip=$ip")
         _isConnecting.value = true

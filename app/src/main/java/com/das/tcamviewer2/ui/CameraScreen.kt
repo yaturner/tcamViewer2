@@ -262,6 +262,7 @@ fun CameraScreen(
                     coroutineScope.launch { snackbarHostState.showSnackbar("Chart saved") }
                 }
             },
+            onClear = { viewModel.clearChartHistory() },
             onDismiss = { showTempChart = false },
         )
     }
@@ -953,6 +954,7 @@ private fun TempHistoryDialog(
     isCelsius: Boolean,
     primaryLabel: String,
     onSave: () -> Unit,
+    onClear: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -963,13 +965,19 @@ private fun TempHistoryDialog(
             TextButton(onClick = onDismiss) { Text("Close") }
         },
         dismissButton = {
-            TextButton(
-                onClick = {
-                    onSave()
-                    onDismiss()
-                },
-                enabled = samples.size >= 2,
-            ) { Text("Save") }
+            Row {
+                // Clears the rolling buffer so it restarts fresh from now — otherwise it just
+                // keeps accumulating indefinitely with no way to reset it short of toggling
+                // Region Measurement, which resets it as a side effect.
+                TextButton(onClick = onClear, enabled = samples.isNotEmpty()) { Text("Clear") }
+                TextButton(
+                    onClick = {
+                        onSave()
+                        onDismiss()
+                    },
+                    enabled = samples.size >= 2,
+                ) { Text("Save") }
+            }
         },
     )
 }
