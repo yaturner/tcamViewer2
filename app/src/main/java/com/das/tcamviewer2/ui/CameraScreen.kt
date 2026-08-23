@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Menu
@@ -619,6 +620,18 @@ fun CameraScreen(
                         Icon(
                             imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                             contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
+                        )
+                    }
+                }
+
+                if (imageBitmap != null) {
+                    IconButton(
+                        onClick = { viewModel.runFfc() },
+                        enabled = isConnected,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.CenterFocusStrong,
+                            contentDescription = "Flat field correction",
                         )
                     }
                 }

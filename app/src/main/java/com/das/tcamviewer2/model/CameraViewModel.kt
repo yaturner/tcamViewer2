@@ -703,6 +703,11 @@ class CameraViewModel : ViewModel() {
         cameraService.getImage()
     }
 
+    fun runFfc() {
+        if (!_isConnected.value) return
+        cameraService.runFfc()
+    }
+
     fun startTimeLapse(
         intervalSec: Int,
         durationSec: Int,
