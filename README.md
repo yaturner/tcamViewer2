@@ -30,6 +30,7 @@ The live view above shows a thermal image using the Rainbow palette. The spotmet
 - 10 colour palettes selectable from a drop-down: Arctic, Banded, Blackhot, DoubleRainbow, Fusion, Gray, Ironblack, Isotherm, Rainbow, Sepia
 - **Auto-reconnect** — if an active connection drops unexpectedly (as opposed to the user disconnecting), the app retries the last-known IP a few times, then falls back to mDNS discovery in case the camera's DHCP lease handed out a new address
 - **Temperature history chart** — a chart icon (top-right, next to fullscreen) opens a rolling chart of spot/max/min temperature over the last 5 minutes; see [Temperature history / Charts](#temperature-history--charts) below
+- **Flat field correction (FFC)** — an icon below the fullscreen toggle sends the camera a `run_ffc` command to manually trigger the Lepton's flat field correction on demand
 - **Region measurement** — an alternative to the point spotmeter showing avg/min/max within a resizable box; see [Region measurement](#region-measurement) below
 - **Get** — captures a single frame from the camera
 - **Save** — saves the current frame to disk as a `.tjsn` file
