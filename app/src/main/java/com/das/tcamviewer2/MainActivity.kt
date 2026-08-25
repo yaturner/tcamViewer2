@@ -3,6 +3,7 @@ package com.das.tcamviewer2
 import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -105,6 +106,14 @@ fun MainScreen() {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
     val openDrawer: () -> Unit = { coroutineScope.launch { drawerState.open() } }
+
+    // Hardware/gesture back returns to the Camera tab from any other tab. Disabled on Camera
+    // itself so its own back handling (e.g. exiting fullscreen) and the system default
+    // (exit app) still apply there.
+    BackHandler(enabled = selectedTabItem != 0) {
+        previousTabItem = selectedTabItem
+        selectedTabItem = 0
+    }
 
     ModalNavigationDrawer(
         modifier = Modifier.fillMaxSize(),
