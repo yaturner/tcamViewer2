@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: August 28, 2026**
+**Last updated: August 30, 2026**
 
 tCam Viewer ("the app") is a viewer for [tCam](https://github.com/danjulio/tCam) thermal imaging
 cameras. This page explains what data the app accesses and what, if anything, leaves your device.
@@ -72,5 +72,6 @@ reflect it.
 
 ## Contact
 
-Questions about this policy or the app's data handling can be raised by opening an issue at
+Questions about this policy or the app's data handling can be sent to
+[privacy@darcangel.com](mailto:privacy@darcangel.com), or raised by opening an issue at
 <https://github.com/yaturner/tcamViewer2/issues>.
