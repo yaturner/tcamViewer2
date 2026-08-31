@@ -46,11 +46,11 @@ val appVersionName = "$appVersionMajor.$appVersionMinor.$appBuildTimestamp"
 val appVersionCode = appVersionMajor * 100_000 + appVersionMinor
 
 android {
-    namespace = "com.das.tcamviewer2"
+    namespace = "com.danjuliodesigns.tcamviewer2"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.das.tcamviewer2"
+        applicationId = "com.danjuliodesigns.tcamviewer2"
         minSdk = 26
         targetSdk = 37
         versionCode = appVersionCode

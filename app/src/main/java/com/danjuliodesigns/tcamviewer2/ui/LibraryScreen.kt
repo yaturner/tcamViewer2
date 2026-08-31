@@ -1,0 +1,1708 @@
+package com.danjuliodesigns.tcamviewer2.ui
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.os.Environment
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NavigateBefore
+import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Timelapse
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.danjuliodesigns.tcamviewer2.constants.Constants
+import com.danjuliodesigns.tcamviewer2.model.ImageDto
+import com.danjuliodesigns.tcamviewer2.paletteFactory
+import com.danjuliodesigns.tcamviewer2.settingsDataManager
+import com.danjuliodesigns.tcamviewer2.utils.VideoExporter
+import com.danjuliodesigns.tcamviewer2.utils.drawHotspotMarker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
+import java.util.Date
+import com.danjuliodesigns.tcamviewer2.utils as globalUtils
+
+// File isn't directly saveable, but its path is — lets browseFiles survive rotation so the
+// Browse overlay doesn't silently drop back to the file grid (same class of bug as issue #2).
+private val FileListSaver = listSaver<List<File>, String>(
+    save = { list -> list.map { it.absolutePath } },
+    restore = { paths -> paths.map { File(it) } },
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
+    val context = LocalContext.current
+
+    var fileGroups by remember { mutableStateOf<List<Pair<String, List<File>>>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var selectedPaths by remember { mutableStateOf(emptySet<String>()) }
+    var sortAscending by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var browseFiles by rememberSaveable(stateSaver = FileListSaver) { mutableStateOf<List<File>>(emptyList()) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
+    var filterFromMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var filterToMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    val dateFilterActive = filterFromMillis != null || filterToMillis != null
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val picturesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
+                ?: context.filesDir
+            val moviesDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                ?: context.filesDir
+            val folderMap = mutableMapOf<String, MutableList<File>>()
+            for (rootDir in listOf(picturesDir, moviesDir)) {
+                rootDir.listFiles()
+                    ?.filter { it.isDirectory }
+                    ?.forEach { dateDir ->
+                        val files = dateDir.listFiles { f ->
+                            f.extension == "tjsn" || f.extension == "mtjsn" || f.extension == "tltjsn"
+                        } ?: return@forEach
+                        if (files.isNotEmpty()) {
+                            folderMap.getOrPut(dateDir.name) { mutableListOf() }.addAll(files)
+                        }
+                    }
+            }
+            fileGroups = folderMap.entries
+                .sortedByDescending { it.key }
+                .map { (folder, files) -> folder to files.sortedByDescending { it.name } }
+            isLoading = false
+        }
+    }
+
+    val displayGroups = remember(fileGroups, sortAscending, filterFromMillis, filterToMillis) {
+        val filtered = fileGroups.filter { (folder, _) ->
+            val folderMillis = parseFolderDateMillis(folder) ?: return@filter true
+            (filterFromMillis == null || folderMillis >= filterFromMillis!!) &&
+                (filterToMillis == null || folderMillis <= filterToMillis!!)
+        }
+        val sortedFolders = if (sortAscending) {
+            filtered.sortedBy { it.first }
+        } else {
+            filtered.sortedByDescending { it.first }
+        }
+        sortedFolders.map { (folder, files) ->
+            folder to if (sortAscending) {
+                files.sortedBy { it.name }
+            } else {
+                files.sortedByDescending { it.name }
+            }
+        }
+    }
+
+    val allPaths = remember(fileGroups) {
+        fileGroups.flatMap { it.second }.map { it.absolutePath }.toSet()
+    }
+
+    // Wrap in a Box so BrowseWindow can overlay as a sibling of the Scaffold
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        val n = selectedPaths.size
+                        Text(if (n == 0) "Library" else "$n selected")
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Filled.Menu, contentDescription = "Open menu")
+                        }
+                    },
+                    actions = {
+                        if (selectedPaths.isNotEmpty()) {
+                            IconButton(onClick = {
+                                browseFiles = displayGroups
+                                    .flatMap { it.second }
+                                    .filter { it.absolutePath in selectedPaths }
+                            }) {
+                                Icon(Icons.Default.Visibility, contentDescription = "Browse")
+                            }
+                            IconButton(onClick = { showDeleteConfirm = true }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete")
+                            }
+                        }
+                        IconButton(
+                            onClick = { showFilterDialog = true },
+                            enabled = fileGroups.isNotEmpty(),
+                        ) {
+                            Icon(
+                                Icons.Default.FilterList,
+                                contentDescription = if (dateFilterActive) "Date filter (active)" else "Filter by date",
+                                tint = if (!dateFilterActive) {
+                                    LocalContentColor.current
+                                } else if (fileGroups.isNotEmpty()) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    LocalContentColor.current
+                                },
+                            )
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { menuExpanded = true },
+                                enabled = fileGroups.isNotEmpty(),
+                            ) {
+                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Select all") },
+                                    onClick = {
+                                        selectedPaths = allPaths
+                                        menuExpanded = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Clear selections") },
+                                    onClick = {
+                                        selectedPaths = emptySet()
+                                        menuExpanded = false
+                                    },
+                                )
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Sort ascending") },
+                                    onClick = {
+                                        sortAscending = true
+                                        menuExpanded = false
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sort descending") },
+                                    onClick = {
+                                        sortAscending = false
+                                        menuExpanded = false
+                                    },
+                                )
+                            }
+                        }
+                    },
+                )
+            },
+        ) { innerPadding ->
+            when {
+                isLoading -> Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) { CircularProgressIndicator() }
+
+                displayGroups.isEmpty() -> Box(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No saved files", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                else -> LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                ) {
+                    displayGroups.forEach { (folderName, files) ->
+                        item(key = "header_$folderName", span = { GridItemSpan(2) }) {
+                            Text(
+                                text = formatDateFolder(folderName),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(
+                                    start = 16.dp,
+                                    top = 16.dp,
+                                    bottom = 4.dp,
+                                ),
+                            )
+                        }
+                        items(files, key = { it.absolutePath }) { file ->
+                            val isSelected = file.absolutePath in selectedPaths
+                            ThumbnailGridCell(
+                                file = file,
+                                isSelected = isSelected,
+                                onClick = {
+                                    selectedPaths = if (isSelected) {
+                                        selectedPaths - file.absolutePath
+                                    } else {
+                                        selectedPaths + file.absolutePath
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Browse overlay — drawn on top of the Scaffold, fills the same area
+        if (browseFiles.isNotEmpty()) {
+            BrowseWindow(
+                files = browseFiles,
+                onDismiss = { browseFiles = emptyList() },
+                onDelete = { deletedFile ->
+                    deletedFile.delete()
+                    fileGroups = fileGroups.mapNotNull { (folder, files) ->
+                        val remaining = files.filter { it.absolutePath != deletedFile.absolutePath }
+                        if (remaining.isNotEmpty()) folder to remaining else null
+                    }
+                    browseFiles = browseFiles.filter { it.absolutePath != deletedFile.absolutePath }
+                },
+            )
+        }
+
+        if (showDeleteConfirm) {
+            val n = selectedPaths.size
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete $n file${if (n == 1) "" else "s"}?") },
+                text = { Text("This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        selectedPaths.forEach { File(it).delete() }
+                        fileGroups = fileGroups.mapNotNull { (folder, files) ->
+                            val remaining = files.filter { it.absolutePath !in selectedPaths }
+                            if (remaining.isNotEmpty()) folder to remaining else null
+                        }
+                        selectedPaths = emptySet()
+                        showDeleteConfirm = false
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                },
+            )
+        }
+
+        if (showFilterDialog) {
+            DateFilterDialog(
+                fromMillis = filterFromMillis,
+                toMillis = filterToMillis,
+                onApply = { from, to ->
+                    filterFromMillis = from
+                    filterToMillis = to
+                    showFilterDialog = false
+                },
+                onDismiss = { showFilterDialog = false },
+            )
+        }
+    }
+}
+
+/** MM_dd_yyyy folder name → local midnight epoch millis, or null if it doesn't match that format
+ *  (defensively lets any unexpected folder name pass every filter rather than being hidden). */
+internal fun parseFolderDateMillis(folderName: String): Long? = runCatching {
+    java.text.SimpleDateFormat("MM_dd_yyyy", java.util.Locale.getDefault())
+        .apply { isLenient = false }
+        .parse(folderName)
+        ?.time
+}.getOrNull()
+
+// Not private — reused by ChartsScreen for the same date-range filter.
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DateFilterDialog(
+    fromMillis: Long?,
+    toMillis: Long?,
+    onApply: (from: Long?, to: Long?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var pendingFrom by remember { mutableStateOf(fromMillis) }
+    var pendingTo by remember { mutableStateOf(toMillis) }
+    var showFromPicker by remember { mutableStateOf(false) }
+    var showToPicker by remember { mutableStateOf(false) }
+    val dateFmt = remember { java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filter by Date") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Only show files saved within this range.", style = MaterialTheme.typography.bodySmall)
+                // enabled=false on the field itself would visually gray it out AND (a Compose
+                // gotcha) swallow touches before an externally-chained .clickable ever sees them
+                // — so instead keep it enabled/read-only for normal styling and overlay a
+                // transparent Box to catch the tap and open the date picker.
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = pendingFrom?.let { dateFmt.format(Date(it)) } ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("From") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { showFromPicker = true },
+                    )
+                }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = pendingTo?.let { dateFmt.format(Date(it)) } ?: "",
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("To") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { showToPicker = true },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onApply(pendingFrom, pendingTo) }) { Text("Apply") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = {
+                    pendingFrom = null
+                    pendingTo = null
+                }) { Text("Clear") }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        },
+    )
+
+    if (showFromPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = pendingFrom)
+        DatePickerDialog(
+            onDismissRequest = { showFromPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingFrom = state.selectedDateMillis
+                    showFromPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFromPicker = false }) { Text("Cancel") }
+            },
+        ) { DatePicker(state = state) }
+    }
+
+    if (showToPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = pendingTo)
+        DatePickerDialog(
+            onDismissRequest = { showToPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingTo = state.selectedDateMillis
+                    showToPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showToPicker = false }) { Text("Cancel") }
+            },
+        ) { DatePicker(state = state) }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BrowseWindow(
+    files: List<File>,
+    onDismiss: () -> Unit,
+    onDelete: (File) -> Unit,
+) {
+    BackHandler(onBack = onDismiss)
+
+    // rememberSaveable so rotating while browsing a file (or watching its video) doesn't
+    // silently drop back to the plain image view — same class of bug as issue #2.
+    var currentIndex by rememberSaveable { mutableIntStateOf(0) }
+    var showVideoPlayer by rememberSaveable { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Keep index in bounds when the list shrinks after a delete
+    LaunchedEffect(files.size) {
+        if (files.isEmpty()) {
+            onDismiss()
+        } else {
+            currentIndex = currentIndex.coerceAtMost(files.size - 1)
+        }
+    }
+
+    val file = files.getOrNull(currentIndex) ?: return
+
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var dto by remember { mutableStateOf<ImageDto?>(null) }
+    val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
+    val isCelsius = tempUnit == "Celsius"
+    val spotmeterEnabled by settingsDataManager.spotmeterFlow.collectAsState(initial = true)
+
+    LaunchedEffect(file) {
+        dto = null // show spinner while loading the new image
+        dto = withContext(Dispatchers.Default) {
+            runCatching {
+                if (file.extension == "mtjsn" || file.extension == "tltjsn") {
+                    val json = readFirstMtjsnFrame(file) ?: return@runCatching null
+                    ImageDto.create(json, null)
+                } else {
+                    ImageDto.create(file.absolutePath, null)
+                }
+            }.getOrNull()
+        }
+    }
+
+    // dto.bitmap is already colour-mapped by processImageResponse using the palette from metadata
+    val imageBitmap = remember(dto?.paletteName, dto?.bitmap) { dto?.bitmap?.asImageBitmap() }
+
+    // Build the colour bar from the same palette name stored in the dto metadata
+    val colorBarBitmap = remember(dto?.paletteName) {
+        val palette = paletteFactory.getPaletteByName(dto?.paletteName) ?: return@remember null
+        val pixels = IntArray(256) { i ->
+            val rgb = palette[255 - i]
+            val r = rgb?.get(0) ?: 0
+            val g = rgb?.get(1) ?: 0
+            val b = rgb?.get(2) ?: 0
+            (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        createBitmap(1, 256).also { it.setPixels(pixels, 0, 1, 0, 0, 1, 256) }.asImageBitmap()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                formatFilename(file.name),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                file.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    actions = {
+                        // Play — opens video player for .mtjsn recordings and .tltjsn time lapses
+                        if (file.extension == "mtjsn" || file.extension == "tltjsn") {
+                            IconButton(onClick = { showVideoPlayer = true }) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Play video")
+                            }
+                        }
+                        // Share — composites the full screen (image + colorbar + temps) and shares as PNG
+                        IconButton(
+                            onClick = {
+                                val currentDto = dto ?: return@IconButton
+                                coroutineScope.launch {
+                                    val shareBitmap = withContext(Dispatchers.Default) {
+                                        buildShareBitmap(currentDto, isCelsius)
+                                    }
+                                    val shareDir = File(context.cacheDir, "share")
+                                        .also { it.mkdirs() }
+                                    val shareFile = File(shareDir, "${file.nameWithoutExtension}.png")
+                                    withContext(Dispatchers.IO) {
+                                        shareFile.outputStream().use {
+                                            shareBitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                                        }
+                                    }
+                                    val uri = FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        shareFile,
+                                    )
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "image/png"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(
+                                        Intent.createChooser(intent, "Share thermal image"),
+                                    )
+                                }
+                            },
+                            enabled = dto?.bitmap != null,
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share")
+                        }
+                        // Export — saves composite image (bitmap + colorbar + temps) to gallery
+                        IconButton(
+                            onClick = {
+                                val currentDto = dto ?: return@IconButton
+                                coroutineScope.launch {
+                                    val exportBitmap = withContext(Dispatchers.Default) {
+                                        buildShareBitmap(currentDto, isCelsius)
+                                    }
+                                    val folder = file.parentFile?.name ?: "tCam"
+                                    val name = file.nameWithoutExtension.removePrefix("img_")
+                                    val saved = withContext(Dispatchers.IO) {
+                                        globalUtils.saveBitmap(exportBitmap, folder, name) != null
+                                    }
+                                    Toast.makeText(
+                                        context,
+                                        if (saved) "Saved to gallery: $name" else "Export failed",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            },
+                            enabled = dto?.bitmap != null,
+                        ) {
+                            Icon(Icons.Default.SaveAlt, contentDescription = "Export to gallery")
+                        }
+                        // Delete — removes the current file from the list
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
+                    },
+                )
+            },
+        ) { innerPadding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(Color.Black),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when {
+                        dto == null -> CircularProgressIndicator()
+
+                        imageBitmap != null -> {
+                            val currentDto = dto!!
+                            val hasThermal = currentDto.tLinearEnabled != 0
+                            val scale = if (currentDto.tLinearResolution == 0) 10f else 100f
+                            val colorBar = colorBarBitmap
+
+                            val hasSidebar = hasThermal && colorBar != null
+                            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                                val sidebarW = if (hasSidebar) 64.dp else 0.dp
+                                val labelH = if (hasThermal) 26.dp else 0.dp
+                                val availW = (maxWidth - sidebarW).coerceAtLeast(1.dp)
+                                val availH = (maxHeight - labelH).coerceAtLeast(1.dp)
+                                val fitScale = minOf(
+                                    availW.value / Constants.IMAGE_WIDTH,
+                                    availH.value / Constants.IMAGE_HEIGHT,
+                                )
+                                val imgW = (Constants.IMAGE_WIDTH * fitScale).dp
+                                val imgH = (Constants.IMAGE_HEIGHT * fitScale).dp
+
+                                Row(
+                                    modifier = Modifier.align(Alignment.Center),
+                                    verticalAlignment = Alignment.Top,
+                                ) {
+                                    // Main image: spotmeter temp above, hotspot square drawn on the image.
+                                    // Header reserves the same labelH used for the sidebar's max-temp
+                                    // label, so the image and the color bar start at the same Y.
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        if (hasThermal) {
+                                            Box(
+                                                modifier = Modifier.width(imgW).height(labelH),
+                                                contentAlignment = Alignment.BottomCenter,
+                                            ) {
+                                                Text(
+                                                    text = formatTemp(
+                                                        currentDto.spotmeterMean,
+                                                        scale,
+                                                        isCelsius,
+                                                    ),
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White,
+                                                    textAlign = TextAlign.Center,
+                                                )
+                                            }
+                                        }
+                                        Box(modifier = Modifier.size(width = imgW, height = imgH)) {
+                                            Image(
+                                                bitmap = imageBitmap,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.FillBounds,
+                                            )
+                                            if (hasThermal && spotmeterEnabled) {
+                                                SpotmeterOverlay(currentDto.spotmeterLocation)
+                                            }
+                                        }
+                                    }
+
+                                    // Sidebar: max temp → color bar → min temp. The bar itself is
+                                    // exactly imgH tall; the labels add extra height above/below
+                                    // rather than shrinking it.
+                                    if (hasThermal && colorBar != null) {
+                                        // Fraction of the way down the bar (0 = max/top, 1 = min/bottom)
+                                        // the current spotmeter reading falls at, for the marker arrow.
+                                        // Raw telemetry values are unit-independent as a ratio.
+                                        val spotFraction = remember(
+                                            currentDto.maxTemperature,
+                                            currentDto.minTemperature,
+                                            currentDto.spotmeterMean,
+                                        ) {
+                                            val max = currentDto.maxTemperature
+                                            val min = currentDto.minTemperature
+                                            val spot = currentDto.spotmeterMean
+                                            if (max != min) {
+                                                ((max - spot).toFloat() / (max - min)).coerceIn(0f, 1f)
+                                            } else {
+                                                null
+                                            }
+                                        }
+                                        Column(
+                                            modifier = Modifier
+                                                .width(64.dp)
+                                                .padding(horizontal = 4.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.height(labelH),
+                                                contentAlignment = Alignment.BottomCenter,
+                                            ) {
+                                                Text(
+                                                    text = formatTemp(
+                                                        currentDto.maxTemperature,
+                                                        scale,
+                                                        isCelsius,
+                                                    ),
+                                                    fontSize = 11.sp,
+                                                    color = Color.White,
+                                                    textAlign = TextAlign.Center,
+                                                )
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .height(imgH)
+                                                    .width(38.dp)
+                                                    .padding(vertical = 4.dp),
+                                            ) {
+                                                Image(
+                                                    bitmap = colorBar,
+                                                    contentDescription = "Color scale",
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(start = 7.dp),
+                                                    contentScale = ContentScale.FillBounds,
+                                                )
+                                                if (spotmeterEnabled && spotFraction != null) {
+                                                    Canvas(modifier = Modifier.matchParentSize()) {
+                                                        val y = spotFraction * size.height
+                                                        val tipX = 7.dp.toPx()
+                                                        val halfHeight = 7.dp.toPx()
+                                                        val path = Path().apply {
+                                                            moveTo(tipX, y)
+                                                            lineTo(0f, y - halfHeight)
+                                                            lineTo(0f, y + halfHeight)
+                                                            close()
+                                                        }
+                                                        drawPath(path, color = Color.White)
+                                                        drawPath(path, color = Color.Black, style = Stroke(width = 1.dp.toPx()))
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = formatTemp(
+                                                    currentDto.minTemperature,
+                                                    scale,
+                                                    isCelsius,
+                                                ),
+                                                fontSize = 11.sp,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Center,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        else -> Text("Could not load image", color = Color.White)
+                    }
+                } // end image Box
+
+                // Prev / Next navigation — only shown when browsing multiple selected images
+                if (files.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(
+                            onClick = { currentIndex-- },
+                            enabled = currentIndex > 0,
+                        ) {
+                            Icon(
+                                Icons.Default.NavigateBefore,
+                                contentDescription = "Previous",
+                                tint = Color.White,
+                            )
+                        }
+                        Text(
+                            text = "${currentIndex + 1} / ${files.size}",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        IconButton(
+                            onClick = { currentIndex++ },
+                            enabled = currentIndex < files.size - 1,
+                        ) {
+                            Icon(
+                                Icons.Default.NavigateNext,
+                                contentDescription = "Next",
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                }
+            } // end Column
+        }
+        if (showVideoPlayer) {
+            VideoPlayerWindow(file = file, onDismiss = { showVideoPlayer = false })
+        }
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete this file?") },
+                text = { Text("This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showDeleteConfirm = false
+                        onDelete(file)
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                },
+            )
+        }
+    } // end Box
+}
+
+@Composable
+private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Unit) {
+    var thumbnail by remember(file) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(file) {
+        thumbnail = withContext(Dispatchers.Default) {
+            runCatching {
+                if (file.extension == "mtjsn" || file.extension == "tltjsn") {
+                    val json = readFirstMtjsnFrame(file) ?: return@runCatching null
+                    ImageDto.create(json, null).bitmap?.asImageBitmap()
+                } else {
+                    ImageDto.create(file.absolutePath, null).bitmap?.asImageBitmap()
+                }
+            }.getOrNull()
+        }
+    }
+
+    val bgColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .padding(4.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(4f / 3f),
+        ) {
+            if (thumbnail != null) {
+                Image(
+                    bitmap = thumbnail!!,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.FillBounds,
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize().background(Color.DarkGray),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            }
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Filled.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(20.dp),
+                )
+            }
+            if (file.extension == "mtjsn") {
+                Icon(
+                    imageVector = Icons.Default.Videocam,
+                    contentDescription = "Video recording",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp)
+                        .size(20.dp),
+                )
+            }
+            if (file.extension == "tltjsn") {
+                Icon(
+                    imageVector = Icons.Default.Timelapse,
+                    contentDescription = "Time lapse",
+                    tint = Color.Yellow,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(4.dp)
+                        .size(20.dp),
+                )
+            }
+        }
+        Text(
+            text = formatFilename(file.name),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+        )
+    }
+}
+
+internal fun formatTemp(rawValue: Int, scale: Float, isCelsius: Boolean): String {
+    val tempC = rawValue / scale - 273.15f
+    return if (isCelsius) "%.1f°C".format(tempC) else "%.1f°F".format(tempC * 9f / 5f + 32f)
+}
+
+/** MM_dd_yyyy → "June 25, 2026" */
+internal fun formatDateFolder(name: String): String {
+    val parts = name.split("_")
+    if (parts.size != 3) return name
+    val monthNames = arrayOf(
+        "", "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    )
+    val month = parts[0].toIntOrNull()?.let { monthNames.getOrNull(it) } ?: return name
+    return "$month ${parts[1]}, ${parts[2]}"
+}
+
+/** img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.mtjsn → "HH:mm:ss",  tl_HH_mm_ss.tltjsn → "HH:mm:ss" */
+internal fun formatFilename(name: String): String {
+    val base = when {
+        name.endsWith(".mtjsn") -> name.removeSuffix(".mtjsn").removePrefix("vid_")
+        name.endsWith(".tltjsn") -> name.removeSuffix(".tltjsn").removePrefix("tl_")
+        else -> name.removeSuffix(".tjsn").removePrefix("img_")
+    }
+    val parts = base.split("_")
+    return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name
+}
+
+private data class VideoFrame(val bitmap: ImageBitmap, val dto: ImageDto, val timestampMs: Long)
+private data class MtjsnContent(val frames: List<JSONObject>, val videoInfo: JSONObject?)
+
+private suspend fun readMtjsnContent(file: File): MtjsnContent = withContext(Dispatchers.IO) {
+    val frames = mutableListOf<JSONObject>()
+    val sb = StringBuilder()
+    file.inputStream().use { stream ->
+        val buf = ByteArray(8192)
+        while (true) {
+            val n = stream.read(buf)
+            if (n < 0) break
+            for (i in 0 until n) {
+                val b = buf[i].toInt() and 0xFF
+                if (b == 0x03) {
+                    if (sb.isNotEmpty()) {
+                        runCatching {
+                            val json = JSONObject(sb.toString())
+                            if (json.has("radiometric")) frames.add(json)
+                        }
+                        sb.clear()
+                    }
+                } else {
+                    sb.append(b.toChar())
+                }
+            }
+        }
+    }
+    // Content remaining after the last ETX (no trailing ETX) is the footer JSON
+    val footer = if (sb.isNotEmpty()) {
+        runCatching { JSONObject(sb.toString()).optJSONObject("video_info") }.getOrNull()
+    } else {
+        null
+    }
+    MtjsnContent(frames, footer)
+}
+
+internal fun calculateFrameInterval(videoInfo: JSONObject?, numFrames: Int): Long {
+    if (videoInfo == null || numFrames <= 1) return 125L
+    return runCatching {
+        val startMs = parseVideoTimeMs(videoInfo.getString("start_time")) ?: return@runCatching 125L
+        val endMs = parseVideoTimeMs(videoInfo.getString("end_time")) ?: return@runCatching 125L
+        if (endMs > startMs) (endMs - startMs) / numFrames else 125L
+    }.getOrElse { 125L }
+}
+
+internal fun parseVideoTimeMs(t: String): Long? = runCatching {
+    val p = t.split(":")
+    val ms = p[2].split(".").let { it.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLong() ?: 0L }
+    p[0].toLong() * 3_600_000L + p[1].toLong() * 60_000L + p[2].split(".")[0].toLong() * 1_000L + ms
+}.getOrNull()
+
+internal fun parseFrameTimestampMs(json: JSONObject): Long = runCatching {
+    val timeStr = json.getJSONObject("metadata").optString("Time", "")
+    parseVideoTimeMs(timeStr) ?: 0L
+}.getOrElse { 0L }
+
+private const val SKIP_FRAMES = 5
+private val TIME_LAPSE_SPEEDS = listOf(0.1f, 0.25f, 0.5f, 1f, 2f, 4f, 8f)
+private const val TIME_LAPSE_DEFAULT_SPEED_INDEX = 3
+
+private fun formatSpeed(v: Float): String = if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
+    BackHandler(onBack = onDismiss)
+
+    var videoFrames by remember { mutableStateOf<List<VideoFrame>>(emptyList()) }
+    var frameIntervals by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var fallbackIntervalMs by remember { mutableStateOf(125L) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(false) }
+    // currentIndex isn't worth making saveable here — LaunchedEffect(file) below resets it to 0
+    // on every fresh load anyway (frames themselves aren't cheaply saveable). isFullscreen is
+    // saveable so rotating mid-playback keeps fullscreen mode — same class of bug as issue #2.
+    var currentIndex by remember { mutableIntStateOf(0) }
+    var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
+    var showFrameJumpDialog by remember { mutableStateOf(false) }
+    var frameJumpInput by remember { mutableStateOf("") }
+    var speedIndex by remember { mutableIntStateOf(TIME_LAPSE_DEFAULT_SPEED_INDEX) }
+    val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
+    val isCelsius = tempUnit == "Celsius"
+    val spotmeterEnabled by settingsDataManager.spotmeterFlow.collectAsState(initial = true)
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    // Exit fullscreen with back button before closing the player
+    BackHandler(enabled = isFullscreen) { isFullscreen = false }
+
+    // Hide/restore system bars when entering/exiting fullscreen
+    val view = LocalView.current
+    val window = remember { (view.context as Activity).window }
+    DisposableEffect(isFullscreen) {
+        val controller = WindowCompat.getInsetsController(window, view)
+        if (isFullscreen) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { controller.show(WindowInsetsCompat.Type.systemBars()) }
+    }
+
+    LaunchedEffect(file) {
+        isLoading = true
+        isPlaying = false
+        currentIndex = 0
+        speedIndex = TIME_LAPSE_DEFAULT_SPEED_INDEX
+        val content = withContext(Dispatchers.IO) { readMtjsnContent(file) }
+        fallbackIntervalMs = calculateFrameInterval(content.videoInfo, content.frames.size)
+        val loaded = ArrayList<VideoFrame>(content.frames.size)
+        withContext(Dispatchers.Default) {
+            for (json in content.frames) {
+                val dto = runCatching { ImageDto.create(json, null) }.getOrNull() ?: continue
+                val bmp = dto.bitmap?.asImageBitmap() ?: continue
+                loaded.add(VideoFrame(bmp, dto, parseFrameTimestampMs(json)))
+            }
+        }
+        val intervals = ArrayList<Long>(loaded.size)
+        if (file.extension == "tltjsn") {
+            // Time lapse: ignore capture timestamps, play at smooth 8 fps
+            repeat(loaded.size) { intervals.add(125L) }
+        } else {
+            // Compute per-frame display durations from consecutive metadata timestamps.
+            // Fall back to the average interval for any gap that looks wrong (<10ms or >5s).
+            val fb = fallbackIntervalMs
+            for (i in 0 until loaded.size - 1) {
+                val dt = loaded[i + 1].timestampMs - loaded[i].timestampMs
+                intervals.add(if (dt in 10L..5_000L) dt else fb)
+            }
+            intervals.add(intervals.lastOrNull() ?: fb) // last frame: same duration as preceding
+        }
+        videoFrames = loaded
+        frameIntervals = intervals
+        isLoading = false
+    }
+
+    LaunchedEffect(isPlaying) {
+        if (!isPlaying || videoFrames.isEmpty()) return@LaunchedEffect
+        while (isPlaying) {
+            val baseInterval = frameIntervals.getOrElse(currentIndex) { fallbackIntervalMs }
+            val speed = if (file.extension == "tltjsn") TIME_LAPSE_SPEEDS[speedIndex] else 1f
+            delay((baseInterval / speed).toLong().coerceAtLeast(1L))
+            val next = currentIndex + 1
+            if (next >= videoFrames.size) {
+                isPlaying = false
+            } else {
+                currentIndex = next
+            }
+        }
+    }
+
+    val currentFrame = videoFrames.getOrNull(currentIndex)
+    val hasThermal = currentFrame?.dto?.tLinearEnabled != 0
+    val tempScale = if (currentFrame?.dto?.tLinearResolution == 0) 10f else 100f
+
+    val colorBarBitmap = remember(currentFrame?.dto?.paletteName) {
+        val palette = paletteFactory.getPaletteByName(currentFrame?.dto?.paletteName)
+            ?: return@remember null
+        val pix = IntArray(256) { i ->
+            val rgb = palette[255 - i]
+            (0xFF shl 24) or ((rgb?.get(0) ?: 0) shl 16) or ((rgb?.get(1) ?: 0) shl 8) or (rgb?.get(2) ?: 0)
+        }
+        createBitmap(1, 256).also { it.setPixels(pix, 0, 1, 0, 0, 1, 256) }.asImageBitmap()
+    }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            if (!isFullscreen) {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    title = {
+                        Column {
+                            Text(formatFilename(file.name), style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (isLoading) "Loading…" else "${videoFrames.size} frames",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    actions = {
+                        if (isExporting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .padding(end = 16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            // Share — encodes the frames to MP4 (correct per-frame timing) and shares it
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isExporting = true
+                                        val mp4 = runCatching {
+                                            exportVideoAsMp4(context, file, videoFrames, frameIntervals)
+                                        }.getOrNull()
+                                        isExporting = false
+                                        if (mp4 == null) {
+                                            Toast.makeText(context, "Export failed", Toast.LENGTH_LONG).show()
+                                            return@launch
+                                        }
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            mp4,
+                                        )
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "video/mp4"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(
+                                            Intent.createChooser(intent, "Share thermal video"),
+                                        )
+                                    }
+                                },
+                                enabled = videoFrames.isNotEmpty(),
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = "Share")
+                            }
+                            // Export — encodes the frames to MP4 (correct per-frame timing) and saves to gallery
+                            IconButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        isExporting = true
+                                        val mp4 = runCatching {
+                                            exportVideoAsMp4(context, file, videoFrames, frameIntervals)
+                                        }.getOrNull()
+                                        val saved = mp4?.let {
+                                            val folder = file.parentFile?.name ?: "tCam"
+                                            val name = file.nameWithoutExtension
+                                                .removePrefix("vid_").removePrefix("tl_")
+                                            withContext(Dispatchers.IO) {
+                                                globalUtils.saveVideo(it, folder, name) != null
+                                            }
+                                        } ?: false
+                                        isExporting = false
+                                        Toast.makeText(
+                                            context,
+                                            if (saved) "Saved to gallery" else "Export failed",
+                                            Toast.LENGTH_LONG,
+                                        ).show()
+                                    }
+                                },
+                                enabled = videoFrames.isNotEmpty(),
+                            ) {
+                                Icon(Icons.Default.SaveAlt, contentDescription = "Export to gallery")
+                            }
+                        }
+                    },
+                )
+            }
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(Color.Black),
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clickable { isFullscreen = !isFullscreen },
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    isLoading -> CircularProgressIndicator()
+
+                    videoFrames.isEmpty() -> Text("No frames to display", color = Color.White)
+
+                    currentFrame != null -> {
+                        val colorBar = colorBarBitmap
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            val hasSidebar = hasThermal && colorBar != null
+                            val sidebarW = if (hasSidebar) 64.dp else 0.dp
+                            val labelH = if (hasThermal) 26.dp else 0.dp
+                            val availW = (maxWidth - sidebarW).coerceAtLeast(1.dp)
+                            val availH = (maxHeight - labelH).coerceAtLeast(1.dp)
+                            val fitScale = minOf(
+                                availW.value / Constants.IMAGE_WIDTH,
+                                availH.value / Constants.IMAGE_HEIGHT,
+                            )
+                            val imgW = (Constants.IMAGE_WIDTH * fitScale).dp
+                            val imgH = (Constants.IMAGE_HEIGHT * fitScale).dp
+
+                            Row(
+                                modifier = Modifier.align(Alignment.Center),
+                                verticalAlignment = Alignment.Top,
+                            ) {
+                                // Header reserves the same labelH used for the sidebar's max-temp
+                                // label, so the image and the color bar start at the same Y.
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    if (hasThermal) {
+                                        Box(
+                                            modifier = Modifier.width(imgW).height(labelH),
+                                            contentAlignment = Alignment.BottomCenter,
+                                        ) {
+                                            Text(
+                                                text = formatTemp(currentFrame.dto.spotmeterMean, tempScale, isCelsius),
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Center,
+                                            )
+                                        }
+                                    }
+                                    Box(modifier = Modifier.size(width = imgW, height = imgH)) {
+                                        Image(
+                                            bitmap = currentFrame.bitmap,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.FillBounds,
+                                        )
+                                        if (hasThermal && spotmeterEnabled) {
+                                            SpotmeterOverlay(currentFrame.dto.spotmeterLocation)
+                                        }
+                                    }
+                                }
+                                if (hasThermal && colorBar != null) {
+                                    // Bar itself is exactly imgH tall; labels add extra height.
+                                    Column(
+                                        modifier = Modifier
+                                            .width(64.dp)
+                                            .padding(horizontal = 4.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.height(labelH),
+                                            contentAlignment = Alignment.BottomCenter,
+                                        ) {
+                                            Text(
+                                                formatTemp(currentFrame.dto.maxTemperature, tempScale, isCelsius),
+                                                fontSize = 11.sp,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Center,
+                                            )
+                                        }
+                                        Image(
+                                            bitmap = colorBar,
+                                            contentDescription = null,
+                                            modifier = Modifier.height(imgH).width(28.dp).padding(vertical = 4.dp),
+                                            contentScale = ContentScale.FillBounds,
+                                        )
+                                        Text(
+                                            formatTemp(currentFrame.dto.minTemperature, tempScale, isCelsius),
+                                            fontSize = 11.sp,
+                                            color = Color.White,
+                                            textAlign = TextAlign.Center,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!isLoading && videoFrames.isNotEmpty()) {
+                    IconButton(
+                        onClick = { isFullscreen = !isFullscreen },
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    ) {
+                        Icon(
+                            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                            contentDescription = if (isFullscreen) "Exit fullscreen" else "Fullscreen",
+                            tint = Color.White,
+                        )
+                    }
+                }
+            }
+
+            if (!isLoading && videoFrames.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF222222))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { currentIndex = (currentIndex - SKIP_FRAMES).coerceAtLeast(0) },
+                        enabled = currentIndex > 0,
+                    ) {
+                        Icon(Icons.Default.FastRewind, contentDescription = "Skip back", tint = Color.White)
+                    }
+                    IconButton(onClick = { isPlaying = !isPlaying }) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White,
+                        )
+                    }
+                    IconButton(
+                        onClick = { currentIndex = (currentIndex + SKIP_FRAMES).coerceAtMost(videoFrames.size - 1) },
+                        enabled = currentIndex < videoFrames.size - 1,
+                    ) {
+                        Icon(Icons.Default.FastForward, contentDescription = "Skip forward", tint = Color.White)
+                    }
+                    if (file.extension == "tltjsn") {
+                        Text(
+                            text = "${formatSpeed(TIME_LAPSE_SPEEDS[speedIndex])}x",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .width(44.dp)
+                                .clickable {
+                                    speedIndex = (speedIndex + 1) % TIME_LAPSE_SPEEDS.size
+                                },
+                        )
+                    }
+                    Slider(
+                        value = currentIndex.toFloat(),
+                        onValueChange = {
+                            isPlaying = false
+                            currentIndex = it.toInt().coerceIn(0, videoFrames.size - 1)
+                        },
+                        valueRange = 0f..maxOf(videoFrames.size - 1, 0).toFloat(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = Color.White,
+                            inactiveTrackColor = Color.Gray,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${currentIndex + 1}/${videoFrames.size}",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        modifier = androidx.compose.ui.Modifier
+                            .width(52.dp)
+                            .padding(start = 4.dp)
+                            .clickable {
+                                isPlaying = false
+                                frameJumpInput = (currentIndex + 1).toString()
+                                showFrameJumpDialog = true
+                            },
+                    )
+                }
+            }
+
+            if (showFrameJumpDialog) {
+                AlertDialog(
+                    onDismissRequest = { showFrameJumpDialog = false },
+                    title = { Text("Go to frame") },
+                    text = {
+                        OutlinedTextField(
+                            value = frameJumpInput,
+                            onValueChange = { frameJumpInput = it.filter(Char::isDigit) },
+                            label = { Text("Frame (1-${videoFrames.size})") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            frameJumpInput.toIntOrNull()?.let { n ->
+                                currentIndex = (n - 1).coerceIn(0, videoFrames.size - 1)
+                            }
+                            showFrameJumpDialog = false
+                        }) { Text("Go") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showFrameJumpDialog = false }) { Text("Cancel") }
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Encodes [frames] to an MP4 in the app's share cache dir, using [intervals] for per-frame timing. */
+private suspend fun exportVideoAsMp4(
+    context: android.content.Context,
+    sourceFile: File,
+    frames: List<VideoFrame>,
+    intervals: List<Long>,
+): File = withContext(Dispatchers.Default) {
+    val (rawW, rawH) = parseResolution(settingsDataManager.getExportResolution()) ?: (320 to 240)
+    val width = VideoExporter.align16(rawW)
+    val height = VideoExporter.align16(rawH)
+    val spotmeterEnabled = settingsDataManager.getSpotmeter()
+    val bitmaps = frames.map { it.dto.bitmap!! }
+    val spotmeterRects = frames.map {
+        if (spotmeterEnabled && it.dto.tLinearEnabled != 0) it.dto.spotmeterLocation else null
+    }
+    val exportDir = File(context.cacheDir, "share").also { it.mkdirs() }
+    val outputFile = File(exportDir, "${sourceFile.nameWithoutExtension}.mp4")
+    VideoExporter.exportMp4(bitmaps, intervals, spotmeterRects, outputFile, width, height)
+    outputFile
+}
+
+internal fun parseResolution(s: String): Pair<Int, Int>? {
+    val parts = s.lowercase().split("x")
+    if (parts.size != 2) return null
+    val w = parts[0].trim().toIntOrNull() ?: return null
+    val h = parts[1].trim().toIntOrNull() ?: return null
+    return w to h
+}
+
+private suspend fun readFirstMtjsnFrame(file: File): JSONObject? = withContext(Dispatchers.IO) {
+    runCatching {
+        val sb = StringBuilder()
+        file.inputStream().use { stream ->
+            val buf = ByteArray(8192)
+            var done = false
+            while (!done) {
+                val n = stream.read(buf)
+                if (n < 0) break
+                for (i in 0 until n) {
+                    val b = buf[i].toInt() and 0xFF
+                    if (b == 0x03) {
+                        done = true
+                        break
+                    }
+                    sb.append(b.toChar())
+                }
+            }
+        }
+        if (sb.isEmpty()) null else JSONObject(sb.toString())
+    }.getOrNull()
+}
+
+/**
+ * Builds a composite share image: spotmeter temp header + scaled thermal image + colour bar
+ * sidebar + temperature labels + spotmeter overlay + gain/emissivity/date-time footer.
+ * All rendering via Android Canvas (no Compose layer).
+ */
+suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
+    val tempScale = if (dto.tLinearResolution == 0) 10f else 100f
+    val hasThermal = dto.tLinearEnabled != 0
+    val spotmeterEnabled = settingsDataManager.getSpotmeter()
+    val exportMetadata = settingsDataManager.getExportMetadata()
+
+    // All dimensions in px (off-screen bitmap — not dp). Every other constant here was
+    // tuned against the 640×480 (160×4) design size, so scale them together with it to
+    // follow the "Export Resolution" setting rather than always rendering at 640×480.
+    val (imgW, imgH) = parseResolution(settingsDataManager.getExportResolution()) ?: (640 to 480)
+    val scale = imgW / 640f
+    // With Export Metadata off, the export is just the plain colorized picture at the
+    // selected resolution — no header/sidebar/footer chrome around it.
+    val headerH = if (exportMetadata) (64 * scale).toInt() else 0 // room for the centred spotmeter temperature
+    val footerRow1Y = 34f * scale // baseline of the gain/emissivity row, relative to footer top
+    val footerRow2Y = 72f * scale // baseline of the date/time row, relative to footer top
+    val bottomPad = if (exportMetadata) (96 * scale).toInt() else 0 // room for both footer rows below the image
+    val sidebarW = if (hasThermal && exportMetadata) (120 * scale).toInt() else 0
+    val totalW = imgW + sidebarW
+    val totalH = headerH + imgH + bottomPad
+
+    val result = Bitmap.createBitmap(totalW, totalH, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(result)
+    canvas.drawColor(android.graphics.Color.BLACK)
+
+    // ── Header: centred spotmeter temperature (only when Spotmeter setting is on) ──
+    if (exportMetadata && hasThermal && spotmeterEnabled) {
+        val headerPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 40f * scale
+            isAntiAlias = true
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        canvas.drawText(
+            formatTemp(dto.spotmeterMean, tempScale, isCelsius),
+            imgW / 2f,
+            headerH - 18f * scale,
+            headerPaint,
+        )
+    }
+
+    // ── Thermal image (scaled 4×, starts at y = headerH) ────────────────────
+    dto.bitmap?.let { src ->
+        val scaled = Bitmap.createScaledBitmap(src, imgW, imgH, true)
+        canvas.drawBitmap(scaled, 0f, headerH.toFloat(), null)
+        scaled.recycle()
+    }
+
+    if (hasThermal && exportMetadata) {
+        // Hotspot marker — same fixed 4x4-camera-pixel square shown on-screen, only when enabled.
+        if (spotmeterEnabled) {
+            dto.spotmeterLocation?.let { rect ->
+                drawHotspotMarker(canvas, rect, imgW, imgH, offsetY = headerH.toFloat())
+            }
+        }
+
+        // ── Colour bar: top-aligned with the image, full image height (matches
+        // the on-screen views — the bar itself is never shrunk to fit labels) ─
+        val cbW = (44 * scale).toInt()
+        val cbH = imgH
+        val cbX = imgW + (sidebarW - cbW) / 2
+        val cbY = headerH
+
+        val cbPixels = IntArray(256) { i ->
+            val rgb = dto.palette?.get(255 - i)
+            val r = rgb?.get(0) ?: 0
+            val g = rgb?.get(1) ?: 0
+            val b = rgb?.get(2) ?: 0
+            (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+        }
+        val cbSrc = Bitmap.createBitmap(1, 256, Bitmap.Config.ARGB_8888)
+        cbSrc.setPixels(cbPixels, 0, 1, 0, 0, 1, 256)
+        val cbScaled = Bitmap.createScaledBitmap(cbSrc, cbW, cbH, true)
+        canvas.drawBitmap(cbScaled, cbX.toFloat(), cbY.toFloat(), null)
+        cbSrc.recycle()
+        cbScaled.recycle()
+
+        // ── Arrow marking where the current spotmeter reading falls on the bar
+        // (same fraction math as the on-screen marker, only when Spotmeter is on) ─
+        if (spotmeterEnabled && dto.maxTemperature != dto.minTemperature) {
+            val fraction = (
+                (dto.maxTemperature - dto.spotmeterMean).toFloat() /
+                    (dto.maxTemperature - dto.minTemperature)
+                ).coerceIn(0f, 1f)
+            val arrowY = cbY + fraction * cbH
+            val tipX = cbX.toFloat()
+            val baseX = tipX - 25f * scale
+            val halfH = 18f * scale
+            val arrowPath = android.graphics.Path().apply {
+                moveTo(tipX, arrowY)
+                lineTo(baseX, arrowY - halfH)
+                lineTo(baseX, arrowY + halfH)
+                close()
+            }
+            val arrowFill = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE
+                style = android.graphics.Paint.Style.FILL
+                isAntiAlias = true
+            }
+            val arrowStroke = android.graphics.Paint().apply {
+                color = android.graphics.Color.BLACK
+                style = android.graphics.Paint.Style.STROKE
+                strokeWidth = 2f * scale
+                isAntiAlias = true
+            }
+            canvas.drawPath(arrowPath, arrowFill)
+            canvas.drawPath(arrowPath, arrowStroke)
+        }
+
+        // ── Max / min labels (above and below the colour bar) ────────────────
+        val tempPaint = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 30f * scale
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+        }
+        val sidebarCx = imgW + sidebarW / 2f
+        // Max: baseline sits just above the bar's top, inside the header band
+        canvas.drawText(
+            formatTemp(dto.maxTemperature, tempScale, isCelsius),
+            sidebarCx,
+            headerH - 12f * scale,
+            tempPaint,
+        )
+        // Min: baseline sits just below the bar's bottom, inside the footer band
+        canvas.drawText(
+            formatTemp(dto.minTemperature, tempScale, isCelsius),
+            sidebarCx,
+            (headerH + imgH + footerRow2Y).toFloat(),
+            tempPaint,
+        )
+    }
+
+    // ── Footer: row 1 = gain mode + emissivity, row 2 = time + date saved
+    // (only when the "Export Metadata" setting is on) ────────────────────────
+    if (exportMetadata) {
+        val gainLabel = when (dto.gainMode) {
+            Constants.GAIN_MODE_HIGH -> "HIGH"
+            Constants.GAIN_MODE_LOW -> "LOW"
+            Constants.GAIN_MODE_AUTO -> "AUTO"
+            else -> "?"
+        }
+        val emissivityStr = "%.2f".format(dto.emissivity / 8192f)
+        val timeStr = dto.metadata?.optString("Time").orEmpty()
+        val dateStr = dto.metadata?.optString("Date").orEmpty()
+
+        val infoPaintLeft = android.graphics.Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 28f * scale
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.LEFT
+        }
+        val infoPaintRight = android.graphics.Paint(infoPaintLeft).apply {
+            textAlign = android.graphics.Paint.Align.RIGHT
+        }
+        val footerTop = headerH + imgH
+        val leftX = 16f * scale
+        val rightX = imgW - 16f * scale
+        canvas.drawText("g $gainLabel", leftX, footerTop + footerRow1Y, infoPaintLeft)
+        canvas.drawText("ε $emissivityStr", rightX, footerTop + footerRow1Y, infoPaintRight)
+        canvas.drawText(timeStr, leftX, footerTop + footerRow2Y, infoPaintLeft)
+        canvas.drawText(dateStr, rightX, footerTop + footerRow2Y, infoPaintRight)
+    }
+
+    return result
+}

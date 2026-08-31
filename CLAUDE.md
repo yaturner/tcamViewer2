@@ -22,7 +22,7 @@ Android app (Kotlin + Jetpack Compose) for viewing a [tCam](https://github.com/d
 ./gradlew connectedAndroidTest
 
 # Run a single unit test class
-./gradlew test --tests "com.das.tcamviewer2.ExampleUnitTest"
+./gradlew test --tests "com.danjuliodesigns.tcamviewer2.ExampleUnitTest"
 
 # Check Kotlin formatting (ktlint via Spotless)
 ./gradlew spotlessCheck
