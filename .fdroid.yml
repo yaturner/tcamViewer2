@@ -3,8 +3,7 @@
 # repo instead of requiring a manual metadata PR to fdroiddata for every release.
 #
 # IMPORTANT: this app ships two build flavors (see app/build.gradle.kts):
-#   - "full"   — includes GlitchTip (Sentry-protocol-compatible) crash reporting,
-#                distributed via GitHub releases.
+#   - "full"   — includes Sentry crash reporting, distributed via GitHub releases.
 #   - "fdroid" — no crash reporting, no network telemetry of any kind. This is
 #                the flavor F-Droid must build (see Builds.gradle below), so the
 #                F-Droid release carries no Anti-Features: Tracking disclosure.

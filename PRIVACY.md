@@ -33,7 +33,7 @@ configuring it. No location data is stored, transmitted, or associated with you.
 
 ### Crash reports (GitHub/Prebuilt release build only)
 The build distributed via GitHub Releases includes automated crash reporting through
-[GlitchTip](https://glitchtip.com/) (a self-hosted, Sentry-compatible error tracking service). If
+[Sentry](https://sentry.io/) (an error tracking service operated by Functional Software, Inc.). If
 the app crashes or hits an unexpected error, a report is sent containing:
 - The stack trace of the error
 - App version and build type
@@ -43,7 +43,7 @@ These reports do not include your camera's IP address, saved images, telemetry, 
 you've captured. They exist to help fix bugs.
 
 **The F-Droid build of tCam Viewer has no crash reporting or network telemetry of any kind** — it
-contains no code path that can contact GlitchTip or any other external service beyond the camera
+contains no code path that can contact Sentry or any other external service beyond the camera
 itself.
 
 ## What the app does not do

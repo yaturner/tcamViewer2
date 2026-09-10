@@ -59,11 +59,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Environment tag lets debug/release crashes be filtered separately in the
-        // GlitchTip dashboard (see the "full" flavor below for the DSN itself).
+        // Sentry dashboard (see the "full" flavor below for the DSN itself).
         manifestPlaceholders["sentryEnvironment"] = "release"
     }
 
-    // "full" ships GlitchTip crash reporting (see app/src/full/AndroidManifest.xml);
+    // "full" ships Sentry crash reporting (see app/src/full/AndroidManifest.xml);
     // "fdroid" has no network telemetry at all, so the F-Droid build carries no
     // Anti-Features: Tracking disclosure. Distributed separately (GitHub vs F-Droid).
     flavorDimensions += "distribution"
@@ -71,7 +71,7 @@ android {
         create("full") {
             dimension = "distribution"
             // Not a secret — a DSN is meant to be embedded in every client build.
-            manifestPlaceholders["sentryDsn"] = "https://98271d16a43b45c993b62bc5fc6e7ccc@app.glitchtip.com/25696"
+            manifestPlaceholders["sentryDsn"] = "https://fec0fdfe7886f2d0d05892782cb4c06e@o1336451.ingest.us.sentry.io/4512062738530304"
         }
         create("fdroid") {
             dimension = "distribution"
