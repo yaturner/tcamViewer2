@@ -37,7 +37,7 @@ The live view above shows a thermal image using the Rainbow palette. The spotmet
 - **Get** — captures a single frame from the camera
 - **Save** — saves the current frame to disk as a `.tjsn` file
 - **Stream → Start** — starts continuous streaming (frames displayed, not saved)
-- **Stream → Record** — starts streaming and simultaneously records every frame to a `.mtjsn` file
+- **Stream → Record** — starts streaming and simultaneously records every frame to a `.tmjsn` file
 - **Stream → Time Lapse** — opens a dialog to select capture interval (1 second – 5 minutes) and total duration (30 seconds – 2 hours); sends a `get_image` command at each interval and saves the frames to a `.tltjsn` file. The button shows **Rec** while each frame is being captured and **Stream** while waiting for the next interval. Each captured frame also feeds the Temperature History chart, same as streaming. When the duration expires naturally, the chart is auto-saved as a `.tchart` file (no prompt) alongside the completion notification; manually stopping or discarding a time lapse does not trigger this.
 - **Stop** — stops streaming, recording, or an in-progress time lapse
 
@@ -59,7 +59,7 @@ An alternative to the point spotmeter: a resizable box with corner handles repla
 
 The library groups saved files by date. Video recordings show a white camera badge and time lapse files show a yellow timer badge (top-left of thumbnail). Tap a thumbnail to select it; the eye icon opens the browse window.
 
-- Browses all saved `.tjsn` (image), `.mtjsn` (video), and `.tltjsn` (time lapse) files grouped by date
+- Browses all saved `.tjsn` (image), `.tmjsn` (video), and `.tltjsn` (time lapse) files grouped by date
 - Thumbnail preview loaded lazily per visible row; video recordings show a white camera badge; time lapse files show a yellow timer badge
 - **Filter by date** — a filter icon in the toolbar (tinted when active) opens a From/To date-range picker; only file groups saved within that range are shown. The filter and overflow icons are disabled when there's nothing to filter
 - Multi-select with visual highlight and checkmark badge
@@ -71,7 +71,7 @@ The library groups saved files by date. Video recordings show a white camera bad
 
 ![Browse window](screenshots/browse_window.png)
 
-Full thermal image with colour bar, temperature labels, and spotmeter hotspot marker. Tap the play button (▶) on `.mtjsn` recordings and `.tltjsn` time lapses to open the video player.
+Full thermal image with colour bar, temperature labels, and spotmeter hotspot marker. Tap the play button (▶) on `.tmjsn` recordings and `.tltjsn` time lapses to open the video player.
 
 - Full-screen thermal image with colour bar sidebar
 - Max temperature (top of bar), min temperature (bottom of bar), and spotmeter temperature overlaid on the image
@@ -80,7 +80,7 @@ Full thermal image with colour bar, temperature labels, and spotmeter hotspot ma
 - Previous / next navigation when multiple files are selected
 - **Share** / **Export** – see [Exported / shared image](#exported--shared-image) below
 - **Delete** – removes the file from disk and returns to the library
-- **Play** (`.mtjsn` recordings and `.tltjsn` time lapses) – opens the video player
+- **Play** (`.tmjsn` recordings and `.tltjsn` time lapses) – opens the video player
 
 #### Exported / shared image
 
@@ -126,7 +126,7 @@ The Charts tab lists saved temperature-history charts, grouped by date, mirrorin
 
 ![Video player](screenshots/video_player.png)
 
-- Plays back `.mtjsn` recordings with accurate per-frame timing derived from metadata timestamps
+- Plays back `.tmjsn` recordings with accurate per-frame timing derived from metadata timestamps
 - Plays back `.tltjsn` time lapses at a smooth 8 fps (125 ms/frame), ignoring the original capture interval
 - **Skip back / forward** 5 frames with fast-rewind / fast-forward buttons
 - Scrub slider with frame counter
@@ -154,7 +154,7 @@ When connected, a **Camera Settings** section appears at the top with AGC, emiss
 - Spotmeter enable / disable
 - Region Measurement enable / disable — switches the Camera screen between the point spotmeter and the resizable [region measurement](#region-measurement) box; mutually exclusive with Spotmeter and persists across sessions
 - **Temperature Alert** — fires an in-app message (Snackbar on the Camera screen) the moment a chosen metric (Spot/Max/Min) crosses a threshold in the current unit, in a chosen direction (Above/Below); edge-triggered, so it fires once per crossing rather than every frame. The Spot metric only alerts while the point hotspot marker is actually visible on screen — it stays silent if Spotmeter is disabled or Region Measurement mode is active, since no marker is drawn in either case
-- Export resolution for shared/exported video (`.mtjsn` / `.tltjsn` playback → MP4)
+- Export resolution for shared/exported video (`.tmjsn` / `.tltjsn` playback → MP4)
 - All settings are deferred until **Save** is pressed; **Cancel** discards changes and returns to the previous tab
 
 ## Architecture
@@ -207,7 +207,9 @@ A single JSON object written verbatim from the camera frame:
 
 Saved to `<externalFilesDir>/Pictures/<MM_dd_yyyy>/img_<HH_mm_ss>.tjsn`. No storage permission required (app-private external storage).
 
-#### `.mtjsn` — multi-frame thermal video
+#### `.tmjsn` — multi-frame thermal video
+
+(named `.mtjsn` before issue #24 — recordings saved before that fix still open fine, still under that extension)
 
 A sequence of raw frame JSON objects delimited by ETX bytes (`0x03`), followed by a footer JSON object:
 
@@ -230,11 +232,11 @@ Each `<frameN_json>` is the same structure as a `.tjsn` file. The footer carries
 }
 ```
 
-Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/vid_<HH_mm_ss>.mtjsn`. Playback uses the per-frame `metadata` timestamps to reconstruct accurate inter-frame timing regardless of the recording frame rate.
+Saved to `<externalFilesDir>/Movies/<MM_dd_yyyy>/vid_<HH_mm_ss>.tmjsn`. Playback uses the per-frame `metadata` timestamps to reconstruct accurate inter-frame timing regardless of the recording frame rate.
 
 #### `.tltjsn` — time lapse
 
-Identical byte structure to `.mtjsn`. Each frame is captured on demand via a `get_image` command at the selected interval rather than from a continuous stream. The footer is the same `video_info` structure.
+Identical byte structure to `.tmjsn`. Each frame is captured on demand via a `get_image` command at the selected interval rather than from a continuous stream. The footer is the same `video_info` structure.
 
 ```
 <frame1_json> 0x03 <frame2_json> 0x03 … <frameN_json> 0x03 <video_info_json>

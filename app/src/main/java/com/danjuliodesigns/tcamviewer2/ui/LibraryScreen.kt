@@ -151,7 +151,10 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                     ?.filter { it.isDirectory }
                     ?.forEach { dateDir ->
                         val files = dateDir.listFiles { f ->
-                            f.extension == "tjsn" || f.extension == "mtjsn" || f.extension == "tltjsn"
+                            // "mtjsn" is the legacy extension (issue #24 renamed it to "tmjsn"
+                            // for new recordings); still recognized so existing files stay visible.
+                            f.extension == "tjsn" || f.extension == "tmjsn" || f.extension == "mtjsn" ||
+                                f.extension == "tltjsn"
                         } ?: return@forEach
                         if (files.isNotEmpty()) {
                             folderMap.getOrPut(dateDir.name) { mutableListOf() }.addAll(files)
@@ -530,7 +533,7 @@ private fun BrowseWindow(
         dto = null // show spinner while loading the new image
         dto = withContext(Dispatchers.Default) {
             runCatching {
-                if (file.extension == "mtjsn" || file.extension == "tltjsn") {
+                if (file.extension == "tmjsn" || file.extension == "mtjsn" || file.extension == "tltjsn") {
                     val json = readFirstMtjsnFrame(file) ?: return@runCatching null
                     ImageDto.create(json, null)
                 } else {
@@ -580,8 +583,8 @@ private fun BrowseWindow(
                         }
                     },
                     actions = {
-                        // Play — opens video player for .mtjsn recordings and .tltjsn time lapses
-                        if (file.extension == "mtjsn" || file.extension == "tltjsn") {
+                        // Play — opens video player for .tmjsn (or legacy .mtjsn) recordings and .tltjsn time lapses
+                        if (file.extension == "tmjsn" || file.extension == "mtjsn" || file.extension == "tltjsn") {
                             IconButton(onClick = { showVideoPlayer = true }) {
                                 Icon(Icons.Default.PlayArrow, contentDescription = "Play video")
                             }
@@ -885,7 +888,7 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
     LaunchedEffect(file) {
         thumbnail = withContext(Dispatchers.Default) {
             runCatching {
-                if (file.extension == "mtjsn" || file.extension == "tltjsn") {
+                if (file.extension == "tmjsn" || file.extension == "mtjsn" || file.extension == "tltjsn") {
                     val json = readFirstMtjsnFrame(file) ?: return@runCatching null
                     ImageDto.create(json, null).bitmap?.asImageBitmap()
                 } else {
@@ -939,7 +942,7 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
                         .size(20.dp),
                 )
             }
-            if (file.extension == "mtjsn") {
+            if (file.extension == "tmjsn" || file.extension == "mtjsn") {
                 Icon(
                     imageVector = Icons.Default.Videocam,
                     contentDescription = "Video recording",
@@ -990,9 +993,14 @@ internal fun formatDateFolder(name: String): String {
     return "$month ${parts[1]}, ${parts[2]}"
 }
 
-/** img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.mtjsn → "HH:mm:ss",  tl_HH_mm_ss.tltjsn → "HH:mm:ss" */
+/**
+ * img_HH_mm_ss.tjsn → "HH:mm:ss",  vid_HH_mm_ss.tmjsn → "HH:mm:ss",  tl_HH_mm_ss.tltjsn → "HH:mm:ss"
+ * ".mtjsn" is the legacy video extension (issue #24 renamed it to ".tmjsn"); still handled here
+ * so recordings saved before the rename keep displaying correctly.
+ */
 internal fun formatFilename(name: String): String {
     val base = when {
+        name.endsWith(".tmjsn") -> name.removeSuffix(".tmjsn").removePrefix("vid_")
         name.endsWith(".mtjsn") -> name.removeSuffix(".mtjsn").removePrefix("vid_")
         name.endsWith(".tltjsn") -> name.removeSuffix(".tltjsn").removePrefix("tl_")
         else -> name.removeSuffix(".tjsn").removePrefix("img_")
@@ -1240,8 +1248,13 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                         }.getOrNull()
                                         val saved = mp4?.let {
                                             val folder = file.parentFile?.name ?: "tCam"
-                                            val name = file.nameWithoutExtension
+                                            val time = file.nameWithoutExtension
                                                 .removePrefix("vid_").removePrefix("tl_")
+                                            // Issue #25: the gallery only sees this DISPLAY_NAME, not
+                                            // the app's own date subfolder, so fold the date in here
+                                            // too — a time-only name looked identical across days
+                                            // once it left our folder structure.
+                                            val name = "${folder}_$time"
                                             withContext(Dispatchers.IO) {
                                                 globalUtils.saveVideo(it, folder, name) != null
                                             }

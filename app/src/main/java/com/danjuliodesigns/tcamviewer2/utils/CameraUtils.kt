@@ -308,7 +308,7 @@ class CameraUtils @Inject constructor(
         val rootDir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
         val dir = File(rootDir, generateNewPath())
         if (!dir.exists()) dir.mkdirs()
-        val filename = "vid_" + simpleDateFormatFile.format(Date()) + ".mtjsn"
+        val filename = "vid_" + simpleDateFormatFile.format(Date()) + ".tmjsn"
         val file = File(dir, filename)
         return RecordingHandle(file, FileOutputStream(file))
     }

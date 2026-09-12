@@ -91,7 +91,7 @@ These are initialized in `MainActivity.onCreate()`. Note: Hilt DI is partially w
 `MainActivity` hosts a `ModalNavigationDrawer` (not a bottom nav bar) with four tabs, defined in the `ScreenTab` enum: **Camera**, **Settings**, **Library**, **Charts**. Each tab renders a Compose screen:
 - `CameraScreen` — live thermal view; point spotmeter or resizable region measurement (mutually exclusive, toggled in Settings) overlaid on the image, color bar, histogram, FPS counter, temperature-history chart dialog
 - `SettingsScreen` — camera IP, palette, temperature units, AGC, manual range, spotmeter/region toggle, temperature alerts, WiFi, etc. All changes are staged locally and only persisted on **Save**; **Cancel** reverts via a `resetKey` bump
-- `LibraryScreen` — fully implemented: browses saved `.tjsn`/`.mtjsn`/`.tltjsn` files grouped by date, multi-select, sort, delete, date-range filter, full-screen browse/video-playback windows
+- `LibraryScreen` — fully implemented: browses saved `.tjsn`/`.tmjsn`/`.tltjsn` files grouped by date (`.mtjsn` is the pre-issue-#24 legacy video extension, still recognized), multi-select, sort, delete, date-range filter, full-screen browse/video-playback windows
 - `ChartsScreen` — browses saved `.tchart` temperature-history files, mirroring Library's grouping/select/sort/delete UX
 
 ### Image Processing Pipeline

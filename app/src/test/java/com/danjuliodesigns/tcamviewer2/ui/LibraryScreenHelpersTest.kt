@@ -57,6 +57,12 @@ class LibraryScreenHelpersTest {
 
     @Test
     fun formatFilenameVideoFile() {
+        assertEquals("08:17:39", formatFilename("vid_08_17_39.tmjsn"))
+    }
+
+    @Test
+    fun formatFilenameLegacyVideoFile() {
+        // Pre-issue-#24 recordings were saved as ".mtjsn"; must keep displaying correctly.
         assertEquals("08:17:39", formatFilename("vid_08_17_39.mtjsn"))
     }
 
