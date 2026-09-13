@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">tcamViewer</string>
+    <string name="app_name">tcamViewer2</string>
     <string name="title_home">Home</string>
     <string name="title_dashboard">Dashboard</string>
     <string name="title_notifications">Notifications</string>
@@ -74,7 +74,7 @@
     <string name="title_warning">Warning</string>
     <string name="save_settings_with_warning">Do you wish to save your settings?\nChanging these settings will disconnect the camera</string>
     <string name="agc_changes_info">AGC mode changes will be applied to the next GET image</string>
-    <string name="appName">tcamViewer</string>
+    <string name="appName">tcamViewer2</string>
     <string name="nothing_to_selected_to_delete">Nothing selected to delete</string>
     <string name="nothing_selected_to_browse">Nothing selected to browse</string>
     <string name="start">start</string>
