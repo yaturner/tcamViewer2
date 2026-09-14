@@ -24,8 +24,8 @@ Repo: https://github.com/yaturner/tcamViewer2.git
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest/app
 
-CurrentVersion: '1.0'
-CurrentVersionCode: 1
+CurrentVersion: '1.245.1409260741'
+CurrentVersionCode: 100245
 
 Builds:
   - versionName: '1.0'
@@ -34,6 +34,9 @@ Builds:
     subdir: app
     gradle:
       - fdroid
-  # TODO: once this is committed, add a second entry here pinned to that commit's hash, with
-  # its actual versionName/versionCode (bootstraps F-Droid onto current code instead of the
-  # year-old v1.0 tag; RepoManifest then keeps picking up future versions automatically).
+  - versionName: '1.245.1409260741'
+    versionCode: 100245
+    commit: bdae438bc4b670638948c4d5db02d516d1502566
+    subdir: app
+    gradle:
+      - fdroid
