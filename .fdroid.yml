@@ -17,8 +17,12 @@ IssueTracker: https://github.com/yaturner/tcamViewer2/issues
 RepoType: git
 Repo: https://github.com/yaturner/tcamViewer2.git
 
+# versionName/versionCode are commit-count-derived (see app/build.gradle.kts) with no git tag
+# per release, so "Tags" can't track new versions — F-Droid would be stuck serving whatever the
+# last tagged release was forever. RepoManifest instead reads the version straight from the
+# manifest at the tip of the tracked branch, matching this repo's actual versioning scheme.
 AutoUpdateMode: Version
-UpdateCheckMode: Tags
+UpdateCheckMode: RepoManifest/app
 
 CurrentVersion: '1.0'
 CurrentVersionCode: 1
@@ -30,3 +34,6 @@ Builds:
     subdir: app
     gradle:
       - fdroid
+  # TODO: once this is committed, add a second entry here pinned to that commit's hash, with
+  # its actual versionName/versionCode (bootstraps F-Droid onto current code instead of the
+  # year-old v1.0 tag; RepoManifest then keeps picking up future versions automatically).

@@ -1,5 +1,3 @@
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Properties
 
 plugins {
@@ -22,7 +20,11 @@ val keystoreProperties =
 // Version scheme: major.minor.ddMMyyHHmm
 //  - major:  bumped by hand in version.properties whenever a build is marked as a GitHub Release
 //  - minor:  total commit count — advances automatically with every commit, no manual bookkeeping
-//  - suffix: this build's timestamp, so every build is uniquely identifiable
+//  - suffix: HEAD's own commit date/time (not wall-clock build time) — so rebuilding the same
+//            commit twice (e.g. the AAB and the Prebuilt APK, or a local build vs. F-Droid's own
+//            build server) reproduces an identical versionName instead of drifting by build time.
+//            F-Droid in particular expects/rewards reproducible builds; this also fixes an
+//            in-repo annoyance where two builds of the same commit looked like different versions.
 val versionPropertiesFile = rootProject.file("version.properties")
 val versionProperties =
     Properties().apply {
@@ -40,7 +42,14 @@ val appVersionMinor =
         .get()
         .trim()
         .toInt()
-val appBuildTimestamp = SimpleDateFormat("ddMMyyHHmm").format(Date())
+val appBuildTimestamp =
+    providers
+        .exec {
+            workingDir = rootDir
+            commandLine("git", "log", "-1", "--format=%cd", "--date=format:%d%m%y%H%M")
+        }.standardOutput.asText
+        .get()
+        .trim()
 val appVersionName = "$appVersionMajor.$appVersionMinor.$appBuildTimestamp"
 // Must stay monotonically increasing across releases for Android/Play update checks.
 val appVersionCode = appVersionMajor * 100_000 + appVersionMinor
