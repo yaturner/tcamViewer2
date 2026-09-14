@@ -24,8 +24,8 @@ Repo: https://github.com/yaturner/tcamViewer2.git
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest/app
 
-CurrentVersion: '1.245.1409260741'
-CurrentVersionCode: 100245
+CurrentVersion: '1.247.1409260753'
+CurrentVersionCode: 100247
 
 Builds:
   - versionName: '1.0'
@@ -34,9 +34,9 @@ Builds:
     subdir: app
     gradle:
       - fdroid
-  - versionName: '1.245.1409260741'
-    versionCode: 100245
-    commit: bdae438bc4b670638948c4d5db02d516d1502566
+  - versionName: '1.247.1409260753'
+    versionCode: 100247
+    commit: dd3727f8abbcdf005b27da1f28ef1b5952d53441
     subdir: app
     gradle:
       - fdroid
