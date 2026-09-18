@@ -177,17 +177,12 @@ fun SettingsScreen(
         dataManager.saveExportResolution(localResolution)
         dataManager.saveManualRange(localManualRange)
         // Cap at sane bounds — nothing previously stopped a stray/garbage value (e.g. a leftover
-        // "2299") from being saved and silently breaking the manual-range display. Only rewrite
-        // the string when actually clamping, so a normal value's formatting round-trips exactly.
-        // Min is floored at absolute zero (-273°C), max capped at 999°C — both converted to the
-        // active unit, since a bound expressed in one unit isn't the same number in the other.
+        // "2299") from being saved and silently breaking the manual-range display. Min is floored
+        // at absolute zero (-273°C), max capped at 999°C — both converted to the active unit,
+        // since a bound expressed in one unit isn't the same number in the other.
         val isCelsiusUnit = localUnit == "Celsius"
-        val absoluteZeroFloor = if (isCelsiusUnit) -273f else (-273f * 9f / 5f + 32f)
-        val maxCeiling = if (isCelsiusUnit) 999f else (999f * 9f / 5f + 32f)
-        val minValue = localMin.toFloatOrNull()
-        dataManager.saveMinValue(if (minValue != null && minValue < absoluteZeroFloor) absoluteZeroFloor.toString() else localMin)
-        val maxValue = localMax.toFloatOrNull()
-        dataManager.saveMaxValue(if (maxValue != null && maxValue > maxCeiling) maxCeiling.toString() else localMax)
+        dataManager.saveMinValue(clampManualRangeBound(localMin, isCelsiusUnit, isMin = true))
+        dataManager.saveMaxValue(clampManualRangeBound(localMax, isCelsiusUnit, isMin = false))
         dataManager.saveShutterSound(localShutter)
         dataManager.saveSpotmeter(localSpotmeter)
         dataManager.saveRegionMeasurement(localRegionMeasurement)
@@ -1333,8 +1328,24 @@ private fun CameraSettingsSection(
 }
 
 /** Converts a Manual Range bound string between °C and °F, preserving the physical temperature. */
-private fun convertManualBound(value: String, toCelsius: Boolean): String {
+internal fun convertManualBound(value: String, toCelsius: Boolean): String {
     val v = value.toFloatOrNull() ?: return value
     val converted = if (toCelsius) (v - 32f) * 5f / 9f else v * 9f / 5f + 32f
     return converted.roundToInt().toString()
+}
+
+/** Clamps a Manual Range bound string to sane physical limits so a stray/garbage value (e.g. a
+ *  leftover "2299") can't be saved and silently break the manual-range display: Min is floored at
+ *  absolute zero (-273°C), Max is capped at 999°C, both expressed in [isCelsiusUnit]'s unit since a
+ *  bound expressed in one unit isn't the same number in the other. Malformed/unparseable input
+ *  passes through unchanged; a normal in-range value's formatting round-trips exactly. */
+internal fun clampManualRangeBound(value: String, isCelsiusUnit: Boolean, isMin: Boolean): String {
+    val floatValue = value.toFloatOrNull() ?: return value
+    return if (isMin) {
+        val floor = if (isCelsiusUnit) -273f else (-273f * 9f / 5f + 32f)
+        if (floatValue < floor) floor.toString() else value
+    } else {
+        val ceiling = if (isCelsiusUnit) 999f else (999f * 9f / 5f + 32f)
+        if (floatValue > ceiling) ceiling.toString() else value
+    }
 }

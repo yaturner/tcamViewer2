@@ -887,22 +887,6 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    private fun buildFooterJson(
-        startMs: Long,
-        endMs: Long,
-        numFrames: Int,
-    ): String {
-        val timeFmt = SimpleDateFormat("H:mm:ss.SSS", Locale.US)
-        val dateFmt = SimpleDateFormat("M/d/yy", Locale.US)
-        val start = Date(startMs)
-        val end = Date(endMs)
-        return """{"video_info":{"start_time":"${timeFmt.format(
-            start,
-        )}","start_date":"${dateFmt.format(
-            start,
-        )}","end_time":"${timeFmt.format(end)}","end_date":"${dateFmt.format(end)}","num_frames":$numFrames,"version":1}}"""
-    }
-
     fun setPalette(name: String) {
         viewModelScope.launch { settingsDataManager.saveSelectedPalette(name) }
     }
@@ -981,84 +965,6 @@ class CameraViewModel : ViewModel() {
         }
     }
 
-    /** Returns the temperature in the currently-selected display unit, alongside its formatted text. */
-    private fun formatTemp(
-        rawValue: Int,
-        scale: Float,
-        isCelsius: Boolean,
-    ): Pair<Float, String> {
-        val tempC = rawValue / scale - 273.15f
-        val value = if (isCelsius) tempC else tempC * 9f / 5f + 32f
-        val text = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
-        return value to text
-    }
-
-    // cameraUtils.settingManualMin/Max are already degrees in the current unit (kept converted
-    // in step with unit changes — see SettingsScreen's convertManualBound), unlike formatTemp's
-    // raw-sensor-value input, so this just needs the matching display format, not a conversion.
-    private fun formatManualBound(
-        value: Float,
-        isCelsius: Boolean,
-    ): String = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
-
-    private fun calcSpotTemp(
-        imageData: IntArray,
-        cx: Int,
-        cy: Int,
-        scale: Float,
-        isCelsius: Boolean,
-    ): Pair<Float, String> {
-        val c1 = cx.coerceIn(0, Constants.IMAGE_WIDTH - 1)
-        val c2 = (cx + 1).coerceAtMost(Constants.IMAGE_WIDTH - 1)
-        val r1 = cy.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-        val r2 = (cy + 1).coerceAtMost(Constants.IMAGE_HEIGHT - 1)
-        var sum = 0L
-        var count = 0
-        for (row in r1..r2) {
-            for (col in c1..c2) {
-                sum += imageData[row * Constants.IMAGE_WIDTH + col]
-                count++
-            }
-        }
-        return formatTemp(if (count > 0) (sum / count).toInt() else 0, scale, isCelsius)
-    }
-
-    /** Average/min/max temperature (value + formatted text) over an arbitrary region, computed
-     *  client-side from the raw per-frame imageData — the camera's own set_spotmeter command only
-     *  reports a mean for whatever region it was last told about, not min/max, so those need
-     *  local math. Raw values (not just text) are returned so callers can feed them into the
-     *  temperature-history chart alongside the whole-frame spot/max/min. */
-    private fun calcRegionStats(
-        imageData: IntArray,
-        rect: Rect,
-        scale: Float,
-        isCelsius: Boolean,
-    ): Triple<Pair<Float, String>, Pair<Float, String>, Pair<Float, String>> {
-        val c1 = rect.left.coerceIn(0, Constants.IMAGE_WIDTH - 1)
-        val c2 = rect.right.coerceIn(c1, Constants.IMAGE_WIDTH - 1)
-        val r1 = rect.top.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
-        val r2 = rect.bottom.coerceIn(r1, Constants.IMAGE_HEIGHT - 1)
-        var sum = 0L
-        var count = 0
-        var minRaw = Int.MAX_VALUE
-        var maxRaw = Int.MIN_VALUE
-        for (row in r1..r2) {
-            for (col in c1..c2) {
-                val v = imageData[row * Constants.IMAGE_WIDTH + col]
-                sum += v
-                count++
-                if (v < minRaw) minRaw = v
-                if (v > maxRaw) maxRaw = v
-            }
-        }
-        if (count == 0) return Triple(0f to "--", 0f to "--", 0f to "--")
-        return Triple(
-            formatTemp((sum / count).toInt(), scale, isCelsius),
-            formatTemp(minRaw, scale, isCelsius),
-            formatTemp(maxRaw, scale, isCelsius),
-        )
-    }
-
     private fun updateFps() {
         val now = SystemClock.elapsedRealtime()
         if (fpsWindowStart < 0L) {
@@ -1083,4 +989,98 @@ class CameraViewModel : ViewModel() {
         connectionLostDisposable?.dispose()
         cameraService.disconnect()
     }
+}
+
+/** Returns the temperature in the currently-selected display unit, alongside its formatted text. */
+internal fun formatTemp(
+    rawValue: Int,
+    scale: Float,
+    isCelsius: Boolean,
+): Pair<Float, String> {
+    val tempC = rawValue / scale - 273.15f
+    val value = if (isCelsius) tempC else tempC * 9f / 5f + 32f
+    val text = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
+    return value to text
+}
+
+// cameraUtils.settingManualMin/Max are already degrees in the current unit (kept converted
+// in step with unit changes — see SettingsScreen's convertManualBound), unlike formatTemp's
+// raw-sensor-value input, so this just needs the matching display format, not a conversion.
+internal fun formatManualBound(
+    value: Float,
+    isCelsius: Boolean,
+): String = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
+
+internal fun calcSpotTemp(
+    imageData: IntArray,
+    cx: Int,
+    cy: Int,
+    scale: Float,
+    isCelsius: Boolean,
+): Pair<Float, String> {
+    val c1 = cx.coerceIn(0, Constants.IMAGE_WIDTH - 1)
+    val c2 = (cx + 1).coerceAtMost(Constants.IMAGE_WIDTH - 1)
+    val r1 = cy.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+    val r2 = (cy + 1).coerceAtMost(Constants.IMAGE_HEIGHT - 1)
+    var sum = 0L
+    var count = 0
+    for (row in r1..r2) {
+        for (col in c1..c2) {
+            sum += imageData[row * Constants.IMAGE_WIDTH + col]
+            count++
+        }
+    }
+    return formatTemp(if (count > 0) (sum / count).toInt() else 0, scale, isCelsius)
+}
+
+/** Average/min/max temperature (value + formatted text) over an arbitrary region, computed
+ *  client-side from the raw per-frame imageData — the camera's own set_spotmeter command only
+ *  reports a mean for whatever region it was last told about, not min/max, so those need
+ *  local math. Raw values (not just text) are returned so callers can feed them into the
+ *  temperature-history chart alongside the whole-frame spot/max/min. */
+internal fun calcRegionStats(
+    imageData: IntArray,
+    rect: Rect,
+    scale: Float,
+    isCelsius: Boolean,
+): Triple<Pair<Float, String>, Pair<Float, String>, Pair<Float, String>> {
+    val c1 = rect.left.coerceIn(0, Constants.IMAGE_WIDTH - 1)
+    val c2 = rect.right.coerceIn(c1, Constants.IMAGE_WIDTH - 1)
+    val r1 = rect.top.coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+    val r2 = rect.bottom.coerceIn(r1, Constants.IMAGE_HEIGHT - 1)
+    var sum = 0L
+    var count = 0
+    var minRaw = Int.MAX_VALUE
+    var maxRaw = Int.MIN_VALUE
+    for (row in r1..r2) {
+        for (col in c1..c2) {
+            val v = imageData[row * Constants.IMAGE_WIDTH + col]
+            sum += v
+            count++
+            if (v < minRaw) minRaw = v
+            if (v > maxRaw) maxRaw = v
+        }
+    }
+    if (count == 0) return Triple(0f to "--", 0f to "--", 0f to "--")
+    return Triple(
+        formatTemp((sum / count).toInt(), scale, isCelsius),
+        formatTemp(minRaw, scale, isCelsius),
+        formatTemp(maxRaw, scale, isCelsius),
+    )
+}
+
+internal fun buildFooterJson(
+    startMs: Long,
+    endMs: Long,
+    numFrames: Int,
+): String {
+    val timeFmt = SimpleDateFormat("H:mm:ss.SSS", Locale.US)
+    val dateFmt = SimpleDateFormat("M/d/yy", Locale.US)
+    val start = Date(startMs)
+    val end = Date(endMs)
+    return """{"video_info":{"start_time":"${timeFmt.format(
+        start,
+    )}","start_date":"${dateFmt.format(
+        start,
+    )}","end_time":"${timeFmt.format(end)}","end_date":"${dateFmt.format(end)}","num_frames":$numFrames,"version":1}}"""
 }

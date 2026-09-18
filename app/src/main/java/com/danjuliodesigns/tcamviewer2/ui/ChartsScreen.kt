@@ -65,14 +65,14 @@ import org.json.JSONObject
 import java.io.File
 import java.nio.charset.StandardCharsets
 
-private data class SavedChart(
+internal data class SavedChart(
     val savedTime: String,
     val isCelsius: Boolean,
     val primaryLabel: String,
     val samples: List<TempSample>,
 )
 
-private fun loadTempChart(file: File): SavedChart? = runCatching {
+internal fun loadTempChart(file: File): SavedChart? = runCatching {
     val json = JSONObject(file.readText(StandardCharsets.US_ASCII))
     val isCelsius = json.optString("unit", "Celsius") == "Celsius"
     val savedTime = json.optString("saved_time", "")
@@ -92,7 +92,7 @@ private fun loadTempChart(file: File): SavedChart? = runCatching {
 }.getOrNull()
 
 /** chart_HH_mm_ss.tchart → "HH:mm:ss" */
-private fun formatChartFilename(name: String): String {
+internal fun formatChartFilename(name: String): String {
     val base = name.removeSuffix(".tchart").removePrefix("chart_")
     val parts = base.split("_")
     return if (parts.size == 3) "${parts[0]}:${parts[1]}:${parts[2]}" else name

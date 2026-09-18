@@ -997,7 +997,7 @@ private fun TempHistoryDialog(
 
 /** Rounds a raw axis range up to a "nice" tick step (1/2/5 × a power of ten) so gridlines land on
  *  round numbers instead of the raw sample min/max — same trick desktop charting tools use. */
-private fun niceAxisStep(rawRange: Float, targetTicks: Int = 5): Float {
+internal fun niceAxisStep(rawRange: Float, targetTicks: Int = 5): Float {
     val range = rawRange.takeIf { it > 0.01f } ?: 1f
     val rawStep = range / targetTicks
     val magnitude = 10.0.pow(floor(log10(rawStep.toDouble())))
@@ -1188,12 +1188,12 @@ fun LegendEntry(color: Color, label: String) {
 }
 
 /** Which part of the region box a drag gesture is manipulating. */
-private enum class RegionDragTarget { NONE, MOVE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
+internal enum class RegionDragTarget { NONE, MOVE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
 // Camera-pixel radius around each corner treated as a resize handle, rather than a plain move.
 private const val REGION_HANDLE_HIT_PX = 10f
 
-private fun resolveRegionDragTarget(region: Rect, camX: Float, camY: Float): RegionDragTarget {
+internal fun resolveRegionDragTarget(region: Rect, camX: Float, camY: Float): RegionDragTarget {
     fun near(x: Int, y: Int) = hypot((camX - x).toDouble(), (camY - y).toDouble()) <= REGION_HANDLE_HIT_PX
     return when {
         near(region.left, region.top) -> RegionDragTarget.TOP_LEFT
@@ -1211,7 +1211,7 @@ private fun resolveRegionDragTarget(region: Rect, camX: Float, camY: Float): Reg
     }
 }
 
-private fun applyRegionDrag(region: Rect, target: RegionDragTarget, dx: Float, dy: Float): Rect {
+internal fun applyRegionDrag(region: Rect, target: RegionDragTarget, dx: Float, dy: Float): Rect {
     var left = region.left
     var top = region.top
     var right = region.right
@@ -1246,7 +1246,12 @@ private fun applyRegionDrag(region: Rect, target: RegionDragTarget, dx: Float, d
 
         RegionDragTarget.NONE -> {}
     }
-    return Rect(left, top, right, bottom)
+    return Rect().apply {
+        this.left = left
+        this.top = top
+        this.right = right
+        this.bottom = bottom
+    }
 }
 
 /** Draws the resizable region box — a hollow rectangle (same black+white outline style as

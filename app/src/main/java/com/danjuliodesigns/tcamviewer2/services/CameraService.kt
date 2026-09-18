@@ -38,21 +38,26 @@ class CameraService : Service() {
         // disconnect()/stopListening() instead of sitting in a blocking syscall indefinitely —
         // important on the flaky WiFi links this app talks to, where the camera can go quiet
         // for a while (modem-sleep) without that meaning the connection actually died.
-        private const val SOCKET_READ_TIMEOUT_MS = 12_000
+        //
+        // These four are `internal var` rather than `private const val` solely so tests can dial
+        // them down (e.g. to a few hundred ms) and exercise the real disconnect-detection timing
+        // logic in a fraction of a second instead of the tens of seconds the production values
+        // would otherwise take — the values themselves are unchanged from what production uses.
+        internal var SOCKET_READ_TIMEOUT_MS = 12_000
 
         // While actively streaming, frames should arrive far more often than the read timeout
         // above — total silence for this many consecutive cycles means the camera vanished
         // (e.g. powered off) without cleanly closing the TCP connection, which read() alone
         // won't detect: a dead peer doesn't send a FIN/RST, so the socket just keeps timing out
         // forever and looks identical to a legitimately idle (not streaming) link (issue #26).
-        private const val MAX_CONSECUTIVE_READ_TIMEOUTS_WHILE_STREAMING = 2
+        internal var MAX_CONSECUTIVE_READ_TIMEOUTS_WHILE_STREAMING = 2
 
         // The streaming check above only covers connections actively producing frames. A
         // connected-but-idle link (just Get, or nothing at all) can go silently dead the same
         // way — read() alone can't tell, since a dead peer never sends a FIN/RST — so poll it
         // with a real request/response every interval while idle (issue #26).
-        private const val IDLE_HEALTH_CHECK_INTERVAL_MS = 60_000L
-        private const val IDLE_HEALTH_CHECK_TIMEOUT_MS = 5_000L
+        internal var IDLE_HEALTH_CHECK_INTERVAL_MS = 60_000L
+        internal var IDLE_HEALTH_CHECK_TIMEOUT_MS = 5_000L
     }
 
     private var cameraSocket: Socket? = null
