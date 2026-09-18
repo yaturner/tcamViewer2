@@ -45,7 +45,7 @@ class SettingsScreenUiTest {
 
         openSettings()
         composeRule.onNodeWithTag("switch_export_picture").performClick()
-        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithText("Save").performClick()
         composeRule.waitForIdle()
 
         assertTrue(manager.getExportPicture())
@@ -72,7 +72,7 @@ class SettingsScreenUiTest {
         openSettings()
         composeRule.onNodeWithTag("switch_manual_range").performClick()
         composeRule.onNodeWithTag("switch_shutter_sound").performClick()
-        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithText("Save").performClick()
         composeRule.waitForIdle()
 
         assertTrue(manager.getManualRange())
