@@ -277,16 +277,22 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch {
             settingsDataManager.manualRangeFlow.collect { v ->
                 cameraUtils.settingIsManualRange = v
+                // Re-render the already-displayed frame immediately (issue #29) — without
+                // this, the change is invisible until the next stream/Get frame happens to
+                // arrive, same reasoning as the unit-change re-render below.
+                remapCurrentFrame(selectedPalette)
             }
         }
         viewModelScope.launch {
             settingsDataManager.minValueFlow.collect { v ->
                 cameraUtils.settingManualMin = v.toFloatOrNull() ?: 0f
+                remapCurrentFrame(selectedPalette)
             }
         }
         viewModelScope.launch {
             settingsDataManager.maxValueFlow.collect { v ->
                 cameraUtils.settingManualMax = v.toFloatOrNull() ?: 100f
+                remapCurrentFrame(selectedPalette)
             }
         }
         viewModelScope.launch {

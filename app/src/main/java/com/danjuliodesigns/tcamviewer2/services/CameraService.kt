@@ -39,6 +39,13 @@ class CameraService : Service() {
         // important on the flaky WiFi links this app talks to, where the camera can go quiet
         // for a while (modem-sleep) without that meaning the connection actually died.
         private const val SOCKET_READ_TIMEOUT_MS = 30_000
+
+        // While actively streaming, frames should arrive far more often than the read timeout
+        // above — total silence for this many consecutive cycles means the camera vanished
+        // (e.g. powered off) without cleanly closing the TCP connection, which read() alone
+        // won't detect: a dead peer doesn't send a FIN/RST, so the socket just keeps timing out
+        // forever and looks identical to a legitimately idle (not streaming) link (issue #26).
+        private const val MAX_CONSECUTIVE_READ_TIMEOUTS_WHILE_STREAMING = 2
     }
 
     private var cameraSocket: Socket? = null
@@ -409,10 +416,25 @@ class CameraService : Service() {
         listeningJob =
             serviceScope.launch {
                 val input = inFromSocket ?: return@launch
+                var consecutiveReadTimeouts = 0
                 while (isConnected && running) {
                     try {
                         bytesRead = input.read(readBuffer)
+                        consecutiveReadTimeouts = 0
                     } catch (e: java.net.SocketTimeoutException) {
+                        consecutiveReadTimeouts++
+                        if (isStreaming && consecutiveReadTimeouts >= MAX_CONSECUTIVE_READ_TIMEOUTS_WHILE_STREAMING) {
+                            Timber.w(
+                                "No frames for ${consecutiveReadTimeouts * SOCKET_READ_TIMEOUT_MS}ms " +
+                                    "while streaming — treating camera as disconnected",
+                            )
+                            val wasRunning = running
+                            running = false
+                            teardownConnection()
+                            failPendingRequests("No data received while streaming")
+                            if (wasRunning) connectionLostSubject.onNext(Unit)
+                            break
+                        }
                         // Just an idle link (e.g. camera modem-sleep) — not necessarily dead.
                         // Looping back re-checks isConnected/running so a concurrent disconnect()
                         // is noticed promptly instead of blocking another full read() cycle.
