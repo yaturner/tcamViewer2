@@ -176,8 +176,18 @@ fun SettingsScreen(
         dataManager.saveExportMetadata(localExportMeta)
         dataManager.saveExportResolution(localResolution)
         dataManager.saveManualRange(localManualRange)
-        dataManager.saveMinValue(localMin)
-        dataManager.saveMaxValue(localMax)
+        // Cap at sane bounds — nothing previously stopped a stray/garbage value (e.g. a leftover
+        // "2299") from being saved and silently breaking the manual-range display. Only rewrite
+        // the string when actually clamping, so a normal value's formatting round-trips exactly.
+        // Min is floored at absolute zero (-273°C), max capped at 999°C — both converted to the
+        // active unit, since a bound expressed in one unit isn't the same number in the other.
+        val isCelsiusUnit = localUnit == "Celsius"
+        val absoluteZeroFloor = if (isCelsiusUnit) -273f else (-273f * 9f / 5f + 32f)
+        val maxCeiling = if (isCelsiusUnit) 999f else (999f * 9f / 5f + 32f)
+        val minValue = localMin.toFloatOrNull()
+        dataManager.saveMinValue(if (minValue != null && minValue < absoluteZeroFloor) absoluteZeroFloor.toString() else localMin)
+        val maxValue = localMax.toFloatOrNull()
+        dataManager.saveMaxValue(if (maxValue != null && maxValue > maxCeiling) maxCeiling.toString() else localMax)
         dataManager.saveShutterSound(localShutter)
         dataManager.saveSpotmeter(localSpotmeter)
         dataManager.saveRegionMeasurement(localRegionMeasurement)

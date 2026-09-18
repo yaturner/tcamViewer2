@@ -38,7 +38,7 @@ class CameraService : Service() {
         // disconnect()/stopListening() instead of sitting in a blocking syscall indefinitely —
         // important on the flaky WiFi links this app talks to, where the camera can go quiet
         // for a while (modem-sleep) without that meaning the connection actually died.
-        private const val SOCKET_READ_TIMEOUT_MS = 30_000
+        private const val SOCKET_READ_TIMEOUT_MS = 12_000
 
         // While actively streaming, frames should arrive far more often than the read timeout
         // above — total silence for this many consecutive cycles means the camera vanished
@@ -46,6 +46,13 @@ class CameraService : Service() {
         // won't detect: a dead peer doesn't send a FIN/RST, so the socket just keeps timing out
         // forever and looks identical to a legitimately idle (not streaming) link (issue #26).
         private const val MAX_CONSECUTIVE_READ_TIMEOUTS_WHILE_STREAMING = 2
+
+        // The streaming check above only covers connections actively producing frames. A
+        // connected-but-idle link (just Get, or nothing at all) can go silently dead the same
+        // way — read() alone can't tell, since a dead peer never sends a FIN/RST — so poll it
+        // with a real request/response every interval while idle (issue #26).
+        private const val IDLE_HEALTH_CHECK_INTERVAL_MS = 60_000L
+        private const val IDLE_HEALTH_CHECK_TIMEOUT_MS = 5_000L
     }
 
     private var cameraSocket: Socket? = null
@@ -62,6 +69,7 @@ class CameraService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var listeningJob: Job? = null
+    private var idleHealthCheckJob: Job? = null
 
     // --- NEW: A thread-safe map tracking pending requests awaiting responses ---
     // Key: Command Type/ID string, Value: The deferred handler wrapper returning a JSONObject
@@ -149,6 +157,8 @@ class CameraService : Service() {
         teardownConnection()
         listeningJob?.cancelAndJoin()
         listeningJob = null
+        idleHealthCheckJob?.cancelAndJoin()
+        idleHealthCheckJob = null
         resetBuffers()
         running = true
         val connected =
@@ -172,6 +182,7 @@ class CameraService : Service() {
         connectedFlag = connected
         if (connected) {
             startListening()
+            startIdleHealthCheck()
             // tCam-Mini has no battery-backed RTC, so it powers up with whatever time it last
             // had (or none at all) — push the phone's clock to it on every fresh connection so
             // saved images/recordings get sane timestamps. tCam itself has a battery-backed RTC
@@ -186,9 +197,34 @@ class CameraService : Service() {
         listeningJob?.cancel()
     }
 
+    /** Polls a connected-but-idle link with a real request/response every interval so a camera
+     *  that silently vanished (no FIN/RST) doesn't sit "connected" forever — the counterpart to
+     *  the streaming-side check in [startListening] (issue #26). No-ops while streaming, since
+     *  frames arriving is itself a much faster liveness signal than this could ever be. */
+    private fun startIdleHealthCheck() {
+        idleHealthCheckJob =
+            serviceScope.launch {
+                while (isConnected && running) {
+                    delay(IDLE_HEALTH_CHECK_INTERVAL_MS)
+                    if (!isConnected || !running || isStreaming) continue
+                    val response = sendCmd(Constants.CMD_GET_STATUS, expectedKey = "status", timeoutMillis = IDLE_HEALTH_CHECK_TIMEOUT_MS)
+                    if (response.has("error") && isConnected && running && !isStreaming) {
+                        Timber.w("Idle health check got no response — treating camera as disconnected")
+                        running = false
+                        teardownConnection()
+                        failPendingRequests("Idle health check failed")
+                        listeningJob?.cancel()
+                        connectionLostSubject.onNext(Unit)
+                        break
+                    }
+                }
+            }
+    }
+
     fun disconnect() {
         stopStreaming()
         running = false
+        idleHealthCheckJob?.cancel()
         // Closing the streams here (not just cancelling the listening coroutine) is what
         // actually unblocks a thread currently sitting in a blocking read() call — coroutine
         // cancellation alone is cooperative and won't interrupt that blocking JVM I/O.

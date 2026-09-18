@@ -398,9 +398,17 @@ class CameraViewModel : ViewModel() {
             }
         val (maxValue, maxText) = formatTemp(dto.maxTemperature, scale, celsius)
         val (minValue, minText) = formatTemp(dto.minTemperature, scale, celsius)
+        // The colour bar's printed scale endpoints should track whatever range is actually
+        // driving the colour mapping (see CameraUtils.getRadiometricTemperatures) — under
+        // Manual Range that's the user's own bounds, not the scene's real min/max (issue #29).
+        // maxValue/minValue themselves stay the real scene values: alerts and the temperature
+        // history chart below need actual measurements, not the color-scale display bounds.
+        val isManualRange = cameraUtils.settingIsManualRange
+        val displayMaxText = if (isManualRange) formatManualBound(cameraUtils.settingManualMax, celsius) else maxText
+        val displayMinText = if (isManualRange) formatManualBound(cameraUtils.settingManualMin, celsius) else minText
         _spotmeterTemp.value = spotText
-        _maxTemp.value = maxText
-        _minTemp.value = minText
+        _maxTemp.value = displayMaxText
+        _minTemp.value = displayMinText
         _spotmeterTempValue.value = spotValue
         _maxTempValue.value = maxValue
         _minTempValue.value = minValue
@@ -984,6 +992,14 @@ class CameraViewModel : ViewModel() {
         val text = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
         return value to text
     }
+
+    // cameraUtils.settingManualMin/Max are already degrees in the current unit (kept converted
+    // in step with unit changes — see SettingsScreen's convertManualBound), unlike formatTemp's
+    // raw-sensor-value input, so this just needs the matching display format, not a conversion.
+    private fun formatManualBound(
+        value: Float,
+        isCelsius: Boolean,
+    ): String = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
 
     private fun calcSpotTemp(
         imageData: IntArray,
