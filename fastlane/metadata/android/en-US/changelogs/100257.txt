@@ -1,0 +1,5 @@
+First release of tCam Viewer 2.
+
+Live thermal video from your tCam/tCam-Mini over Wi-Fi, with 10 color palettes, a spotmeter, resizable region measurement, manual or automatic temperature range, and Celsius/Fahrenheit units.
+
+Capture stills, record video, or run scheduled time lapses. Browse saved files in the Library, graph temperature over time in Charts, and export or share images with a color bar and temperature labels. Automatically reconnects if the camera drops off Wi-Fi.
