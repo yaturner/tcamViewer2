@@ -95,7 +95,6 @@ import com.danjuliodesigns.tcamviewer2.model.TempSample
 import com.danjuliodesigns.tcamviewer2.paletteFactory
 import com.danjuliodesigns.tcamviewer2.settingsDataManager
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.ceil
@@ -198,19 +197,6 @@ fun CameraScreen(
     LaunchedEffect(Unit) {
         viewModel.alertMessage.collect { msg ->
             snackbarHostState.showSnackbar(msg)
-        }
-    }
-
-    // Auto-dismiss the AGC hint after 10s; re-shows if AGC toggles off then on again.
-    val isAGC = currentImageDto?.isAGC == true
-    var showAgcHint by remember { mutableStateOf(false) }
-    LaunchedEffect(isAGC) {
-        if (isAGC) {
-            showAgcHint = true
-            delay(10_000)
-            showAgcHint = false
-        } else {
-            showAgcHint = false
         }
     }
 
@@ -439,18 +425,6 @@ fun CameraScreen(
                                     RegionOverlay(measurementRegion)
                                 } else if (spotmeterEnabled) {
                                     SpotmeterOverlay(spotmeterRect)
-                                }
-
-                                if (showAgcHint) {
-                                    Text(
-                                        text = "AGC on — temps unavailable",
-                                        fontSize = 11.sp,
-                                        color = Color.White,
-                                        modifier = Modifier
-                                            .align(Alignment.BottomCenter)
-                                            .background(Color.Black.copy(alpha = 0.5f))
-                                            .padding(horizontal = 6.dp, vertical = 3.dp),
-                                    )
                                 }
                             }
                         }

@@ -397,9 +397,39 @@ class CameraViewModel : ViewModel() {
      *  when the user changes units, rather than waiting for the next frame to reflect it. */
     private fun refreshTempDisplays() {
         val dto = _currentImageDto.value ?: return
-        if (dto.tLinearEnabled == 0) return
         val celsius = cameraUtils.settingIsCelsius
         val scale = if (dto.tLinearResolution == 0) 10f else 100f
+
+        if (dto.tLinearEnabled == 0) {
+            // AGC active: imageData holds 8-bit AGC display values, not radiometric pixel data,
+            // so dto.maxTemperature/minTemperature (raw min/max of that same array, computed
+            // unconditionally in CameraUtils) are meaningless here and must not be displayed.
+            // dto.spotmeterMean, however, is documented by the tCam firmware as valid
+            // independent of AGC, and already tracks wherever setSpotmeter() last positioned
+            // the camera's own measurement box — reuse it as the sole AGC temperature source.
+            // Region mode has no AGC equivalent at all: the firmware only ever telemeters a
+            // mean, never min/max, over an arbitrary box (see issue #27).
+            val (spotValue, spotText) = formatTemp(dto.spotmeterMean, scale, celsius)
+            _spotmeterTemp.value = spotText
+            _spotmeterTempValue.value = spotValue
+            _maxTemp.value = "--"
+            _minTemp.value = "--"
+            _maxTempValue.value = null
+            _minTempValue.value = null
+            _regionAvgTemp.value = "--"
+            _regionMinTemp.value = "--"
+            _regionMaxTemp.value = "--"
+            if (alertMetric == "Spot") {
+                checkTemperatureAlert(spotValue, spotValue, spotValue, celsius)
+            } else {
+                alertCurrentlyTriggered = false
+            }
+            if (_measurementMode.value == MeasurementMode.POINT) {
+                recordTempSample(spotValue, spotValue, spotValue)
+            }
+            return
+        }
+
         val rect = _spotmeterRect.value
         val (spotValue, spotText) =
             if (rect != null && dto.imageData != null) {
@@ -978,16 +1008,7 @@ class CameraViewModel : ViewModel() {
             _currentBitmap.value = dto.bitmap
             _histogram.value = dto.histogram
             if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
-            if (dto.tLinearEnabled != 0) {
-                refreshTempDisplays()
-            } else {
-                _spotmeterTemp.value = "--"
-                _maxTemp.value = "--"
-                _minTemp.value = "--"
-                _spotmeterTempValue.value = null
-                _maxTempValue.value = null
-                _minTempValue.value = null
-            }
+            refreshTempDisplays()
             updateFps()
         } catch (e: Exception) {
             Timber.e(e, "Frame processing error")
