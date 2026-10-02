@@ -155,6 +155,7 @@ fun CameraScreen(
     val spotmeterRect by viewModel.spotmeterRect.collectAsState()
     val showConnectError by viewModel.showConnectError.collectAsState()
     val tempHistory by viewModel.tempHistory.collectAsState()
+    val isChartHistoryPaused by viewModel.isChartHistoryPaused.collectAsState()
     val isCelsius by viewModel.isCelsius.collectAsState()
     val exportPictureOnSave by settingsDataManager.exportPictureFlow.collectAsState(initial = false)
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
@@ -258,12 +259,14 @@ fun CameraScreen(
             samples = tempHistory,
             isCelsius = isCelsius,
             primaryLabel = chartPrimaryLabel,
+            isPaused = isChartHistoryPaused,
             onSave = {
                 if (cameraUtils.saveTempChart(tempHistory, isCelsius, chartPrimaryLabel)) {
                     coroutineScope.launch { snackbarHostState.showSnackbar("Chart saved") }
                 }
             },
             onClear = { viewModel.clearChartHistory() },
+            onTogglePause = { viewModel.toggleChartHistoryPaused() },
             onDismiss = { showTempChart = false },
         )
     }
@@ -966,8 +969,10 @@ private fun TempHistoryDialog(
     samples: List<TempSample>,
     isCelsius: Boolean,
     primaryLabel: String,
+    isPaused: Boolean,
     onSave: () -> Unit,
     onClear: () -> Unit,
+    onTogglePause: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -979,6 +984,10 @@ private fun TempHistoryDialog(
         },
         dismissButton = {
             Row {
+                // Stops new samples from being recorded, independent of Clear — lets a long
+                // session (or time lapse) be left running without the chart growing forever.
+                // Doesn't affect an in-progress time-lapse capture itself.
+                TextButton(onClick = onTogglePause) { Text(if (isPaused) "Resume" else "Stop") }
                 // Clears the rolling buffer so it restarts fresh from now — otherwise it just
                 // keeps accumulating indefinitely with no way to reset it short of toggling
                 // Region Measurement, which resets it as a side effect.

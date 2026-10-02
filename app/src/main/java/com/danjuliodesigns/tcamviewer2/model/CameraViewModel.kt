@@ -216,6 +216,19 @@ class CameraViewModel : ViewModel() {
     // which restores the normal rolling-window behavior for live streaming.
     @Volatile private var tempHistoryWindowOverrideMs: Long? = null
 
+    // Hard cap independent of the time window above — the window override during a time lapse
+    // otherwise has no ceiling at all (24h at a 1s interval is ~86,400 samples and growing the
+    // whole time it runs). When exceeded, recordTempSample() halves resolution instead of
+    // truncating the oldest half, so a long lapse's chart keeps its overall shape.
+    // https://github.com/yaturner/tcamViewer2/issues/28
+    private val maxTempSamples = 10_000
+
+    // Pauses new samples from being recorded without affecting an in-progress time-lapse capture
+    // itself — the literal "Stop button" requested in issue #28.
+    @Volatile private var tempHistoryPaused = false
+    private val _isChartHistoryPaused = MutableStateFlow(false)
+    val isChartHistoryPaused: StateFlow<Boolean> = _isChartHistoryPaused.asStateFlow()
+
     // 35mm-style shutter click — plays only when the user manually taps the "Get" button
     // (see getImage() below), not for the auto-Get on connect, the spotmeter-drag re-Get,
     // streaming/recording frames, or time-lapse captures — all of which would be constant
@@ -478,20 +491,27 @@ class CameraViewModel : ViewModel() {
     }
 
     /** Appends a temperature-over-time sample and trims anything older than
-     *  [tempHistoryWindowMs] (or [tempHistoryWindowOverrideMs] during a time lapse). Called from
-     *  both the frame-processing dispatcher and Main (a unit change re-renders and records
-     *  immediately), so the buffer mutation is synchronized. */
+     *  [tempHistoryWindowMs] (or [tempHistoryWindowOverrideMs] during a time lapse), then caps
+     *  the buffer at [maxTempSamples] regardless of window. Called from both the
+     *  frame-processing dispatcher and Main (a unit change re-renders and records immediately),
+     *  so the buffer mutation is synchronized. No-op while [tempHistoryPaused]. */
     private fun recordTempSample(
         spot: Float,
         max: Float,
         min: Float,
     ) {
+        if (tempHistoryPaused) return
         val now = System.currentTimeMillis()
         val snapshot = synchronized(tempHistoryBuffer) {
             tempHistoryBuffer.addLast(TempSample(now, spot, max, min))
             val cutoff = now - (tempHistoryWindowOverrideMs ?: tempHistoryWindowMs)
             while (tempHistoryBuffer.isNotEmpty() && tempHistoryBuffer.first().timestampMs < cutoff) {
                 tempHistoryBuffer.removeFirst()
+            }
+            if (tempHistoryBuffer.size > maxTempSamples) {
+                val decimated = tempHistoryBuffer.filterIndexed { index, _ -> index % 2 == 0 }
+                tempHistoryBuffer.clear()
+                tempHistoryBuffer.addAll(decimated)
             }
             tempHistoryBuffer.toList()
         }
@@ -501,12 +521,21 @@ class CameraViewModel : ViewModel() {
     private fun clearTempHistory() {
         synchronized(tempHistoryBuffer) { tempHistoryBuffer.clear() }
         _tempHistory.value = emptyList()
+        tempHistoryPaused = false
+        _isChartHistoryPaused.value = false
     }
 
     /** User-triggered reset from the Temperature History dialog's Clear button — the buffer
      *  otherwise just keeps rolling, with no way to start a fresh window short of toggling
      *  Region Measurement (which resets it as a side effect). */
     fun clearChartHistory() = clearTempHistory()
+
+    /** User-triggered Stop/Resume from the Temperature History dialog — stops new samples from
+     *  being recorded without affecting an in-progress time-lapse capture itself. */
+    fun toggleChartHistoryPaused() {
+        tempHistoryPaused = !tempHistoryPaused
+        _isChartHistoryPaused.value = tempHistoryPaused
+    }
 
     private suspend fun connectToCamera(ip: String, showErrorOnFailure: Boolean = true) {
         Timber.d("connectToCamera ip=$ip")
