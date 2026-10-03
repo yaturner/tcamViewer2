@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -169,6 +170,29 @@ fun SettingsScreen(
     var localAlertThreshold by remember(savedAlertThreshold, resetKey) { mutableStateOf(savedAlertThreshold) }
     var localUnit by remember(savedUnit, resetKey) { mutableStateOf(savedUnit) }
     var localPalette by remember(savedPalette, resetKey) { mutableStateOf(savedPalette) }
+
+    val hasUnsavedChanges =
+        localIp != savedIp ||
+            localAgc != savedCameraAgc ||
+            localEmissivity != savedCameraEmissivity ||
+            localGainMode != savedCameraGainMode ||
+            localExportPic != savedExportPic ||
+            localExportMeta != savedExportMeta ||
+            localResolution != savedExportRes ||
+            localManualRange != savedManualRange ||
+            localMin != savedMin ||
+            localMax != savedMax ||
+            localShutter != savedShutter ||
+            localSpotmeter != savedSpotmeter ||
+            localRegionMeasurement != savedRegionMeasurement ||
+            localAlertEnabled != savedAlertEnabled ||
+            localAlertMetric != savedAlertMetric ||
+            localAlertComparison != savedAlertComparison ||
+            localAlertThreshold != savedAlertThreshold ||
+            localUnit != savedUnit ||
+            localPalette != savedPalette
+    var showDiscardConfirm by remember { mutableStateOf(false) }
+    BackHandler(enabled = hasUnsavedChanges) { showDiscardConfirm = true }
 
     suspend fun performSave(sendConfigIfConnected: Boolean) {
         dataManager.saveCameraIp(localIp)
@@ -713,6 +737,24 @@ For questions about this privacy statement, please contact the developer through
             },
             dismissButton = {
                 TextButton(onClick = { showIpChangeConfirm = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showDiscardConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDiscardConfirm = false },
+            title = { Text("Discard changes?") },
+            text = { Text("Your unsaved changes will be lost.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDiscardConfirm = false
+                    resetKey++
+                    onNavigateBack()
+                }) { Text("Discard") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardConfirm = false }) { Text("Keep editing") }
             },
         )
     }
