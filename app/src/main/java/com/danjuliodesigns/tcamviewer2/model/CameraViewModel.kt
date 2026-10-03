@@ -724,6 +724,7 @@ class CameraViewModel : ViewModel() {
         emissivity: Int,
         gainMode: Int,
     ) {
+        _cameraConfig.value = CameraConfig(agcEnabled, emissivity, gainMode)
         cameraService.setConfig(agcEnabled, emissivity, gainMode)
     }
 
@@ -780,6 +781,15 @@ class CameraViewModel : ViewModel() {
         if (!_isConnected.value) return
         manualGetPending = true
         cameraService.getImage()
+    }
+
+    /** The camera applies a set_config asynchronously, so a Get sent immediately could still
+     *  return a frame from the old mode; wait briefly before requesting the new one. */
+    fun refreshAfterConfigChange() {
+        viewModelScope.launch {
+            delay(500L)
+            getImage()
+        }
     }
 
     fun runFfc() {

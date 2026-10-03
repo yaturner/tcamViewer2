@@ -195,6 +195,7 @@ fun SettingsScreen(
     BackHandler(enabled = hasUnsavedChanges) { showDiscardConfirm = true }
 
     suspend fun performSave(sendConfigIfConnected: Boolean) {
+        val cameraAgcOnDevice = viewModel.cameraConfig.value?.agcEnabled ?: savedCameraAgc
         dataManager.saveCameraIp(localIp)
         dataManager.saveExportPicture(localExportPic)
         dataManager.saveExportMetadata(localExportMeta)
@@ -222,6 +223,7 @@ fun SettingsScreen(
         if (sendConfigIfConnected && isConnected) {
             val emissivityPct = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
             viewModel.sendCameraConfig(localAgc, emissivityPct, localGainMode)
+            if (localAgc != cameraAgcOnDevice) viewModel.refreshAfterConfigChange()
         }
         onNavigateBack()
     }
