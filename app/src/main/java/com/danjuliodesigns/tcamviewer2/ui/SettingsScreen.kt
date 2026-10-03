@@ -276,20 +276,11 @@ fun SettingsScreen(
                 CameraSettingsSection(
                     viewModel = viewModel,
                     localAgc = localAgc,
-                    onAgcChange = {
-                        localAgc = it
-                        coroutineScope.launch { dataManager.saveCameraAgc(it) }
-                    },
+                    onAgcChange = { localAgc = it },
                     localEmissivity = localEmissivity,
                     onEmissivityChange = { localEmissivity = it },
-                    onEmissivityConfirm = {
-                        coroutineScope.launch { dataManager.saveCameraEmissivity(localEmissivity) }
-                    },
                     localGainMode = localGainMode,
-                    onGainModeChange = {
-                        localGainMode = it
-                        coroutineScope.launch { dataManager.saveCameraGainMode(it) }
-                    },
+                    onGainModeChange = { localGainMode = it },
                 )
             }
 
@@ -931,7 +922,6 @@ private fun CameraSettingsSection(
     onAgcChange: (Boolean) -> Unit,
     localEmissivity: String,
     onEmissivityChange: (String) -> Unit,
-    onEmissivityConfirm: () -> Unit,
     localGainMode: Int,
     onGainModeChange: (Int) -> Unit,
 ) {
@@ -987,7 +977,6 @@ private fun CameraSettingsSection(
             ),
             keyboardActions = KeyboardActions(onDone = {
                 keyboardController?.hide()
-                onEmissivityConfirm()
             }),
         )
         Spacer(modifier = Modifier.width(8.dp))
@@ -1074,7 +1063,6 @@ private fun CameraSettingsSection(
                 TextButton(onClick = {
                     val selectedPct = EMISSIVITY_PRESETS[selectedIndex].second
                     onEmissivityChange(selectedPct.toString())
-                    onEmissivityConfirm()
                     showEmissivityDialog = false
                 }) { Text("OK") }
             },
