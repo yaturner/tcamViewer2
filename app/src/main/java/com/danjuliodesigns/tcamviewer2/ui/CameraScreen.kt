@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -143,6 +144,7 @@ fun CameraScreen(
     val fpsText by viewModel.fpsCounter.collectAsState()
     val isConnected by viewModel.isConnected.collectAsState()
     val isConnecting by viewModel.isConnecting.collectAsState()
+    val isGetting by viewModel.isGetting.collectAsState()
     val isStreaming by viewModel.isStreaming.collectAsState()
     val isRecording by viewModel.isRecording.collectAsState()
     val isTimeLapsing by viewModel.isTimeLapsing.collectAsState()
@@ -425,6 +427,10 @@ fun CameraScreen(
                                     RegionOverlay(measurementRegion)
                                 } else if (spotmeterEnabled) {
                                     SpotmeterOverlay(spotmeterRect)
+                                }
+
+                                if (isGetting) {
+                                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                                 }
                             }
                         }

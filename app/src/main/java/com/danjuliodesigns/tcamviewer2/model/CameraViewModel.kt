@@ -57,6 +57,9 @@ data class TempSample(
  *  avg/min/max within it. Mutually exclusive in the UI — only one overlay/readout at a time. */
 enum class MeasurementMode { POINT, REGION }
 
+// Upper bound on how long the Get spinner stays up if the camera never answers.
+private const val GET_TIMEOUT_MS = 5_000L
+
 class CameraViewModel : ViewModel() {
     private val _spotmeterTemp = MutableStateFlow("--")
     val spotmeterTemp: StateFlow<String> = _spotmeterTemp.asStateFlow()
@@ -97,6 +100,12 @@ class CameraViewModel : ViewModel() {
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
 
     private val _isConnecting = MutableStateFlow(false)
+
+    // True from a Get request until the frame that answers it arrives (or a timeout gives up).
+    private val _isGetting = MutableStateFlow(false)
+    val isGetting: StateFlow<Boolean> = _isGetting.asStateFlow()
+
+    private var getTimeoutJob: Job? = null
     val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
 
     private val _isStreaming = MutableStateFlow(false)
@@ -780,6 +789,12 @@ class CameraViewModel : ViewModel() {
     fun getImage() {
         if (!_isConnected.value) return
         manualGetPending = true
+        _isGetting.value = true
+        getTimeoutJob?.cancel()
+        getTimeoutJob = viewModelScope.launch {
+            delay(GET_TIMEOUT_MS)
+            _isGetting.value = false
+        }
         cameraService.getImage()
     }
 
@@ -1006,6 +1021,10 @@ class CameraViewModel : ViewModel() {
         if (!json.has("radiometric")) return
         // Only the frame that answers a manually-tapped Get clicks — not the auto-Get on
         // connect, the spotmeter-drag re-Get, streaming/recording frames, or time-lapse captures.
+        if (_isGetting.value) {
+            _isGetting.value = false
+            getTimeoutJob?.cancel()
+        }
         if (manualGetPending) {
             manualGetPending = false
             if (shutterSoundEnabled) playShutterSound()
