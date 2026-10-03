@@ -361,6 +361,12 @@ class CameraViewModel : ViewModel() {
         }
     }
 
+    private fun defaultSpotmeterRect(): Rect {
+        val cx = Constants.IMAGE_WIDTH / 2
+        val cy = Constants.IMAGE_HEIGHT / 2
+        return Rect(cx - 2, cy - 2, cx + 2, cy + 2)
+    }
+
     /** Seeds a default centered region box the first time it's needed in a session — either
      *  because the setting just turned on, or a fresh connection cleared the previous session's
      *  box while the setting was already on. No-op if a box already exists or REGION isn't active. */
@@ -642,7 +648,7 @@ class CameraViewModel : ViewModel() {
             _isConnected.value = false
             _isConnecting.value = false
             _isStreaming.value = false
-            _spotmeterRect.value = null
+            _spotmeterRect.value = defaultSpotmeterRect()
             _cameraConfig.value = null
             userMovedSpotmeter = false
             clearTempHistory()
@@ -675,7 +681,7 @@ class CameraViewModel : ViewModel() {
         cameraService.disconnect()
         _isConnected.value = false
         _isStreaming.value = false
-        _spotmeterRect.value = null
+        _spotmeterRect.value = defaultSpotmeterRect()
         _cameraConfig.value = null
         userMovedSpotmeter = false
         connectJob = viewModelScope.launch(Dispatchers.IO) {
