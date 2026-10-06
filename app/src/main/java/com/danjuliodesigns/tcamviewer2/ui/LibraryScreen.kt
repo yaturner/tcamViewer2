@@ -100,6 +100,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.danjuliodesigns.tcamviewer2.cameraService
 import com.danjuliodesigns.tcamviewer2.constants.Constants
 import com.danjuliodesigns.tcamviewer2.model.ImageDto
 import com.danjuliodesigns.tcamviewer2.paletteFactory
@@ -135,11 +136,15 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
     var browseFiles by rememberSaveable(stateSaver = FileListSaver) { mutableStateOf<List<File>>(emptyList()) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
+    var showCameraDownload by remember { mutableStateOf(false) }
+    // Bumped after a camera download so the folder scan below runs again and shows new files
+    var reloadKey by remember { mutableStateOf(0) }
+    val cameraSupportsFs by cameraService.supportsFilesystem.collectAsState()
     var filterFromMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var filterToMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     val dateFilterActive = filterFromMillis != null || filterToMillis != null
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(reloadKey) {
         withContext(Dispatchers.IO) {
             val picturesDir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
                 ?: context.filesDir
@@ -238,7 +243,7 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                         Box {
                             IconButton(
                                 onClick = { menuExpanded = true },
-                                enabled = fileGroups.isNotEmpty(),
+                                enabled = fileGroups.isNotEmpty() || cameraSupportsFs,
                             ) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "More options")
                             }
@@ -246,6 +251,15 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Download from camera") },
+                                    enabled = cameraSupportsFs,
+                                    onClick = {
+                                        showCameraDownload = true
+                                        menuExpanded = false
+                                    },
+                                )
+                                if (fileGroups.isNotEmpty()) HorizontalDivider()
                                 DropdownMenuItem(
                                     text = { Text("Select all") },
                                     onClick = {
@@ -367,6 +381,13 @@ fun LibraryScreen(onOpenDrawer: () -> Unit = {}) {
                 dismissButton = {
                     TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
                 },
+            )
+        }
+
+        if (showCameraDownload) {
+            CameraDownloadWindow(
+                onDismiss = { showCameraDownload = false },
+                onSaved = { reloadKey++ },
             )
         }
 

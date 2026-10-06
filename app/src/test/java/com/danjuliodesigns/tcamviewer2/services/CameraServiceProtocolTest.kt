@@ -176,8 +176,11 @@ class CameraServiceProtocolTest {
         // up pathologically slow (60s+ per test) instead of failing fast or succeeding promptly.
         val connected = cameraService.connect()
         server.awaitConnection()
-        val setTimeCmd = server.readNextCommand()
-        assertTrue("Expected the automatic set_time command right after connect: $setTimeCmd", setTimeCmd.contains("set_time"))
+        // connect() also launches a get_filesystem_list probe (issue #35). Its order relative to
+        // set_time is not fixed, so read both and check that each one arrived.
+        val afterConnect = listOf(server.readNextCommand(), server.readNextCommand())
+        assertTrue("Expected the automatic set_time command right after connect: $afterConnect", afterConnect.any { it.contains("set_time") })
+        assertTrue("Expected the filesystem probe after connect: $afterConnect", afterConnect.any { it.contains("get_filesystem_list") })
         return connected
     }
 
@@ -377,12 +380,18 @@ class CameraServiceProtocolTest {
 
         val responderThread =
             Thread {
-                repeat(3) {
+                // Skip the connect-time get_filesystem_list probe and answer only health checks
+                var answered = 0
+                while (answered < 3) {
                     try {
                         val cmd = server.readNextCommand()
-                        if (cmd.contains("get_status")) server.sendResponse("{\"status\":{\"ok\":true}}")
+                        if (cmd.contains("get_status")) {
+                            server.sendResponse("{\"status\":{\"ok\":true}}")
+                            answered++
+                        }
                     } catch (_: Exception) {
                         // Socket closed by teardown -- fine, the test is over by then.
+                        break
                     }
                 }
             }.apply {

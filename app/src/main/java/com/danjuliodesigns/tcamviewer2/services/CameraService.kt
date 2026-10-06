@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import com.danjuliodesigns.tcamviewer2.constants.Constants
+import com.danjuliodesigns.tcamviewer2.utils.DeviceFiles
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.subjects.PublishSubject
 import kotlinx.coroutines.CompletableDeferred
@@ -16,6 +17,9 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -58,6 +62,9 @@ class CameraService : Service() {
         // with a real request/response every interval while idle (issue #26).
         internal var IDLE_HEALTH_CHECK_INTERVAL_MS = 60_000L
         internal var IDLE_HEALTH_CHECK_TIMEOUT_MS = 5_000L
+
+        // How long to wait for a filesystem list before deciding the camera doesn't support it
+        private const val FS_PROBE_TIMEOUT_MS = 3_000L
     }
 
     private var cameraSocket: Socket? = null
@@ -82,6 +89,14 @@ class CameraService : Service() {
 
     // Resolved with the next radiometric frame; used by getImageOnce() for time lapse capture
     @Volatile private var singleImageDeferred: CompletableDeferred<JSONObject>? = null
+
+    // Set while a get_file request is waiting for its reply (see fetchFile)
+    @Volatile private var fileDeferred: CompletableDeferred<JSONObject>? = null
+
+    // True when the connected camera answers filesystem requests (full tCam with micro-SD).
+    // Probed once per connection; reset on teardown.
+    private val _supportsFilesystem = MutableStateFlow(false)
+    val supportsFilesystem: StateFlow<Boolean> = _supportsFilesystem.asStateFlow()
 
     // Volatile: read from the listening-loop coroutine, written from disconnect() on whatever
     // coroutine calls it — needs to be visible across threads so a read failure caused by our
@@ -193,6 +208,11 @@ class CameraService : Service() {
             // saved images/recordings get sane timestamps. tCam itself has a battery-backed RTC
             // and just re-accepts the same time, so this is harmless there too.
             setTime()
+            // Filesystem support is a per-camera capability, so probe it once per connection.
+            // A camera without it never answers, so the short timeout is the "no" answer.
+            serviceScope.launch {
+                _supportsFilesystem.value = listDirectory("/", timeoutMillis = FS_PROBE_TIMEOUT_MS) != null
+            }
         }
         connected
     }
@@ -243,6 +263,7 @@ class CameraService : Service() {
      *  unconditionally instead of each needing its own "is there something to clean up" check. */
     private fun teardownConnection() {
         connectedFlag = false
+        _supportsFilesystem.value = false
         try {
             cameraSocket?.shutdownInput()
         } catch (_: Exception) {
@@ -369,6 +390,51 @@ class CameraService : Service() {
     fun runFfc() {
         serviceScope.launch {
             writeCommand(Constants.CMD_RUN_FFC.toByteArray(StandardCharsets.UTF_8))
+        }
+    }
+
+    /**
+     * Lists the folders (`"/"`) or the files in a folder on the camera's micro-SD card. Returns
+     * null if the camera doesn't answer with a filesystem list (no support, no card, or timeout).
+     */
+    suspend fun listDirectory(dirName: String, timeoutMillis: Long = 5000L): List<String>? {
+        val args = String.format(Constants.ARGS_FS_DIR, dirName)
+        val command = String.format(Constants.CMD_GET_FS_LIST, args)
+        val response = sendCmd(command, expectedKey = "filesystem_list", timeoutMillis = timeoutMillis)
+        val listing = response.optJSONObject("filesystem_list") ?: return null
+        return DeviceFiles.parseNameList(listing.optString("name_list"))
+    }
+
+    /**
+     * Fetches one image file from the camera's micro-SD card. Returns the file's JSON (the same
+     * shape as a captured `.tjsn`), or null on failure or timeout.
+     *
+     * Live frames use the same keys as the reply, so streaming is paused for the duration of the
+     * request and restarted afterwards. That keeps every frame that arrives while the request is
+     * pending a reply to it.
+     */
+    suspend fun fetchFile(
+        dirName: String,
+        fileName: String,
+        timeoutMs: Long = 20_000L,
+    ): JSONObject? {
+        if (!isConnected) return null
+        val wasStreaming = isStreaming
+        if (wasStreaming) {
+            isStreaming = false
+            sendCmd(Constants.CMD_SET_STREAM_OFF, expectedKey = "stream_status")
+        }
+        val deferred = CompletableDeferred<JSONObject>()
+        fileDeferred = deferred
+        try {
+            val args = String.format(Constants.ARGS_FS_FILE, dirName, fileName)
+            val command = String.format(Constants.CMD_GET_FS_FILE, args)
+            val sent = withContext(Dispatchers.IO) { writeCommand(command.toByteArray(StandardCharsets.UTF_8)) }
+            if (!sent) return null
+            return withTimeoutOrNull(timeoutMs) { deferred.await() }
+        } finally {
+            fileDeferred = null
+            if (wasStreaming && isConnected) startStreaming()
         }
     }
 
@@ -517,7 +583,12 @@ class CameraService : Service() {
                                     parseResponse(
                                         String(response, 0, responsePos, StandardCharsets.UTF_8),
                                     )
-                                if (!routeToPendingRequest(parsedJson)) {
+                                val pendingFile = fileDeferred
+                                if (pendingFile != null && !pendingFile.isCompleted && parsedJson.has("radiometric")) {
+                                    // fetchFile pauses streaming first, so this is the get_file reply
+                                    fileDeferred = null
+                                    pendingFile.complete(parsedJson)
+                                } else if (!routeToPendingRequest(parsedJson)) {
                                     // Resolve a pending single-image capture (time lapse) if waiting
                                     val deferred = singleImageDeferred
                                     if (deferred != null && !deferred.isCompleted && parsedJson.has("radiometric")) {
