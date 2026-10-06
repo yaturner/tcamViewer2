@@ -9,8 +9,7 @@ cameras. This page explains what data the app accesses and what, if anything, le
 
 tCam Viewer talks directly to your camera over your local WiFi network. It does not have an
 account system, does not show ads, and does not run analytics on how you use it. The only data
-that can leave your device is an automated crash report, and only in the version distributed
-outside F-Droid — see below.
+that can leave your device is an automated crash report — see below.
 
 ## Data the app accesses
 
@@ -41,10 +40,6 @@ the app crashes or hits an unexpected error, a report is sent containing:
 
 These reports do not include your camera's IP address, saved images, telemetry, or anything else
 you've captured. They exist to help fix bugs.
-
-**The F-Droid build of tCam Viewer has no crash reporting or network telemetry of any kind** — it
-contains no code path that can contact Sentry or any other external service beyond the camera
-itself.
 
 ## What the app does not do
 

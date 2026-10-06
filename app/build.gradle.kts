@@ -21,10 +21,8 @@ val keystoreProperties =
 //  - major:  bumped by hand in version.properties whenever a build is marked as a GitHub Release
 //  - minor:  total commit count — advances automatically with every commit, no manual bookkeeping
 //  - suffix: HEAD's own commit date/time (not wall-clock build time) — so rebuilding the same
-//            commit twice (e.g. the AAB and the Prebuilt APK, or a local build vs. F-Droid's own
-//            build server) reproduces an identical versionName instead of drifting by build time.
-//            F-Droid in particular expects/rewards reproducible builds; this also fixes an
-//            in-repo annoyance where two builds of the same commit looked like different versions.
+//            commit twice (e.g. the AAB and the Prebuilt APK) reproduces an identical versionName
+//            instead of drifting by build time.
 val versionPropertiesFile = rootProject.file("version.properties")
 val versionProperties =
     Properties().apply {
@@ -72,18 +70,13 @@ android {
         manifestPlaceholders["sentryEnvironment"] = "release"
     }
 
-    // "full" ships Sentry crash reporting (see app/src/full/AndroidManifest.xml);
-    // "fdroid" has no network telemetry at all, so the F-Droid build carries no
-    // Anti-Features: Tracking disclosure. Distributed separately (GitHub vs F-Droid).
+    // "full" ships Sentry crash reporting (see app/src/full/AndroidManifest.xml).
     flavorDimensions += "distribution"
     productFlavors {
         create("full") {
             dimension = "distribution"
             // Not a secret — a DSN is meant to be embedded in every client build.
             manifestPlaceholders["sentryDsn"] = "https://fec0fdfe7886f2d0d05892782cb4c06e@o1336451.ingest.us.sentry.io/4512062738530304"
-        }
-        create("fdroid") {
-            dimension = "distribution"
         }
     }
 

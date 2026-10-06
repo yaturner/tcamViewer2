@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Merged only into the "full" flavor (GitHub/direct-install builds). The "fdroid"
-     flavor has no equivalent file, so F-Droid builds carry no Sentry meta-data,
-     no sentry-android dependency, and no network telemetry at all. -->
+<!-- Merged only into the "full" flavor. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
