@@ -407,12 +407,36 @@ class CameraService : Service() {
     }
 
     /**
+     * Pauses streaming before a batch of [fetchFile] calls, so live frames don't arrive mid-
+     * transfer and get mistaken for a file reply. Returns true if streaming was on (and is now
+     * paused) — call [resumeStreamingAfterBatch] when the batch finishes, in that case.
+     *
+     * Deliberately a single pause/resume around the whole batch rather than one per file: every
+     * `stream_on`/`stream_off` round trip risks a lost ack (the full tCam's modem-sleep behavior,
+     * see the WiFi power-save project note), and doing that up to once per file both slows a
+     * multi-file download down substantially and raised the odds of the idle-while-streaming
+     * watchdog (`MAX_CONSECUTIVE_READ_TIMEOUTS_WHILE_STREAMING`) wrongly treating the camera as
+     * disconnected if an ack got lost right as a resume call set `isStreaming` back to true.
+     */
+    suspend fun pauseStreamingForBatch(): Boolean {
+        if (!isStreaming) return false
+        isStreaming = false
+        sendCmd(Constants.CMD_SET_STREAM_OFF, expectedKey = "stream_status")
+        return true
+    }
+
+    /** Resumes streaming after a batch where [pauseStreamingForBatch] returned true. */
+    fun resumeStreamingAfterBatch() {
+        if (isConnected) startStreaming()
+    }
+
+    /**
      * Fetches one image file from the camera's micro-SD card. Returns the file's JSON (the same
      * shape as a captured `.tjsn`), or null on failure or timeout.
      *
-     * Live frames use the same keys as the reply, so streaming is paused for the duration of the
-     * request and restarted afterwards. That keeps every frame that arrives while the request is
-     * pending a reply to it.
+     * Live frames use the same keys as the reply, so the caller is expected to have paused
+     * streaming first (see [pauseStreamingForBatch]) when fetching more than one file — this
+     * function does not manage streaming itself.
      */
     suspend fun fetchFile(
         dirName: String,
@@ -420,11 +444,6 @@ class CameraService : Service() {
         timeoutMs: Long = 20_000L,
     ): JSONObject? {
         if (!isConnected) return null
-        val wasStreaming = isStreaming
-        if (wasStreaming) {
-            isStreaming = false
-            sendCmd(Constants.CMD_SET_STREAM_OFF, expectedKey = "stream_status")
-        }
         val deferred = CompletableDeferred<JSONObject>()
         fileDeferred = deferred
         val startedAt = System.currentTimeMillis()
@@ -444,7 +463,6 @@ class CameraService : Service() {
             throw e
         } finally {
             fileDeferred = null
-            if (wasStreaming && isConnected) startStreaming()
         }
     }
 

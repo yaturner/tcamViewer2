@@ -103,6 +103,10 @@ fun CameraDownloadWindow(
             var saved = 0
             var skipped = 0
             var failed = 0
+            // Paused once for the whole batch, not once per file — see pauseStreamingForBatch's
+            // doc for why (fewer stream_on/off round trips, less chance of the idle-while-
+            // streaming watchdog misfiring on a lost ack partway through a long download).
+            val wasStreaming = cameraService.pauseStreamingForBatch()
             try {
                 for ((index, name) in names.withIndex()) {
                     if (!cameraService.isConnected) {
@@ -135,6 +139,7 @@ fun CameraDownloadWindow(
             } finally {
                 progress = null
                 job = null
+                if (wasStreaming) cameraService.resumeStreamingAfterBatch()
                 Toast.makeText(
                     context,
                     "Saved $saved, already imported $skipped, failed $failed",
