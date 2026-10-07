@@ -8,9 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -18,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,7 +32,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,6 +54,7 @@ import com.danjuliodesigns.tcamviewer2.cameraService
 import com.danjuliodesigns.tcamviewer2.utils.DeviceFiles
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.IOException
 
 /**
@@ -72,42 +78,48 @@ fun CameraDownloadWindow(
     var selected by remember { mutableStateOf(emptySet<String>()) }
     var job by remember { mutableStateOf<Job?>(null) }
     var progress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var status by remember { mutableStateOf<String?>(null) }
 
     fun closeFolder() {
         openFolder = null
         files = null
         selected = emptySet()
-        status = null
     }
 
     fun loadFolder(name: String) {
         openFolder = name
         files = null
         selected = emptySet()
-        status = null
         scope.launch {
             files = cameraService.listDirectory(name)?.filter(DeviceFiles::isSafeName)?.sorted() ?: emptyList()
         }
     }
 
-    /** Downloads [names] from [folder]. Already-imported files are skipped, not re-downloaded. */
+    /** Downloads [names] from [folder]. Already-imported files are skipped, not re-downloaded.
+     *  Progress and cancel are driven by the modal dialog below, not by whichever list screen
+     *  happens to be on top — a folder's own "download all" icon starts this without opening
+     *  that folder at all. */
     fun download(folder: String, names: List<String>) {
         job = scope.launch {
             var saved = 0
             var skipped = 0
             var failed = 0
             try {
-                names.forEachIndexed { index, name ->
+                for ((index, name) in names.withIndex()) {
                     if (!cameraService.isConnected) {
+                        // `break`, not `continue` — forEachIndexed's return@ only skips one
+                        // iteration, so this used to re-add the remaining count on every
+                        // subsequent index instead of stopping once (a real bug, not just a
+                        // style choice: a plain for loop is what lets `break` work here).
                         failed += names.size - index
-                        return@forEachIndexed
+                        Timber.d("download $folder: disconnected at $index/${names.size}, stopping")
+                        break
                     }
                     progress = index to names.size
                     try {
                         val json = cameraService.fetchFile(folder, name)
                         if (json == null || !json.has("radiometric")) {
                             failed++
+                            Timber.d("download $folder/$name: no data (got=${json != null})")
                         } else if (DeviceFiles.saveImage(root, folder, name, json.toString()) ==
                             DeviceFiles.SaveResult.SAVED
                         ) {
@@ -117,12 +129,17 @@ fun CameraDownloadWindow(
                         }
                     } catch (e: IOException) {
                         failed++
+                        Timber.d(e, "download $folder/$name: IOException")
                     }
                 }
             } finally {
                 progress = null
                 job = null
-                status = "Saved $saved, already imported $skipped, failed $failed"
+                Toast.makeText(
+                    context,
+                    "Saved $saved, already imported $skipped, failed $failed",
+                    Toast.LENGTH_LONG,
+                ).show()
                 selected = emptySet()
                 if (saved > 0) onSaved()
             }
@@ -161,7 +178,10 @@ fun CameraDownloadWindow(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+        // A raw Compose Dialog doesn't get the Activity's own edge-to-edge inset handling, so
+        // without this the last row of either list sits under the 3-button nav bar — reported by
+        // the user as the download-progress bar overlapping the last folder row.
+        Surface(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.navigationBars)) {
             Scaffold(
                 topBar = {
                     TopAppBar(
@@ -180,29 +200,19 @@ fun CameraDownloadWindow(
                     )
                 },
                 bottomBar = {
-                    if (openFolder != null) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                            progress?.let { (done, total) ->
-                                LinearProgressIndicator(
-                                    progress = { if (total == 0) 0f else done.toFloat() / total },
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Text("Downloading ${done + 1} of $total")
-                            }
-                            status?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                            ) {
-                                if (job != null) {
-                                    TextButton(onClick = { job?.cancel() }) { Text("Cancel") }
-                                } else {
-                                    Button(
-                                        enabled = selected.isNotEmpty(),
-                                        onClick = { download(openFolder!!, selected.sorted()) },
-                                    ) { Text("Download ${selected.size}") }
-                                }
-                            }
+                    // The "Download N" selection button only applies within an open folder, and
+                    // only while nothing is already downloading. Live progress and cancel are a
+                    // separate modal (below) so they never compete with either list's own
+                    // layout — see the user-reported overlap with the last folder row.
+                    if (openFolder != null && job == null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            Button(
+                                enabled = selected.isNotEmpty(),
+                                onClick = { download(openFolder!!, selected.sorted()) },
+                            ) { Text("Download ${selected.size}") }
                         }
                     }
                 },
@@ -227,6 +237,30 @@ fun CameraDownloadWindow(
                 }
             }
         }
+    }
+
+    // A separate modal, not the bottomBar, so it never overlaps or competes with either list's
+    // own layout (folder list or file list) and works the same regardless of which is showing.
+    if (job != null) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Downloading") },
+            text = {
+                Column {
+                    progress?.let { (done, total) ->
+                        LinearProgressIndicator(
+                            progress = { if (total == 0) 0f else done.toFloat() / total },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text("Downloading ${done + 1} of $total")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { job?.cancel() }) { Text("Cancel") }
+            },
+        )
     }
 }
 

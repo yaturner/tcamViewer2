@@ -8,6 +8,7 @@ import com.danjuliodesigns.tcamviewer2.constants.Constants
 import com.danjuliodesigns.tcamviewer2.utils.DeviceFiles
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.subjects.PublishSubject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -426,12 +427,21 @@ class CameraService : Service() {
         }
         val deferred = CompletableDeferred<JSONObject>()
         fileDeferred = deferred
+        val startedAt = System.currentTimeMillis()
         try {
             val args = String.format(Constants.ARGS_FS_FILE, dirName, fileName)
             val command = String.format(Constants.CMD_GET_FS_FILE, args)
             val sent = withContext(Dispatchers.IO) { writeCommand(command.toByteArray(StandardCharsets.UTF_8)) }
-            if (!sent) return null
-            return withTimeoutOrNull(timeoutMs) { deferred.await() }
+            if (!sent) {
+                Timber.d("fetchFile $dirName/$fileName: write failed")
+                return null
+            }
+            val result = withTimeoutOrNull(timeoutMs) { deferred.await() }
+            Timber.d("fetchFile $dirName/$fileName: got=${result != null} after ${System.currentTimeMillis() - startedAt}ms")
+            return result
+        } catch (e: CancellationException) {
+            Timber.d("fetchFile $dirName/$fileName: cancelled after ${System.currentTimeMillis() - startedAt}ms")
+            throw e
         } finally {
             fileDeferred = null
             if (wasStreaming && isConnected) startStreaming()
