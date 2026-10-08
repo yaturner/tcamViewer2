@@ -67,6 +67,17 @@ The library groups saved files by date. Video recordings show a white camera bad
 - Delete selected files from disk
 - Browse button opens a full-screen image viewer for selected files
 
+### Download from camera
+
+The Library's overflow menu has a **Download from camera** item, enabled only when the connected camera answers filesystem requests — a full tCam with a micro-SD card. A tCam-Mini has no SD card, and the item stays disabled for it.
+
+- Lists the camera's SD card folders, newest first; tapping one lists its files
+- Download selected files, or use a folder row's download icon to download every image in that folder at once
+- Files are saved under the Library's existing date-folder layout, named for the camera's own folder, so they group and play back like any other capture
+- Files already downloaded are skipped, not re-fetched or overwritten
+- A modal shows live progress with a **Cancel** button, independent of whichever folder screen is on top
+- Video files (`.tmjsn`, `.tltjsn`) are listed but not downloadable yet
+
 ### Browse / image viewer
 
 ![Browse window](screenshots/browse_window.png)
@@ -146,6 +157,8 @@ The Charts tab lists saved temperature-history charts, grouped by date, mirrorin
 When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
 
 - Camera IP address — changing it while connected and pressing **Save** first shows a confirmation dialog (this will disconnect the camera); confirming disconnects only, and the new address is persisted on the next **Save** press
+- **Saved Cameras** — remembers cameras found by Find Cameras or connected to by IP, most-recently-used first; tap a saved entry to fill the IP Address field, or remove it with the delete icon. Hidden until there's at least one
+- **Auto-connect on launch** — off by default; when enabled, connects automatically to the most-recently-used saved camera on app start, with no Connect tap needed
 - Colour palette selection
 - Temperature units (Celsius / Fahrenheit)
 - AGC (Automatic Gain Control) toggle
@@ -182,6 +195,8 @@ All messages are JSON framed with STX (``) prefix and ETX (``) suffix over **T
 | `metadata` | Timestamp, date, palette name |
 
 Camera devices are discovered via mDNS service type `_tcam-socket._tcp.`
+
+Full tCam cameras with a micro-SD card also answer filesystem commands — `get_filesystem_list` (folders, then the files within one) and `get_file` (fetches one file's JSON, the same shape as a saved `.tjsn`) — which the Library's **Download from camera** feature uses. A tCam-Mini has no SD card and answers both as unsupported.
 
 ### Image processing pipeline (`CameraUtils.processImageResponse`)
 
