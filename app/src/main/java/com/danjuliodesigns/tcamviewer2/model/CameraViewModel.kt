@@ -286,6 +286,19 @@ class CameraViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.Default) {
             for (json in frameChannel) processFrame(json)
         }
+        attemptAutoConnect()
+    }
+
+    /** Issue #44: connects to the most-recently-used saved camera on launch, if the user has
+     *  opted in and there is one. Silent on failure — this runs unprompted at launch, so it
+     *  must not pop an error dialog the user didn't ask for; a failed attempt just leaves the
+     *  app in its normal disconnected state, same as if Connect was never tapped. */
+    private fun attemptAutoConnect() {
+        connectJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!settingsDataManager.getAutoConnect()) return@launch
+            val lastUsed = settingsDataManager.getSavedCameras().firstOrNull() ?: return@launch
+            connectToCamera(lastUsed.ip, showErrorOnFailure = false)
+        }
     }
 
     private fun observeSettings() {

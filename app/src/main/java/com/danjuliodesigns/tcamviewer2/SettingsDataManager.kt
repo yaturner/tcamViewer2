@@ -47,6 +47,7 @@ class SettingsDataManager(
         val CAMERA_EMISSIVITY_KEY = stringPreferencesKey("camera_emissivity")
         val CAMERA_GAIN_MODE_KEY = intPreferencesKey("camera_gain_mode")
         val SAVED_CAMERAS_KEY = stringPreferencesKey("saved_cameras")
+        val AUTO_CONNECT_KEY = booleanPreferencesKey("auto_connect")
 
         private const val MAX_SAVED_CAMERAS = 20
 
@@ -81,6 +82,14 @@ class SettingsDataManager(
     val savedCamerasFlow: Flow<List<SavedCamera>> =
         appContext.dataStore.data.map { preferences ->
             decodeSavedCameras(preferences[SAVED_CAMERAS_KEY] ?: "")
+        }
+
+    /** Whether to connect automatically to the most-recently-used saved camera on launch
+     *  (issue #44). Off by default — a new behavior like this shouldn't surprise existing
+     *  users who already have saved cameras from before this setting existed. */
+    val autoConnectFlow: Flow<Boolean> =
+        appContext.dataStore.data.map { preferences ->
+            preferences[AUTO_CONNECT_KEY] == true
         }
 
     val exportPictureFlow: Flow<Boolean> =
@@ -274,6 +283,10 @@ class SettingsDataManager(
         }
     }
 
+    suspend fun saveAutoConnect(enabled: Boolean) {
+        appContext.dataStore.edit { prefs -> prefs[AUTO_CONNECT_KEY] = enabled }
+    }
+
     // Get methods (one-shot retrieval)
     suspend fun getCameraIp(): String = cameraIpFlow.first()
 
@@ -318,4 +331,6 @@ class SettingsDataManager(
     suspend fun getManualMaxTemperature(): Float = maxValueFlow.first().toFloat()
 
     suspend fun getSavedCameras(): List<SavedCamera> = savedCamerasFlow.first()
+
+    suspend fun getAutoConnect(): Boolean = autoConnectFlow.first()
 }

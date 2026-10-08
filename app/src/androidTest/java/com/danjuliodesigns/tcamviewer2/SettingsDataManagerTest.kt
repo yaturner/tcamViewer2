@@ -269,4 +269,20 @@ class SettingsDataManagerTest {
 
         assertEquals(listOf(SavedCamera("tCam-Mini-7FC9", "192.168.68.54")), manager.getSavedCameras())
     }
+
+    // --- Auto-connect on launch (issue #44) ---
+
+    @Test
+    fun defaultAutoConnectIsOff() = runBlocking {
+        assertFalse(manager.getAutoConnect())
+    }
+
+    @Test
+    fun saveThenReadAutoConnect() = runBlocking {
+        manager.saveAutoConnect(true)
+        assertTrue(manager.getAutoConnect())
+
+        manager.saveAutoConnect(false)
+        assertFalse(manager.getAutoConnect())
+    }
 }

@@ -101,6 +101,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val dataManager = remember { SettingsDataManager(context) }
     val savedCameras by dataManager.savedCamerasFlow.collectAsState(initial = emptyList())
+    val savedAutoConnect by dataManager.autoConnectFlow.collectAsState(initial = false)
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
     val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
@@ -159,6 +160,7 @@ fun SettingsScreen(
 
     // --- Local (unsaved) working copies ---
     var localIp by remember(savedIp, resetKey) { mutableStateOf(savedIp) }
+    var localAutoConnect by remember(savedAutoConnect, resetKey) { mutableStateOf(savedAutoConnect) }
     var localExportPic by remember(savedExportPic, resetKey) { mutableStateOf(savedExportPic) }
     var localExportMeta by remember(savedExportMeta, resetKey) { mutableStateOf(savedExportMeta) }
     var localResolution by remember(savedExportRes, resetKey) { mutableStateOf(savedExportRes) }
@@ -177,6 +179,7 @@ fun SettingsScreen(
 
     val hasUnsavedChanges =
         localIp != savedIp ||
+            localAutoConnect != savedAutoConnect ||
             localAgc != savedCameraAgc ||
             localEmissivity != savedCameraEmissivity ||
             localGainMode != savedCameraGainMode ||
@@ -201,6 +204,7 @@ fun SettingsScreen(
     suspend fun performSave(sendConfigIfConnected: Boolean) {
         val cameraAgcOnDevice = viewModel.cameraConfig.value?.agcEnabled ?: savedCameraAgc
         dataManager.saveCameraIp(localIp)
+        dataManager.saveAutoConnect(localAutoConnect)
         dataManager.saveExportPicture(localExportPic)
         dataManager.saveExportMetadata(localExportMeta)
         dataManager.saveExportResolution(localResolution)
@@ -328,6 +332,20 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // Auto-connect on launch — connects to the most-recently-used Saved Camera above
+            // with no Connect tap needed (issue #44). Off by default; a no-op if the list above
+            // is empty.
+            ListItem(
+                headlineContent = { Text("Auto-connect on launch") },
+                supportingContent = { Text(if (localAutoConnect) "Enabled" else "Disabled") },
+                trailingContent = {
+                    Switch(
+                        checked = localAutoConnect,
+                        onCheckedChange = { localAutoConnect = it },
+                    )
+                },
+            )
 
             // Camera IP Address
             Row(
