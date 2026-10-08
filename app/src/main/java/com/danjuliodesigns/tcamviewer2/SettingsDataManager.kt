@@ -11,9 +11,15 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
 // Explicitly bound to your package context namespace
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "tcam_preferences")
+
+/** A camera remembered from a past Find Cameras scan or a successful connect (issue #43).
+ *  [name] is the mDNS service name when known, or just [ip] as a fallback. */
+data class SavedCamera(val name: String, val ip: String)
 
 class SettingsDataManager(
     context: Context,
@@ -40,11 +46,41 @@ class SettingsDataManager(
         val CAMERA_AGC_KEY = booleanPreferencesKey("camera_agc")
         val CAMERA_EMISSIVITY_KEY = stringPreferencesKey("camera_emissivity")
         val CAMERA_GAIN_MODE_KEY = intPreferencesKey("camera_gain_mode")
+        val SAVED_CAMERAS_KEY = stringPreferencesKey("saved_cameras")
+
+        private const val MAX_SAVED_CAMERAS = 20
+
+        private fun decodeSavedCameras(raw: String): List<SavedCamera> {
+            if (raw.isEmpty()) return emptyList()
+            return try {
+                val array = JSONArray(raw)
+                (0 until array.length()).map { i ->
+                    val obj = array.getJSONObject(i)
+                    SavedCamera(name = obj.getString("name"), ip = obj.getString("ip"))
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+
+        private fun encodeSavedCameras(cameras: List<SavedCamera>): String {
+            val array = JSONArray()
+            cameras.forEach { camera ->
+                array.put(JSONObject().put("name", camera.name).put("ip", camera.ip))
+            }
+            return array.toString()
+        }
     }
 
     val cameraIpFlow: Flow<String> =
         appContext.dataStore.data.map { preferences ->
             preferences[CAMERA_IP_KEY] ?: "192.168.4.1"
+        }
+
+    /** Most-recently-seen first. See [upsertSavedCamera]. */
+    val savedCamerasFlow: Flow<List<SavedCamera>> =
+        appContext.dataStore.data.map { preferences ->
+            decodeSavedCameras(preferences[SAVED_CAMERAS_KEY] ?: "")
         }
 
     val exportPictureFlow: Flow<Boolean> =
@@ -214,6 +250,30 @@ class SettingsDataManager(
         appContext.dataStore.edit { prefs -> prefs[CAMERA_GAIN_MODE_KEY] = mode }
     }
 
+    /**
+     * Adds [ip] to the saved-cameras list, or moves it to the front if already present. [name]
+     * is used only when better than what's already saved for this [ip] — a bare-IP fallback (as
+     * [CameraViewModel] passes for a manually-typed connection) never overwrites a friendlier
+     * name learned from an earlier mDNS discovery.
+     */
+    suspend fun upsertSavedCamera(name: String, ip: String) {
+        appContext.dataStore.edit { prefs ->
+            val current = decodeSavedCameras(prefs[SAVED_CAMERAS_KEY] ?: "")
+            val existing = current.find { it.ip == ip }
+            val resolvedName = if (name == ip && existing != null) existing.name else name
+            val updated =
+                listOf(SavedCamera(resolvedName, ip)) + current.filter { it.ip != ip }
+            prefs[SAVED_CAMERAS_KEY] = encodeSavedCameras(updated.take(MAX_SAVED_CAMERAS))
+        }
+    }
+
+    suspend fun removeSavedCamera(ip: String) {
+        appContext.dataStore.edit { prefs ->
+            val current = decodeSavedCameras(prefs[SAVED_CAMERAS_KEY] ?: "")
+            prefs[SAVED_CAMERAS_KEY] = encodeSavedCameras(current.filter { it.ip != ip })
+        }
+    }
+
     // Get methods (one-shot retrieval)
     suspend fun getCameraIp(): String = cameraIpFlow.first()
 
@@ -256,4 +316,6 @@ class SettingsDataManager(
     suspend fun getManualMinTemperature(): Float = minValueFlow.first().toFloat()
 
     suspend fun getManualMaxTemperature(): Float = maxValueFlow.first().toFloat()
+
+    suspend fun getSavedCameras(): List<SavedCamera> = savedCamerasFlow.first()
 }

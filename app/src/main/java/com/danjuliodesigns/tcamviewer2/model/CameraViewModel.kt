@@ -602,6 +602,10 @@ class CameraViewModel : ViewModel() {
                 cameraService.getImage()
                 loadCameraConfig()
                 seedDefaultRegionIfNeeded()
+                // Fallback name only — upsertSavedCamera keeps a friendlier name already learned
+                // from an mDNS discovery (see SettingsScreen's Find Cameras flow) instead of
+                // overwriting it with the bare IP here.
+                settingsDataManager.upsertSavedCamera(name = ip, ip = ip)
             } else if (showErrorOnFailure) {
                 _showConnectError.value = true
             }

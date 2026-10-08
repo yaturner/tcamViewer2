@@ -220,4 +220,53 @@ class SettingsDataManagerTest {
             assertEquals(mode, manager.cameraGainModeFlow.first())
         }
     }
+
+    // --- Saved Cameras (issue #43) ---
+
+    @Test
+    fun defaultSavedCamerasIsEmpty() = runBlocking {
+        assertTrue(manager.getSavedCameras().isEmpty())
+    }
+
+    @Test
+    fun upsertThenReadSavedCamera() = runBlocking {
+        manager.upsertSavedCamera("tCam-7F89", "192.168.68.78")
+        assertEquals(listOf(SavedCamera("tCam-7F89", "192.168.68.78")), manager.getSavedCameras())
+    }
+
+    @Test
+    fun upsertMovesExistingEntryToFront() = runBlocking {
+        manager.upsertSavedCamera("tCam-7F89", "192.168.68.78")
+        manager.upsertSavedCamera("tCam-Mini-7FC9", "192.168.68.54")
+        manager.upsertSavedCamera("tCam-7F89", "192.168.68.78")
+
+        val ips = manager.getSavedCameras().map { it.ip }
+        assertEquals(listOf("192.168.68.78", "192.168.68.54"), ips)
+    }
+
+    @Test
+    fun upsertWithIpFallbackNameKeepsExistingFriendlierName() = runBlocking {
+        // A manual/typed-IP connect (CameraViewModel) passes name == ip as its fallback — it
+        // must not clobber a name already learned from an mDNS discovery.
+        manager.upsertSavedCamera("tCam-7F89", "192.168.68.78")
+        manager.upsertSavedCamera("192.168.68.78", "192.168.68.78")
+
+        assertEquals("tCam-7F89", manager.getSavedCameras().single().name)
+    }
+
+    @Test
+    fun upsertWithoutExistingEntryUsesIpFallbackNameAsIs() = runBlocking {
+        manager.upsertSavedCamera("192.168.68.78", "192.168.68.78")
+        assertEquals("192.168.68.78", manager.getSavedCameras().single().name)
+    }
+
+    @Test
+    fun removeSavedCameraDeletesOnlyThatOne() = runBlocking {
+        manager.upsertSavedCamera("tCam-7F89", "192.168.68.78")
+        manager.upsertSavedCamera("tCam-Mini-7FC9", "192.168.68.54")
+
+        manager.removeSavedCamera("192.168.68.78")
+
+        assertEquals(listOf(SavedCamera("tCam-Mini-7FC9", "192.168.68.54")), manager.getSavedCameras())
+    }
 }

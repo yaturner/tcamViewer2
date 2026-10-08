@@ -12,6 +12,7 @@ import android.net.wifi.WifiManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayArrow
@@ -75,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.danjuliodesigns.tcamviewer2.BuildConfig
+import com.danjuliodesigns.tcamviewer2.SavedCamera
 import com.danjuliodesigns.tcamviewer2.SettingsDataManager
 import com.danjuliodesigns.tcamviewer2.constants.Constants
 import com.danjuliodesigns.tcamviewer2.model.CameraViewModel
@@ -97,6 +100,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val dataManager = remember { SettingsDataManager(context) }
+    val savedCameras by dataManager.savedCamerasFlow.collectAsState(initial = emptyList())
     val coroutineScope = rememberCoroutineScope()
     val keyboardController = LocalSoftwareKeyboardController.current
     val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
@@ -293,6 +297,37 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 12.dp),
             )
+
+            // Saved Cameras — cameras found by a past Find Cameras scan or connected to
+            // before (issue #43). Hidden entirely until there's at least one.
+            if (savedCameras.isNotEmpty()) {
+                Text(
+                    text = "Saved Cameras",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
+                )
+                savedCameras.forEach { camera ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { localIp = camera.ip }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(camera.name, fontWeight = FontWeight.SemiBold)
+                            Text(camera.ip, fontSize = 12.sp)
+                        }
+                        IconButton(onClick = {
+                            coroutineScope.launch { dataManager.removeSavedCamera(camera.ip) }
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Remove ${camera.name}")
+                        }
+                    }
+                }
+            }
 
             // Camera IP Address
             Row(
@@ -809,6 +844,8 @@ For questions about this privacy statement, please contact the developer through
                             if (discoveredDevices.none { it.first == name }) {
                                 discoveredDevices.add(name to ip)
                             }
+                            // Remembered whether or not the user ends up picking this one (#43).
+                            dataManager.upsertSavedCamera(name, ip)
                         }
                     }
                 }
