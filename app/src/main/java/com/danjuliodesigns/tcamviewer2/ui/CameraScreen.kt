@@ -622,195 +622,205 @@ fun CameraScreen(
 
             // 4. BUTTON BAR (bottom) — hidden in fullscreen
             if (!isFullscreen) {
-                Row(
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .navigationBarsPadding()
                         .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val btnPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-
-                    // Connect / Disconnect
-                    FeedbackButton(
-                        onClick = { viewModel.toggleConnection() },
-                        enabled = !isConnecting,
-                        contentPadding = btnPadding,
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            when {
-                                isConnected -> "Disconnect"
-                                isConnecting -> "Connecting..."
-                                else -> "Connect"
-                            },
-                            fontSize = 12.sp,
-                        )
-                    }
+                        // Connect / Disconnect
+                        FeedbackButton(
+                            onClick = { viewModel.toggleConnection() },
+                            enabled = !isConnecting,
+                            contentPadding = btnPadding,
+                        ) {
+                            Text(
+                                when {
+                                    isConnected -> "Disconnect"
+                                    isConnecting -> "Connecting..."
+                                    else -> "Connect"
+                                },
+                                fontSize = 12.sp,
+                            )
+                        }
 
-                    // Get — single frame capture; only meaningful when connected but not streaming
-                    FeedbackButton(
-                        onClick = { viewModel.getImage() },
-                        enabled = isConnected && !isStreaming,
-                        contentPadding = btnPadding,
-                    ) {
-                        Text("Get", fontSize = 12.sp)
-                    }
+                        // Get — single frame capture; only meaningful when connected but not streaming
+                        FeedbackButton(
+                            onClick = { viewModel.getImage() },
+                            enabled = isConnected && !isStreaming,
+                            contentPadding = btnPadding,
+                        ) {
+                            Text("Get", fontSize = 12.sp)
+                        }
 
-                    // Save — only meaningful once a frame has actually been captured
-                    FeedbackButton(
-                        onClick = {
-                            currentImageDto?.let { dto ->
-                                if (cameraUtils.saveTjsn(dto)) {
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Image saved as ${dto.filename}")
-                                    }
-                                    if (exportPictureOnSave) {
+                        // Save — only meaningful once a frame has actually been captured
+                        FeedbackButton(
+                            onClick = {
+                                currentImageDto?.let { dto ->
+                                    if (cameraUtils.saveTjsn(dto)) {
                                         coroutineScope.launch {
-                                            val exportBitmap = withContext(Dispatchers.Default) {
-                                                buildShareBitmap(dto, isCelsius)
-                                            }
-                                            val folder = cameraUtils.generateNewPath()
-                                            val name = dto.filename.orEmpty().removeSuffix(".tjsn").removePrefix("img_")
-                                            val saved = withContext(Dispatchers.IO) {
-                                                globalUtils.saveBitmap(exportBitmap, folder, name) != null
-                                            }
-                                            if (saved) {
-                                                snackbarHostState.showSnackbar("Exported to gallery")
+                                            snackbarHostState.showSnackbar("Image saved as ${dto.filename}")
+                                        }
+                                        if (exportPictureOnSave) {
+                                            coroutineScope.launch {
+                                                val exportBitmap = withContext(Dispatchers.Default) {
+                                                    buildShareBitmap(dto, isCelsius)
+                                                }
+                                                val folder = cameraUtils.generateNewPath()
+                                                val name = dto.filename.orEmpty().removeSuffix(".tjsn").removePrefix("img_")
+                                                val saved = withContext(Dispatchers.IO) {
+                                                    globalUtils.saveBitmap(exportBitmap, folder, name) != null
+                                                }
+                                                if (saved) {
+                                                    snackbarHostState.showSnackbar("Exported to gallery")
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                        },
-                        enabled = currentImageDto != null,
-                        contentPadding = btnPadding,
-                    ) {
-                        Text("Save", fontSize = 12.sp)
-                    }
-
-                    // Stop button (active) or Stream dropdown (idle)
-                    if (isStreaming || isRecording || isTimeLapsing) {
-                        FeedbackButton(
-                            onClick = {
-                                if (isTimeLapsing || isRecording) {
-                                    showStopSaveDialog = true
-                                } else {
-                                    viewModel.toggleStreaming()
-                                }
                             },
-                            contentPadding = btnPadding,
-                        ) {
-                            val label = when {
-                                isTimeLapsing && isTimeLapseCapturing -> "Rec"
-                                isTimeLapsing -> "Stream"
-                                else -> "Stop"
-                            }
-                            Text(label, fontSize = 12.sp)
-                        }
-                    } else {
-                        val canStream = isConnected && currentImageDto != null
-                        Box {
-                            FeedbackButton(
-                                onClick = { streamMenuExpanded = true },
-                                enabled = canStream,
-                                contentPadding = btnPadding,
-                            ) {
-                                Text("Stream", fontSize = 12.sp)
-                            }
-                            DropdownMenu(
-                                expanded = streamMenuExpanded,
-                                onDismissRequest = { streamMenuExpanded = false },
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Start") },
-                                    enabled = canStream,
-                                    onClick = {
-                                        viewModel.toggleStreaming()
-                                        streamMenuExpanded = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Record") },
-                                    enabled = canStream,
-                                    onClick = {
-                                        viewModel.toggleRecording()
-                                        streamMenuExpanded = false
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Time Lapse") },
-                                    enabled = canStream,
-                                    onClick = {
-                                        streamMenuExpanded = false
-                                        showTimeLapseDialog = true
-                                    },
-                                )
-                            }
-                        }
-                    }
-
-                    if (showTimeLapseDialog) {
-                        TimeLapseDialog(
-                            onConfirm = { intervalSec, durationSec ->
-                                showTimeLapseDialog = false
-                                viewModel.startTimeLapse(intervalSec, durationSec)
-                            },
-                            onDismiss = { showTimeLapseDialog = false },
-                        )
-                    }
-
-                    if (showStopSaveDialog) {
-                        val label = if (isTimeLapsing) "time lapse" else "recording"
-                        AlertDialog(
-                            onDismissRequest = { showStopSaveDialog = false },
-                            title = { Text("Save $label?") },
-                            text = { Text("Do you want to save the $label, or discard it?") },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    showStopSaveDialog = false
-                                    if (isTimeLapsing) {
-                                        viewModel.stopTimeLapse(save = true)
-                                    } else {
-                                        viewModel.stopRecording(save = true)
-                                    }
-                                }) { Text("Yes") }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = {
-                                    showStopSaveDialog = false
-                                    if (isTimeLapsing) {
-                                        viewModel.stopTimeLapse(save = false)
-                                    } else {
-                                        viewModel.stopRecording(save = false)
-                                    }
-                                }) { Text("No") }
-                            },
-                        )
-                    }
-
-                    // Palette dropdown — only meaningful once a frame has actually been captured
-                    Box {
-                        FeedbackButton(
-                            onClick = { paletteMenuExpanded = true },
                             enabled = currentImageDto != null,
                             contentPadding = btnPadding,
                         ) {
-                            Text(currentPalette, fontSize = 12.sp)
+                            Text("Save", fontSize = 12.sp)
                         }
-                        DropdownMenu(
-                            expanded = paletteMenuExpanded,
-                            onDismissRequest = { paletteMenuExpanded = false },
-                        ) {
-                            PALETTE_OPTIONS.forEach { name ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        viewModel.setPalette(name)
-                                        paletteMenuExpanded = false
-                                    },
-                                )
+
+                        // Stop button (active) or Stream dropdown (idle)
+                        if (isStreaming || isRecording || isTimeLapsing) {
+                            FeedbackButton(
+                                onClick = {
+                                    if (isTimeLapsing || isRecording) {
+                                        showStopSaveDialog = true
+                                    } else {
+                                        viewModel.toggleStreaming()
+                                    }
+                                },
+                                contentPadding = btnPadding,
+                            ) {
+                                val label = when {
+                                    isTimeLapsing && isTimeLapseCapturing -> "Rec"
+                                    isTimeLapsing -> "Stream"
+                                    else -> "Stop"
+                                }
+                                Text(label, fontSize = 12.sp)
+                            }
+                        } else {
+                            val canStream = isConnected && currentImageDto != null
+                            Box {
+                                FeedbackButton(
+                                    onClick = { streamMenuExpanded = true },
+                                    enabled = canStream,
+                                    contentPadding = btnPadding,
+                                ) {
+                                    Text("Stream", fontSize = 12.sp)
+                                }
+                                DropdownMenu(
+                                    expanded = streamMenuExpanded,
+                                    onDismissRequest = { streamMenuExpanded = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Start") },
+                                        enabled = canStream,
+                                        onClick = {
+                                            viewModel.toggleStreaming()
+                                            streamMenuExpanded = false
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Record") },
+                                        enabled = canStream,
+                                        onClick = {
+                                            viewModel.toggleRecording()
+                                            streamMenuExpanded = false
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Time Lapse") },
+                                        enabled = canStream,
+                                        onClick = {
+                                            streamMenuExpanded = false
+                                            showTimeLapseDialog = true
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showTimeLapseDialog) {
+                            TimeLapseDialog(
+                                onConfirm = { intervalSec, durationSec ->
+                                    showTimeLapseDialog = false
+                                    viewModel.startTimeLapse(intervalSec, durationSec)
+                                },
+                                onDismiss = { showTimeLapseDialog = false },
+                            )
+                        }
+
+                        if (showStopSaveDialog) {
+                            val label = if (isTimeLapsing) "time lapse" else "recording"
+                            AlertDialog(
+                                onDismissRequest = { showStopSaveDialog = false },
+                                title = { Text("Save $label?") },
+                                text = { Text("Do you want to save the $label, or discard it?") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        showStopSaveDialog = false
+                                        if (isTimeLapsing) {
+                                            viewModel.stopTimeLapse(save = true)
+                                        } else {
+                                            viewModel.stopRecording(save = true)
+                                        }
+                                    }) { Text("Yes") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = {
+                                        showStopSaveDialog = false
+                                        if (isTimeLapsing) {
+                                            viewModel.stopTimeLapse(save = false)
+                                        } else {
+                                            viewModel.stopRecording(save = false)
+                                        }
+                                    }) { Text("No") }
+                                },
+                            )
+                        }
+                    }
+
+                    // Palette dropdown on its own row — "DoubleRainbow" wraps if squeezed in
+                    // alongside the other four buttons.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box {
+                            FeedbackButton(
+                                onClick = { paletteMenuExpanded = true },
+                                enabled = currentImageDto != null,
+                                contentPadding = btnPadding,
+                            ) {
+                                Text(currentPalette, fontSize = 12.sp)
+                            }
+                            DropdownMenu(
+                                expanded = paletteMenuExpanded,
+                                onDismissRequest = { paletteMenuExpanded = false },
+                            ) {
+                                PALETTE_OPTIONS.forEach { name ->
+                                    DropdownMenuItem(
+                                        text = { Text(name) },
+                                        onClick = {
+                                            viewModel.setPalette(name)
+                                            paletteMenuExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
