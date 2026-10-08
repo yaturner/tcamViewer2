@@ -302,45 +302,6 @@
   .feature-card .frame { aspect-ratio: 3 / 4; overflow: hidden; }
   .feature-card .frame img { height: 100%; object-fit: cover; object-position: top; }
 
-  .stat-frame {
-    background: var(--surface-2);
-    display: flex;
-    align-items: center;
-  }
-  .retry-ladder {
-    position: relative;
-    padding-left: 1rem;
-    width: 100%;
-  }
-  .retry-ladder::before {
-    content: "";
-    position: absolute;
-    left: 0.28rem;
-    top: 0.5rem;
-    bottom: 0.5rem;
-    width: 2px;
-    background: var(--border);
-  }
-  .retry-ladder .step {
-    position: relative;
-    font-family: "JetBrains Mono", monospace;
-    font-size: 0.82rem;
-    color: var(--dim);
-    padding: 0.55rem 0 0.55rem 1.1rem;
-  }
-  .retry-ladder .dot {
-    position: absolute;
-    left: -1rem;
-    top: 0.75rem;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--border);
-    border: 2px solid var(--surface-2);
-    outline: 2px solid var(--border);
-  }
-  .retry-ladder .step.ok { color: var(--ok); font-weight: 600; }
-  .retry-ladder .step.ok .dot { background: var(--ok); outline-color: var(--ok); }
   .feature-card .eyebrow { display: block; margin-top: 1.1rem; }
   .feature-card h3 {
     font-size: 1.35rem;
@@ -552,14 +513,8 @@
           </div>
 
           <div class="feature-card">
-            <div class="frame stat-frame">
-              <i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
-              <div class="retry-ladder">
-                <div class="step"><span class="dot"></span>connection drops mid-stream</div>
-                <div class="step"><span class="dot"></span>retry last known address &times;3</div>
-                <div class="step"><span class="dot"></span>fall back to mDNS scan</div>
-                <div class="step ok"><span class="dot"></span>reconnected</div>
-              </div>
+            <div class="frame"><i class="tl"></i><i class="tr"></i><i class="bl"></i><i class="br"></i>
+              <img src="screenshots/reconnecting.png" alt="Camera screen showing the title bar reading Thermal Viewer (Connecting...) while the last frame is still displayed, mid-reconnect" loading="lazy">
             </div>
             <span class="eyebrow">Reliability</span>
             <h3>Reconnects on its own</h3>
