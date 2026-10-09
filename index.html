@@ -645,6 +645,24 @@
           </div>
 
           <div class="channel">
+            <div class="channel-head"><h3>.rpm package</h3><span class="pill ok">v1.1.0</span></div>
+            <p>For Fedora, RHEL, openSUSE, and CentOS — installs a launcher and icon like any native app.</p>
+            <a class="btn btn-primary" href="https://github.com/yaturner/tcamViewerDesktop/releases/download/v1.1.0/tcamViewerDesktop-1.1.0.x86_64.rpm">Download .rpm</a>
+          </div>
+
+          <div class="channel">
+            <div class="channel-head"><h3>AppImage</h3><span class="pill ok">v1.1.0</span></div>
+            <p>A single portable file — mark it executable and double-click to run, on almost any distro, no install needed.</p>
+            <a class="btn btn-primary" href="https://github.com/yaturner/tcamViewerDesktop/releases/download/v1.1.0/tcamViewerDesktop-1.1.0-x86_64.AppImage">Download AppImage</a>
+          </div>
+
+          <div class="channel">
+            <div class="channel-head"><h3>Flatpak</h3><span class="pill ok">v1.1.0</span></div>
+            <p>Sandboxed bundle — install with <code>flatpak install --user tcamViewerDesktop-1.1.0.flatpak</code>. Not yet on Flathub.</p>
+            <a class="btn btn-primary" href="https://github.com/yaturner/tcamViewerDesktop/releases/download/v1.1.0/tcamViewerDesktop-1.1.0.flatpak">Download .flatpak</a>
+          </div>
+
+          <div class="channel">
             <div class="channel-head"><h3>Portable tar.gz</h3><span class="pill ok">v1.1.0</span></div>
             <p>No install — unpack anywhere and run <code>bin/tcamViewerDesktop</code>. Bundles its own JRE.</p>
             <a class="btn btn-primary" href="https://github.com/yaturner/tcamViewerDesktop/releases/download/v1.1.0/tcamViewerDesktop-1.1.0-linux-x64.tar.gz">Download tar.gz</a>
@@ -657,8 +675,10 @@
           <code>./gradlew run</code>
           <span>, or build your own package with</span>
           <code>./gradlew packageDeb</code>
-          <span>or</span>
-          <code>./gradlew packageAppImage</code>
+          <span>,</span>
+          <code>packageRpm</code>
+          <span>, or</span>
+          <code>./scripts/build-appimage.sh</code>
           <span>.</span>
         </div>
         <div class="btn-row" style="margin-top: 1.3rem;">
