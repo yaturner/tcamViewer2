@@ -359,6 +359,14 @@
   .desktop-note a { color: var(--accent); font-weight: 600; text-decoration: none; }
   .desktop-note a:hover { text-decoration: underline; }
 
+  code {
+    font-family: "JetBrains Mono", monospace;
+    background: var(--surface-2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+
   /* ---------- privacy strip ---------- */
   .privacy-strip {
     background: var(--surface-2);
@@ -401,6 +409,7 @@
         <a class="hide-narrow" href="#features">Features</a>
         <a class="hide-narrow" href="#palettes">Palettes</a>
         <a href="#downloads">Downloads</a>
+        <a class="hide-narrow" href="#desktop">Desktop</a>
         <a class="hide-narrow" href="PRIVACY.md">Privacy</a>
         <a class="cta" href="https://github.com/yaturner/tcamViewer2">GitHub</a>
       </nav>
@@ -593,10 +602,51 @@
           </div>
 
         </div>
+      </div>
+    </section>
+
+    <section id="desktop">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Linux &middot; Open source</span>
+          <h2>Also runs on your desktop</h2>
+          <p><a href="https://github.com/yaturner/tcamViewerDesktop">tcamViewerDesktop</a> is a Compose Multiplatform port for Linux — the same four screens and the same protocol/decode/palette code as the Android app, not a stripped-down companion.</p>
+        </div>
+        <div class="channels">
+
+          <div class="channel">
+            <div class="channel-head"><h3>Camera</h3></div>
+            <p>Live thermal video, spotmeter or region measurement, AGC/manual range, palette switching, and a flat-field-correction button — over the same WiFi/TCP connection as the phone app.</p>
+          </div>
+
+          <div class="channel">
+            <div class="channel-head"><h3>Settings</h3></div>
+            <p>Staged Save/Cancel editing, mDNS camera discovery, temperature alerts, and WiFi configuration with SSID scanning.</p>
+          </div>
+
+          <div class="channel">
+            <div class="channel-head"><h3>Library</h3></div>
+            <p>Saved images, recordings, and time lapses grouped by date, with frame-by-frame video playback and PNG export.</p>
+          </div>
+
+          <div class="channel">
+            <div class="channel-head"><h3>Charts</h3></div>
+            <p>Every saved temperature-history chart, browsable the same way — grouped by date, filterable, deletable.</p>
+          </div>
+
+        </div>
         <div class="desktop-note">
-          <strong>Running Linux instead?</strong>
-          <span>There's a feature-complete desktop port —</span>
-          <a href="https://github.com/yaturner/tcamViewerDesktop">tcamViewerDesktop on GitHub</a>.
+          <strong>No prebuilt installer yet</strong>
+          <span>&mdash; clone the repo and run</span>
+          <code>./gradlew run</code>
+          <span>, or build a native package with</span>
+          <code>./gradlew packageDeb</code>
+          <span>or</span>
+          <code>./gradlew packageAppImage</code>
+          <span>.</span>
+        </div>
+        <div class="btn-row" style="margin-top: 1.3rem;">
+          <a class="btn btn-primary" href="https://github.com/yaturner/tcamViewerDesktop">View on GitHub</a>
         </div>
       </div>
     </section>
