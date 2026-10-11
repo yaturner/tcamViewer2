@@ -1,11 +1,15 @@
 package com.danjuliodesigns.tcamviewer2
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -35,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.danjuliodesigns.tcamviewer2.factory.PaletteFactory
 import com.danjuliodesigns.tcamviewer2.services.CameraService
 import com.danjuliodesigns.tcamviewer2.ui.CameraScreen
@@ -56,6 +61,18 @@ lateinit var appContext: Context
 
 class MainActivity : ComponentActivity() {
 
+    // Android 17 (SDK 37) blocks raw-socket connections to LAN addresses — including the
+    // camera's TCP port 5001 — until the app holds ACCESS_LOCAL_NETWORK. mDNS discovery
+    // (Find cameras) was observed to grant this as a side effect of its own system prompt,
+    // which is why a manual IP connect timed out until Find cameras had been run once
+    // (issue #37). Requesting it explicitly on launch removes that dependency.
+    private val requestLocalNetworkPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                Timber.w("ACCESS_LOCAL_NETWORK denied — manual IP connect may time out")
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -65,6 +82,12 @@ class MainActivity : ComponentActivity() {
         if (!::settingsDataManager.isInitialized) settingsDataManager = SettingsDataManager(this)
         if (!::cameraUtils.isInitialized) cameraUtils = CameraUtils(this)
         if (!::paletteFactory.isInitialized) paletteFactory = PaletteFactory()
+        if (Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_LOCAL_NETWORK) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestLocalNetworkPermission.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
+        }
         setContent {
             TcamViewer2Theme {
                 MainScreen()

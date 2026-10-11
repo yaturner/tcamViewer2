@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- Required by the platform to return SSIDs in WiFi scan results (Android 8+) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Android 17 (SDK 37) blocks raw-socket connections to LAN addresses by default; this
+         is requested at runtime in MainActivity (issue #37). -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <application
         android:allowBackup="true"
