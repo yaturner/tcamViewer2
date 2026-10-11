@@ -630,6 +630,36 @@ fun CameraScreen(
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                 ) {
                     val btnPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+
+                    // Palette dropdown — its own row in portrait ("DoubleRainbow" wraps if
+                    // squeezed in alongside the other four buttons, #45), but landscape has
+                    // enough width to share the row with everything else (#46).
+                    val paletteButton: @Composable () -> Unit = {
+                        Box {
+                            FeedbackButton(
+                                onClick = { paletteMenuExpanded = true },
+                                enabled = currentImageDto != null,
+                                contentPadding = btnPadding,
+                            ) {
+                                Text(currentPalette, fontSize = 12.sp)
+                            }
+                            DropdownMenu(
+                                expanded = paletteMenuExpanded,
+                                onDismissRequest = { paletteMenuExpanded = false },
+                            ) {
+                                PALETTE_OPTIONS.forEach { name ->
+                                    DropdownMenuItem(
+                                        text = { Text(name) },
+                                        onClick = {
+                                            viewModel.setPalette(name)
+                                            paletteMenuExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -753,6 +783,11 @@ fun CameraScreen(
                             }
                         }
 
+                        // Landscape has enough width to keep the palette button on this row.
+                        if (isLandscape) {
+                            paletteButton()
+                        }
+
                         if (showTimeLapseDialog) {
                             TimeLapseDialog(
                                 onConfirm = { intervalSec, durationSec ->
@@ -793,35 +828,14 @@ fun CameraScreen(
                         }
                     }
 
-                    // Palette dropdown on its own row — "DoubleRainbow" wraps if squeezed in
-                    // alongside the other four buttons.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box {
-                            FeedbackButton(
-                                onClick = { paletteMenuExpanded = true },
-                                enabled = currentImageDto != null,
-                                contentPadding = btnPadding,
-                            ) {
-                                Text(currentPalette, fontSize = 12.sp)
-                            }
-                            DropdownMenu(
-                                expanded = paletteMenuExpanded,
-                                onDismissRequest = { paletteMenuExpanded = false },
-                            ) {
-                                PALETTE_OPTIONS.forEach { name ->
-                                    DropdownMenuItem(
-                                        text = { Text(name) },
-                                        onClick = {
-                                            viewModel.setPalette(name)
-                                            paletteMenuExpanded = false
-                                        },
-                                    )
-                                }
-                            }
+                    // Portrait gives the palette button its own row for the full row width.
+                    if (!isLandscape) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            paletteButton()
                         }
                     }
                 }
