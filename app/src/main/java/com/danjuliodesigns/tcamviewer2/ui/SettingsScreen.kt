@@ -706,10 +706,10 @@ fun SettingsScreen(
                 }
             }
 
-            // Version — opens the About dialog (issue #47)
+            // About — opens the About dialog (issue #47), styled like Privacy Statement below
             ListItem(
-                headlineContent = { Text("Version") },
-                supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") },
+                headlineContent = { Text("About") },
+                supportingContent = { Text("Tap to read") },
                 trailingContent = {
                     IconButton(onClick = { showAboutDialog = true }) {
                         Icon(Icons.Default.Info, contentDescription = "About")
