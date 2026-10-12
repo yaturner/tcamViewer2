@@ -708,6 +708,10 @@ fun SettingsScreen(
                 supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") },
             )
 
+            // Check for updates — Play builds only (issue #36); a no-op composable in the GitHub
+            // ("full") build, see ui/UpdateSection.kt in each flavor.
+            CheckForUpdatesSection(viewModel)
+
             // Privacy Statement
             ListItem(
                 headlineContent = { Text("Privacy Statement") },

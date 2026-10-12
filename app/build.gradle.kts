@@ -71,12 +71,18 @@ android {
     }
 
     // "full" ships Sentry crash reporting (see app/src/full/AndroidManifest.xml).
+    // "play" ships the Play In-App Updates check (issue #36) instead — see app/src/play's
+    // AppUpdater.kt/UpdateSection.kt and app/src/full's no-op UpdateSection.kt. Neither flavor's
+    // dependency (Sentry, Play Core) leaks into the other.
     flavorDimensions += "distribution"
     productFlavors {
         create("full") {
             dimension = "distribution"
             // Not a secret — a DSN is meant to be embedded in every client build.
             manifestPlaceholders["sentryDsn"] = "https://fec0fdfe7886f2d0d05892782cb4c06e@o1336451.ingest.us.sentry.io/4512062738530304"
+        }
+        create("play") {
+            dimension = "distribution"
         }
     }
 
@@ -152,6 +158,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     "fullImplementation"(libs.sentry.android)
+    "playImplementation"(libs.play.app.update)
+    "playImplementation"(libs.play.app.update.ktx)
 
     // Tooling/Debug
     debugImplementation(libs.androidx.compose.ui.tooling)

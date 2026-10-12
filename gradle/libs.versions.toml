@@ -17,6 +17,7 @@ androidxLifecycle = "2.11.0"
 orgJson = "20231013"
 sentry = "8.16.0"
 spotless = "8.9.0"
+playAppUpdate = "2.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -44,6 +45,8 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry" }
+play-app-update = { group = "com.google.android.play", name = "app-update", version.ref = "playAppUpdate" }
+play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 
 [plugins]
 ###android-application = { id = "com.android.application", version.ref = "agp" }
