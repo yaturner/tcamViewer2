@@ -317,7 +317,7 @@ A single JSON object holding the raw spot/max/min samples behind a saved chart:
 
 ### Prebuilt APK
 
-`Prebuilt/app-full-release.apk` is a signed, ready-to-install release build (`full` flavor). Sideload it directly if you don't want to build from source; it's rebuilt and committed whenever a notable change lands.
+`Prebuilt/app-full-release.apk` is a signed, ready-to-install release build (`full` flavor). Sideload it directly if you don't want to build from source; it's rebuilt and committed whenever a notable change lands. `Prebuilt/app-full-release-armeabi-v7a.apk` is the same build, single-ABI, for older 32-bit devices. `Prebuilt/app-play-release.aab` is the `play` flavor's Android App Bundle — what's uploaded to Google Play (see issue #36).
 
 ## Dependencies
 
