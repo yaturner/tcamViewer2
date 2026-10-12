@@ -2,6 +2,7 @@ package com.danjuliodesigns.tcamviewer2.utils
 
 import android.content.Context
 import android.os.Environment
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 
@@ -11,6 +12,7 @@ import java.io.IOException
  */
 object DeviceFiles {
     const val IMAGE_EXTENSION = "tjsn"
+    const val VIDEO_EXTENSION = "tmjsn"
 
     /** Splits the comma-separated `name_list` from a `filesystem_list` reply. The camera leaves a
      *  trailing comma, so empty entries are dropped. */
@@ -23,9 +25,12 @@ object DeviceFiles {
         !name.contains('/') &&
         !name.contains('\\')
 
-    /** Only still images are downloadable for now. Video (.tmjsn) replies have a different
-     *  multi-message layout that the import path does not handle yet. */
     fun isDownloadableImage(name: String): Boolean = isSafeName(name) && name.endsWith(".$IMAGE_EXTENSION")
+
+    /** Videos (.tmjsn) — see [CameraService.fetchVideoFile] (issue #39). */
+    fun isDownloadableVideo(name: String): Boolean = isSafeName(name) && name.endsWith(".$VIDEO_EXTENSION")
+
+    fun isDownloadable(name: String): Boolean = isDownloadableImage(name) || isDownloadableVideo(name)
 
     /** Same root the Library scans, so imported folders show up beside captured ones. */
     fun picturesRoot(context: Context): File = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir
@@ -48,6 +53,39 @@ object DeviceFiles {
         val partial = File(dir, "$fileName.part")
         try {
             partial.writeText(content, Charsets.US_ASCII)
+            if (!partial.renameTo(target)) throw IOException("Could not rename to ${target.name}")
+        } catch (e: IOException) {
+            partial.delete()
+            throw e
+        }
+        return SaveResult.SAVED
+    }
+
+    /**
+     * Writes a downloaded video's [frames] and [videoInfo] to `root/folder/fileName`, in the same
+     * layout this app writes for its own local recordings (see CameraViewModel.processFrame /
+     * buildFooterJson): each frame's JSON followed by one ETX (0x03) byte, then the video_info
+     * JSON with no trailing ETX. Library's readMtjsnContent() reads this layout back. Same
+     * `.part`-then-rename and already-imported handling as [saveImage].
+     */
+    @Throws(IOException::class)
+    fun saveVideo(root: File, folder: String, fileName: String, frames: List<JSONObject>, videoInfo: JSONObject): SaveResult {
+        require(isSafeName(folder) && isSafeName(fileName)) { "Unsafe device path: $folder/$fileName" }
+        val dir = File(root, folder)
+        if (!dir.exists() && !dir.mkdirs()) throw IOException("Could not create ${dir.path}")
+
+        val target = File(dir, fileName)
+        if (target.exists()) return SaveResult.ALREADY_PRESENT
+
+        val partial = File(dir, "$fileName.part")
+        try {
+            partial.outputStream().use { out ->
+                for (frame in frames) {
+                    out.write(frame.toString().toByteArray(Charsets.US_ASCII))
+                    out.write(0x03)
+                }
+                out.write(videoInfo.toString().toByteArray(Charsets.US_ASCII))
+            }
             if (!partial.renameTo(target)) throw IOException("Could not rename to ${target.name}")
         } catch (e: IOException) {
             partial.delete()

@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,6 +94,10 @@ class CameraService : Service() {
 
     // Set while a get_file request is waiting for its reply (see fetchFile)
     @Volatile private var fileDeferred: CompletableDeferred<JSONObject>? = null
+
+    // Set while a get_file request for a video (.tmjsn) is collecting its multi-message reply
+    // (see fetchVideoFile) — one message per recorded frame, terminated by a video_info message.
+    @Volatile private var videoFrameChannel: Channel<JSONObject>? = null
 
     // True when the connected camera answers filesystem requests (full tCam with micro-SD).
     // Probed once per connection; reset on teardown.
@@ -466,6 +471,66 @@ class CameraService : Service() {
         }
     }
 
+    /** The reply to a video (.tmjsn) get_file request: one message per recorded frame (same
+     *  shape as a still's get_file reply) followed by a trailing {"video_info":...} message —
+     *  confirmed against a full tCam's own recordings, byte-compatible with the format this app
+     *  writes for its own local recordings (see CameraViewModel.processFrame/buildFooterJson). */
+    data class VideoFileResult(val frames: List<JSONObject>, val videoInfo: JSONObject)
+
+    /**
+     * Fetches a video file from the camera's micro-SD card. Unlike [fetchFile], the reply is a
+     * stream of messages rather than one — collected here until the terminating video_info
+     * message arrives. Returns null on failure, or if no message arrives within
+     * [perMessageTimeoutMs] of the previous one — a per-message timeout rather than one timeout
+     * for the whole transfer, since a long recording can take a while to stream.
+     *
+     * Caller is expected to have paused streaming first (see [pauseStreamingForBatch]), same as
+     * [fetchFile].
+     */
+    suspend fun fetchVideoFile(
+        dirName: String,
+        fileName: String,
+        perMessageTimeoutMs: Long = 10_000L,
+    ): VideoFileResult? {
+        if (!isConnected) return null
+        val channel = Channel<JSONObject>(Channel.UNLIMITED)
+        videoFrameChannel = channel
+        val frames = mutableListOf<JSONObject>()
+        val startedAt = System.currentTimeMillis()
+        try {
+            val args = String.format(Constants.ARGS_FS_FILE, dirName, fileName)
+            val command = String.format(Constants.CMD_GET_FS_FILE, args)
+            val sent = withContext(Dispatchers.IO) { writeCommand(command.toByteArray(StandardCharsets.UTF_8)) }
+            if (!sent) {
+                Timber.d("fetchVideoFile $dirName/$fileName: write failed")
+                return null
+            }
+            while (true) {
+                val json = withTimeoutOrNull(perMessageTimeoutMs) { channel.receive() } ?: run {
+                    Timber.d(
+                        "fetchVideoFile $dirName/$fileName: timed out after ${frames.size} frames, " +
+                            "${System.currentTimeMillis() - startedAt}ms",
+                    )
+                    return null
+                }
+                if (json.has("video_info")) {
+                    Timber.d(
+                        "fetchVideoFile $dirName/$fileName: got ${frames.size} frames after " +
+                            "${System.currentTimeMillis() - startedAt}ms",
+                    )
+                    return VideoFileResult(frames, json)
+                }
+                frames.add(json)
+            }
+        } catch (e: CancellationException) {
+            Timber.d("fetchVideoFile $dirName/$fileName: cancelled after ${System.currentTimeMillis() - startedAt}ms")
+            throw e
+        } finally {
+            videoFrameChannel = null
+            channel.close()
+        }
+    }
+
     suspend fun getImageOnce(timeoutMs: Long = 15_000L): JSONObject? {
         if (!isConnected) return null
         val deferred = CompletableDeferred<JSONObject>()
@@ -612,7 +677,13 @@ class CameraService : Service() {
                                         String(response, 0, responsePos, StandardCharsets.UTF_8),
                                     )
                                 val pendingFile = fileDeferred
-                                if (pendingFile != null && !pendingFile.isCompleted && parsedJson.has("radiometric")) {
+                                val pendingVideo = videoFrameChannel
+                                if (pendingVideo != null && (parsedJson.has("radiometric") || parsedJson.has("video_info"))) {
+                                    // fetchVideoFile pauses streaming first, so this is part of
+                                    // the get_file reply for a video — one message per frame
+                                    // plus a trailing video_info message.
+                                    pendingVideo.trySend(parsedJson)
+                                } else if (pendingFile != null && !pendingFile.isCompleted && parsedJson.has("radiometric")) {
                                     // fetchFile pauses streaming first, so this is the get_file reply
                                     fileDeferred = null
                                     pendingFile.complete(parsedJson)

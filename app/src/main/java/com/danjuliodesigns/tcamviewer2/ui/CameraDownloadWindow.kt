@@ -120,16 +120,27 @@ fun CameraDownloadWindow(
                     }
                     progress = index to names.size
                     try {
-                        val json = cameraService.fetchFile(folder, name)
-                        if (json == null || !json.has("radiometric")) {
-                            failed++
-                            Timber.d("download $folder/$name: no data (got=${json != null})")
-                        } else if (DeviceFiles.saveImage(root, folder, name, json.toString()) ==
-                            DeviceFiles.SaveResult.SAVED
-                        ) {
-                            saved++
+                        val result = if (DeviceFiles.isDownloadableVideo(name)) {
+                            val video = cameraService.fetchVideoFile(folder, name)
+                            if (video == null) {
+                                Timber.d("download $folder/$name: no data")
+                                null
+                            } else {
+                                DeviceFiles.saveVideo(root, folder, name, video.frames, video.videoInfo)
+                            }
                         } else {
-                            skipped++
+                            val json = cameraService.fetchFile(folder, name)
+                            if (json == null || !json.has("radiometric")) {
+                                Timber.d("download $folder/$name: no data (got=${json != null})")
+                                null
+                            } else {
+                                DeviceFiles.saveImage(root, folder, name, json.toString())
+                            }
+                        }
+                        when (result) {
+                            null -> failed++
+                            DeviceFiles.SaveResult.SAVED -> saved++
+                            DeviceFiles.SaveResult.ALREADY_PRESENT -> skipped++
                         }
                     } catch (e: IOException) {
                         failed++
@@ -154,11 +165,11 @@ fun CameraDownloadWindow(
     fun downloadFolder(name: String) {
         scope.launch {
             val names = cameraService.listDirectory(name)
-                ?.filter(DeviceFiles::isDownloadableImage)
+                ?.filter(DeviceFiles::isDownloadable)
                 ?.sorted()
                 .orEmpty()
             if (names.isEmpty()) {
-                Toast.makeText(context, "No images in $name", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "No images or videos in $name", Toast.LENGTH_SHORT).show()
             } else {
                 download(name, names)
             }
@@ -298,7 +309,7 @@ private fun FolderList(
                     Icon(Icons.Default.Folder, contentDescription = null)
                     Text(name, modifier = Modifier.weight(1f).padding(start = 16.dp))
                     IconButton(onClick = { onDownloadAll(name) }) {
-                        Icon(Icons.Default.SaveAlt, contentDescription = "Download all images in $name")
+                        Icon(Icons.Default.SaveAlt, contentDescription = "Download all files in $name")
                     }
                 }
                 HorizontalDivider()
@@ -326,7 +337,7 @@ private fun FileList(
 
         else -> LazyColumn(contentPadding = contentPadding) {
             items(files) { name ->
-                val downloadable = DeviceFiles.isDownloadableImage(name)
+                val downloadable = DeviceFiles.isDownloadable(name)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -340,7 +351,7 @@ private fun FileList(
                         enabled = downloadable,
                     )
                     Text(
-                        if (downloadable) name else "$name (video, not supported yet)",
+                        if (downloadable) name else "$name (unsupported)",
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
