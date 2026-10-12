@@ -745,12 +745,23 @@ fun SettingsScreen(
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text("Author: James Turner")
+                    Text("App website:")
                     Text(
-                        text = "Website: tcamviewer.darcangel.com",
+                        text = "tcamviewer.darcangel.com",
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.clickable {
                             context.startActivity(
                                 Intent(Intent.ACTION_VIEW, Uri.parse("https://tcamviewer.darcangel.com")),
+                            )
+                        },
+                    )
+                    Text("Camera website:")
+                    Text(
+                        text = "danjuliodesigns.com",
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://danjuliodesigns.com")),
                             )
                         },
                     )
