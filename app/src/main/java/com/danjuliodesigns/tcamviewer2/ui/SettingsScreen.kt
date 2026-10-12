@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -107,6 +109,7 @@ fun SettingsScreen(
     val nsdManager = remember { context.getSystemService(NsdManager::class.java) }
 
     val isConnected by viewModel.isConnected.collectAsState()
+    val currentImageDto by viewModel.currentImageDto.collectAsState()
     val currentMinTemp by viewModel.minTempValue.collectAsState()
     val currentMaxTemp by viewModel.maxTempValue.collectAsState()
 
@@ -128,6 +131,7 @@ fun SettingsScreen(
 
     var showPaletteDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     var tempDialogPalette by remember { mutableStateOf("Rainbow") }
     var resMenuExpanded by remember { mutableStateOf(false) }
 
@@ -702,10 +706,15 @@ fun SettingsScreen(
                 }
             }
 
-            // Version
+            // Version — opens the About dialog (issue #47)
             ListItem(
                 headlineContent = { Text("Version") },
                 supportingContent = { Text("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") },
+                trailingContent = {
+                    IconButton(onClick = { showAboutDialog = true }) {
+                        Icon(Icons.Default.Info, contentDescription = "About")
+                    }
+                },
             )
 
             // Check for updates — Play builds only (issue #36); a no-op composable in the GitHub
@@ -723,6 +732,44 @@ fun SettingsScreen(
                 },
             )
         }
+    }
+
+    // About Dialog (issue #47) — author/website/app version always shown; camera type and its
+    // reported firmware version only while connected, read from the current frame's metadata
+    // (no new protocol work — "Camera"/"Version" are already on every frame).
+    if (showAboutDialog) {
+        val cameraMetadata = currentImageDto?.metadata
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = { Text("About tCam Viewer") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Author: James Turner")
+                    Text(
+                        text = "Website: tcamviewer.darcangel.com",
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse("https://tcamviewer.darcangel.com")),
+                            )
+                        },
+                    )
+                    Text("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                    if (isConnected) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        if (cameraMetadata != null) {
+                            Text("Camera: ${cameraMetadata.optString("Camera", "Unknown")}")
+                            Text("Camera version: ${cameraMetadata.optString("Version", "Unknown")}")
+                        } else {
+                            Text("Connected — camera info not yet available")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("Close") }
+            },
+        )
     }
 
     // Privacy Statement Dialog
