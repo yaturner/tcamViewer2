@@ -154,7 +154,7 @@ The Charts tab lists saved temperature-history charts, grouped by date, mirrorin
 |---|---|
 | ![Region Measurement toggle](screenshots/settings_region_measurement.png) | ![Temperature Alert](screenshots/settings_temperature_alert.png) |
 
-When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera. The **Application Settings** section below is always visible.
+When connected, a **Camera Settings** section appears at the top with AGC, emissivity, gain mode, and WiFi/network controls that are sent directly to the camera, plus **Camera Firmware**, which checks danjuliodesigns.com for the latest tCam / tCam-Mini firmware and installs it over the air (or installs a `.bin` you pick). The **Application Settings** section below is always visible.
 
 - Camera IP address — changing it while connected and pressing **Save** first shows a confirmation dialog (this will disconnect the camera); confirming disconnects only, and the new address is persisted on the next **Save** press
 - **Saved Cameras** — remembers cameras found by Find Cameras or connected to by IP, most-recently-used first; tap a saved entry to fill the IP Address field, or remove it with the delete icon. Hidden until there's at least one

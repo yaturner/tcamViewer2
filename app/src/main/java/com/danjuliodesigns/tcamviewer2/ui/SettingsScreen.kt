@@ -132,6 +132,7 @@ fun SettingsScreen(
     var showPaletteDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showFirmwareDialog by remember { mutableStateOf(false) }
     var tempDialogPalette by remember { mutableStateOf("Rainbow") }
     var resMenuExpanded by remember { mutableStateOf(false) }
 
@@ -295,6 +296,7 @@ fun SettingsScreen(
                     onEmissivityChange = { localEmissivity = it },
                     localGainMode = localGainMode,
                     onGainModeChange = { localGainMode = it },
+                    onUpdateFirmware = { showFirmwareDialog = true },
                 )
             }
 
@@ -734,6 +736,12 @@ fun SettingsScreen(
         }
     }
 
+    // Hoisted out of CameraSettingsSection so it stays open across the post-update
+    // reboot/disconnect and the result remains visible
+    if (showFirmwareDialog) {
+        FirmwareUpdateDialog(viewModel = viewModel, onDismiss = { showFirmwareDialog = false })
+    }
+
     // About Dialog (issue #47) — author/website/app version always shown; camera type and its
     // reported firmware version only while connected, read from the current frame's metadata
     // (no new protocol work — "Camera"/"Version" are already on every frame).
@@ -1043,6 +1051,7 @@ private fun CameraSettingsSection(
     onEmissivityChange: (String) -> Unit,
     localGainMode: Int,
     onGainModeChange: (Int) -> Unit,
+    onUpdateFirmware: () -> Unit,
 ) {
     val wifiInfo by viewModel.wifiInfo.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -1147,6 +1156,18 @@ private fun CameraSettingsSection(
                 },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
             ) { Text("Edit", fontSize = 12.sp) }
+        },
+    )
+
+    // Firmware
+    ListItem(
+        headlineContent = { Text("Camera Firmware") },
+        supportingContent = { Text("Check for and install firmware updates") },
+        trailingContent = {
+            FeedbackButton(
+                onClick = onUpdateFirmware,
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            ) { Text("Update", fontSize = 12.sp) }
         },
     )
 

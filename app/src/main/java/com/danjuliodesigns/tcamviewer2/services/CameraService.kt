@@ -35,6 +35,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.Socket
 import java.nio.charset.StandardCharsets
+import java.util.Base64
 import java.util.Calendar
 import java.util.concurrent.ConcurrentHashMap
 
@@ -67,6 +68,12 @@ class CameraService : Service() {
 
         // How long to wait for a filesystem list before deciding the camera doesn't support it
         private const val FS_PROBE_TIMEOUT_MS = 3_000L
+
+        // OTA update timing, mirroring the camera's own: it waits up to 60s for the user to
+        // confirm the update on the camera, then re-sends an unanswered get_fw every 10s up to 6
+        // times before giving up. Allow a little beyond each before giving up on our side.
+        private const val FW_CONFIRM_TIMEOUT_MS = 65_000L
+        private const val FW_SEGMENT_TIMEOUT_MS = 70_000L
     }
 
     private var cameraSocket: Socket? = null
@@ -94,6 +101,10 @@ class CameraService : Service() {
 
     // Set while a get_file request is waiting for its reply (see fetchFile)
     @Volatile private var fileDeferred: CompletableDeferred<JSONObject>? = null
+
+    // Set while an OTA firmware update runs (see updateFirmware): the camera's unsolicited
+    // get_fw requests and cam_info status messages are diverted here instead of imageChannel.
+    @Volatile private var fwUpdateChannel: Channel<JSONObject>? = null
 
     // Set while a get_file request for a video (.tmjsn) is collecting its multi-message reply
     // (see fetchVideoFile) — one message per recorded frame, terminated by a video_info message.
@@ -237,7 +248,9 @@ class CameraService : Service() {
             serviceScope.launch {
                 while (isConnected && running) {
                     delay(IDLE_HEALTH_CHECK_INTERVAL_MS)
-                    if (!isConnected || !running || isStreaming) continue
+                    // An OTA transfer is its own liveness signal, and extra commands would compete
+                    // with fw_segment for the camera's small command buffer.
+                    if (!isConnected || !running || isStreaming || fwUpdateChannel != null) continue
                     val response = sendCmd(Constants.CMD_GET_STATUS, expectedKey = "status", timeoutMillis = IDLE_HEALTH_CHECK_TIMEOUT_MS)
                     if (response.has("error") && isConnected && running && !isStreaming) {
                         Timber.w("Idle health check got no response — treating camera as disconnected")
@@ -303,6 +316,7 @@ class CameraService : Service() {
         pendingRequests.clear()
         singleImageDeferred?.let { if (!it.isCompleted) it.complete(error) }
         singleImageDeferred = null
+        fwUpdateChannel?.close(IOException(reason))
     }
 
     /** Centralizes the write-then-handle-failure path shared by every fire-and-forget command
@@ -564,6 +578,84 @@ class CameraService : Service() {
         }
     }
 
+    suspend fun getStatus(): JSONObject = sendCmd(Constants.CMD_GET_STATUS, expectedKey = "status")
+
+    /**
+     * Runs the camera's OTA firmware update protocol with [image] (a validated application
+     * `.bin`) whose embedded version is [version] — the camera rejects a mismatch:
+     *
+     * 1. Send `fw_update_request`; the camera then asks the user to confirm on the device (tCam-
+     *    Mini blinks its LED red/green until the button is pressed; tCam shows a dialog).
+     * 2. Answer each `get_fw` {start, length} with a matching base64 `fw_segment`.
+     * 3. The camera validates the image and reports through a `cam_info` (info_value 6); on
+     *    success it reboots into the new firmware, which drops this connection.
+     *
+     * [onProgress] gets the number of bytes sent so far; its first call means the user confirmed.
+     * Returns the camera's final status message on success, or throws [IOException] with the
+     * reason on failure. The caller is expected to have stopped streaming first.
+     */
+    suspend fun updateFirmware(
+        image: ByteArray,
+        version: String,
+        onProgress: (bytesSent: Int) -> Unit,
+    ): String {
+        if (!isConnected) throw IOException("Camera not connected")
+        val channel = Channel<JSONObject>(Channel.UNLIMITED)
+        fwUpdateChannel = channel
+        try {
+            val request = String.format(Constants.CMD_FW_UPDATE_REQUEST, image.size, version)
+            if (!withContext(Dispatchers.IO) { writeCommand(request.toByteArray(StandardCharsets.UTF_8)) }) {
+                throw IOException("Failed to send update request")
+            }
+            var confirmed = false
+            while (true) {
+                val timeout = if (confirmed) FW_SEGMENT_TIMEOUT_MS else FW_CONFIRM_TIMEOUT_MS
+                val msg =
+                    withTimeoutOrNull(timeout) { channel.receive() }
+                        ?: throw IOException(
+                            if (confirmed) "Camera stopped requesting firmware data" else "Update was not confirmed on the camera",
+                        )
+
+                val getFw = msg.optJSONObject("get_fw")
+                if (getFw != null) {
+                    val start = getFw.optInt("start", -1)
+                    val length = getFw.optInt("length", -1)
+                    if (start < 0 || length <= 0 || start + length > image.size) {
+                        throw IOException("Camera requested an invalid range ($start, $length)")
+                    }
+                    confirmed = true
+                    val data = Base64.getEncoder().encodeToString(image.copyOfRange(start, start + length))
+                    val segment = String.format(Constants.CMD_FW_SEGMENT, start, length, data)
+                    if (!withContext(Dispatchers.IO) { writeCommand(segment.toByteArray(StandardCharsets.UTF_8)) }) {
+                        throw IOException("Connection lost during firmware transfer")
+                    }
+                    onProgress(start + length)
+                    continue
+                }
+
+                val info = msg.optJSONObject("cam_info") ?: continue
+                val value = info.optInt("info_value", -1)
+                val text = info.optString("info_string")
+                when (value) {
+                    Constants.CAM_INFO_UPDATE_STATUS ->
+                        if (text.contains("success", ignoreCase = true)) return text else throw IOException(text)
+
+                    Constants.CAM_INFO_NACK,
+                    Constants.CAM_INFO_UNIMPLEMENTED,
+                    Constants.CAM_INFO_BAD_CMD,
+                    Constants.CAM_INFO_INTERNAL_ERROR,
+                    -> throw IOException(text.ifEmpty { "Camera rejected the update" })
+
+                    // ACK of fw_update_request, debug messages, and acks for anything else
+                    else -> Timber.d("Firmware update cam_info: $info")
+                }
+            }
+        } finally {
+            fwUpdateChannel = null
+            channel.close()
+        }
+    }
+
     suspend fun getConfig(): JSONObject = sendCmd(Constants.CMD_GET_CONFIG, expectedKey = "config")
 
     suspend fun getWifi(): JSONObject = sendCmd(Constants.CMD_GET_WIFI, expectedKey = "wifi")
@@ -678,7 +770,10 @@ class CameraService : Service() {
                                     )
                                 val pendingFile = fileDeferred
                                 val pendingVideo = videoFrameChannel
-                                if (pendingVideo != null && (parsedJson.has("radiometric") || parsedJson.has("video_info"))) {
+                                val fwChannel = fwUpdateChannel
+                                if (fwChannel != null && (parsedJson.has("get_fw") || parsedJson.has("cam_info"))) {
+                                    fwChannel.trySend(parsedJson)
+                                } else if (pendingVideo != null && (parsedJson.has("radiometric") || parsedJson.has("video_info"))) {
                                     // fetchVideoFile pauses streaming first, so this is part of
                                     // the get_file reply for a video — one message per frame
                                     // plus a trailing video_info message.
