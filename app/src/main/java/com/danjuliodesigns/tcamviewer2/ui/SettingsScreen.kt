@@ -63,6 +63,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,6 +88,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import java.net.Inet4Address
 import kotlin.coroutines.resume
 import kotlin.math.ceil
@@ -132,7 +134,10 @@ fun SettingsScreen(
     var showPaletteDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
-    var showFirmwareDialog by remember { mutableStateOf(false) }
+    // rememberSaveable, not remember -- the OTA flow (and the camera-side "waiting for ack"
+    // state it's gating) can be in progress for a while, and a phone rotation shouldn't make the
+    // pop-up vanish out from under it while the app is still ready to perform the update (#50).
+    var showFirmwareDialog by rememberSaveable { mutableStateOf(false) }
     var tempDialogPalette by remember { mutableStateOf("Rainbow") }
     var resMenuExpanded by remember { mutableStateOf(false) }
 
@@ -234,9 +239,17 @@ fun SettingsScreen(
         dataManager.saveCameraEmissivity(localEmissivity)
         dataManager.saveCameraGainMode(localGainMode)
         if (sendConfigIfConnected && isConnected) {
-            val emissivityPct = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
-            viewModel.sendCameraConfig(localAgc, emissivityPct, localGainMode)
-            if (localAgc != cameraAgcOnDevice) viewModel.refreshAfterConfigChange()
+            // An exception here (e.g. a dropped camera connection mid-save) must not prevent
+            // Settings from exiting -- the DataStore writes above already landed, so leaving the
+            // user stuck on this screen afterward is strictly worse than just skipping the push
+            // to the camera (issue #58).
+            try {
+                val emissivityPct = (localEmissivity.toIntOrNull() ?: 90).coerceIn(1, 100)
+                viewModel.sendCameraConfig(localAgc, emissivityPct, localGainMode)
+                if (localAgc != cameraAgcOnDevice) viewModel.refreshAfterConfigChange()
+            } catch (e: Exception) {
+                Timber.e(e, "sendCameraConfig during Settings save failed")
+            }
         }
         onNavigateBack()
     }
