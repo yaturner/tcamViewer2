@@ -566,7 +566,10 @@ fun SettingsScreen(
                 trailingContent = {
                     Switch(
                         checked = localSpotmeter,
-                        onCheckedChange = { localSpotmeter = it },
+                        onCheckedChange = { checked ->
+                            localSpotmeter = checked
+                            if (checked) localRegionMeasurement = false
+                        },
                         modifier = Modifier.testTag("switch_spotmeter"),
                     )
                 },
@@ -575,13 +578,18 @@ fun SettingsScreen(
             // Region Measurement — mutually exclusive with the point spotmeter above; when on,
             // the Camera screen shows a resizable box (avg/min/max) instead of the single-point
             // reading. The box's own position is session-only regardless of this setting.
+            // Enforced here at toggle time (issue #55) rather than left to silently resolve at
+            // render time on the Camera screen.
             ListItem(
                 headlineContent = { Text("Region Measurement") },
                 supportingContent = { Text(if (localRegionMeasurement) "Enabled" else "Disabled") },
                 trailingContent = {
                     Switch(
                         checked = localRegionMeasurement,
-                        onCheckedChange = { localRegionMeasurement = it },
+                        onCheckedChange = { checked ->
+                            localRegionMeasurement = checked
+                            if (checked) localSpotmeter = false
+                        },
                         modifier = Modifier.testTag("switch_region_measurement"),
                     )
                 },
