@@ -51,9 +51,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.danjuliodesigns.tcamviewer2.cameraService
+import com.danjuliodesigns.tcamviewer2.utils.CameraUtils
 import com.danjuliodesigns.tcamviewer2.utils.DeviceFiles
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import timber.log.Timber
 import java.io.IOException
 
@@ -78,6 +80,30 @@ fun CameraDownloadWindow(
     var selected by remember { mutableStateOf(emptySet<String>()) }
     var job by remember { mutableStateOf<Job?>(null) }
     var progress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+    /** A camera-downloaded file keeps its SD-card name (e.g. a "tcam_23_10_22" folder, a
+     *  "mov_10_23_12.tmjsn" file), which doesn't match this app's own "MM_dd_yyyy" folder /
+     *  "img_"+"HH_mm_ss" filename convention -- LibraryScreen's date grouping, sorting, and
+     *  "h:mm:ss" display all assume the local format, so a downloaded entry sorted and displayed
+     *  oddly (issue #56). Rename at download time to the real capture timestamp parsed out of the
+     *  file's own metadata (not "now" -- the download can happen long after capture), falling back
+     *  to the camera's original folder/name if that metadata can't be parsed for any reason. */
+    fun localStyleName(
+        metadata: JSONObject?,
+        prefix: String,
+        extension: String,
+        fallbackFolder: String,
+        fallbackName: String,
+    ): Pair<String, String> {
+        val date = try {
+            metadata?.let { CameraUtils.sdf.parse(it.optString("Date") + " " + it.optString("Time")) }
+        } catch (e: Exception) {
+            null
+        } ?: return fallbackFolder to fallbackName
+        val folder = CameraUtils.simpleDateFormatFolder.format(date)
+        val fileName = prefix + CameraUtils.simpleDateFormatFile.format(date) + "." + extension
+        return folder to fileName
+    }
 
     fun closeFolder() {
         openFolder = null
@@ -126,7 +152,15 @@ fun CameraDownloadWindow(
                                 Timber.d("download $folder/$name: no data")
                                 null
                             } else {
-                                DeviceFiles.saveVideo(root, folder, name, video.frames, video.videoInfo)
+                                val metadata = video.frames.firstOrNull()?.optJSONObject("metadata")
+                                val (localFolder, localName) = localStyleName(
+                                    metadata,
+                                    "vid_",
+                                    DeviceFiles.VIDEO_EXTENSION,
+                                    folder,
+                                    name,
+                                )
+                                DeviceFiles.saveVideo(root, localFolder, localName, video.frames, video.videoInfo)
                             }
                         } else {
                             val json = cameraService.fetchFile(folder, name)
@@ -134,7 +168,14 @@ fun CameraDownloadWindow(
                                 Timber.d("download $folder/$name: no data (got=${json != null})")
                                 null
                             } else {
-                                DeviceFiles.saveImage(root, folder, name, json.toString())
+                                val (localFolder, localName) = localStyleName(
+                                    json.optJSONObject("metadata"),
+                                    "img_",
+                                    DeviceFiles.IMAGE_EXTENSION,
+                                    folder,
+                                    name,
+                                )
+                                DeviceFiles.saveImage(root, localFolder, localName, json.toString())
                             }
                         }
                         when (result) {
