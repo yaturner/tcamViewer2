@@ -187,7 +187,12 @@ fun CameraDownloadWindow(
     }
 
     LaunchedEffect(Unit) {
+        // A null result here (e.g. the camera has no SD card, so get_filesystem_list fails) must
+        // resolve to an empty list, not stay null -- null is also the initial "still loading"
+        // value, and FolderList below shows the loading spinner forever for a null it can never
+        // tell apart from "haven't gotten a response yet" otherwise (issue #59).
         folders = cameraService.listDirectory("/")?.filter(DeviceFiles::isSafeName)?.sortedDescending()
+            ?: emptyList()
     }
 
     Dialog(
