@@ -754,6 +754,12 @@ fun SettingsScreen(
                     }
                 },
             )
+
+            // Scaffold's innerPadding only reserves exactly the bottomBar's own measured height,
+            // so the last row(s) can end up scrolled to sit flush against it -- close enough that
+            // a tap meant for a half-visible row at that boundary can land on Cancel/Save instead
+            // (issue #60). Extra bottom padding on the scroll content keeps every row clear of it.
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
