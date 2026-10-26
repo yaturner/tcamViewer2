@@ -157,6 +157,13 @@ object Constants {
         "    \"flags\": 1\n" +
         "    }"
 
+    // Same as above, but the user didn't touch the password field -- omit it so the camera
+    // keeps its current AP password instead of blanking it (issue #52/#53).
+    val ARGS_SET_WIFI_AP_NO_PW: String = "{\n" +
+        "    \"ap_ssid\": \"%s\",\n" +
+        "    \"flags\": 1\n" +
+        "    }"
+
     // If Camera is NOT Access Point and NOT Use static IP when Client, send
     val ARGS_SET_WIFI_NOT_STATIC: String = "{\n" +
         "    \"sta_ssid\": \"%s\",\n" +
@@ -164,10 +171,24 @@ object Constants {
         "    \"flags\": 129\n" +
         "    }"
 
+    // Same as above, with the password field omitted (see ARGS_SET_WIFI_AP_NO_PW).
+    val ARGS_SET_WIFI_NOT_STATIC_NO_PW: String = "{\n" +
+        "    \"sta_ssid\": \"%s\",\n" +
+        "    \"flags\": 129\n" +
+        "    }"
+
     // If Camera is NOT Access Point and Use static IP when Client, send
     val ARGS_SET_WIFI_STATIC: String = "{\n" +
         "    \"sta_ssid\": \"%s\",\n" +
         "    \"sta_pw\": \"%s\",\n" +
+        "    \"sta_ip_addr\": \"%s\",\n" +
+        "    \"sta_netmask\": \"%s\",\n" +
+        "    \"flags\": 145\n" +
+        "    }"
+
+    // Same as above, with the password field omitted (see ARGS_SET_WIFI_AP_NO_PW).
+    val ARGS_SET_WIFI_STATIC_NO_PW: String = "{\n" +
+        "    \"sta_ssid\": \"%s\",\n" +
         "    \"sta_ip_addr\": \"%s\",\n" +
         "    \"sta_netmask\": \"%s\",\n" +
         "    \"flags\": 145\n" +

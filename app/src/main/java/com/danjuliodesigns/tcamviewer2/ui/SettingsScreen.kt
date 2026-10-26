@@ -1229,6 +1229,10 @@ private fun CameraSettingsSection(
         var wifiIsAccessPoint by remember { mutableStateOf(true) }
         var wifiSsid by remember { mutableStateOf("") }
         var wifiPassword by remember { mutableStateOf("") }
+        // Only send the password to the camera if the user actually typed one -- the camera
+        // never returns the existing password in get_wifi, so leaving this field blank must mean
+        // "keep the current password", not "set it to empty" (issue #52/#53).
+        var wifiPasswordEdited by remember { mutableStateOf(false) }
         var wifiPasswordVisible by remember { mutableStateOf(false) }
         var wifiUseStaticIp by remember { mutableStateOf(false) }
         var wifiStaticIp by remember { mutableStateOf("") }
@@ -1243,6 +1247,8 @@ private fun CameraSettingsSection(
             wifiIsAccessPoint = !isClientMode
             wifiUseStaticIp = (flags and Constants.WIFI_MASK_STATIC_IP) != 0
             wifiSsid = if (isClientMode) info["sta_ssid"].orEmpty() else info["ap_ssid"].orEmpty()
+            wifiPassword = ""
+            wifiPasswordEdited = false
             wifiStaticIp = info["sta_ip_addr"].orEmpty()
             wifiStaticNetmask = info["sta_netmask"].orEmpty()
         }
@@ -1266,7 +1272,17 @@ private fun CameraSettingsSection(
                             )
                             Switch(
                                 checked = wifiIsAccessPoint,
-                                onCheckedChange = { wifiIsAccessPoint = it },
+                                onCheckedChange = { checked ->
+                                    wifiIsAccessPoint = checked
+                                    // The SSID field was seeded for whichever mode the camera was
+                                    // in when the dialog opened -- re-derive it for the newly
+                                    // selected mode instead of leaving the stale value (issue #53).
+                                    wifiSsid = if (checked) {
+                                        wifiInfo?.get("ap_ssid").orEmpty()
+                                    } else {
+                                        wifiInfo?.get("sta_ssid").orEmpty()
+                                    }
+                                },
                             )
                         }
 
@@ -1299,7 +1315,10 @@ private fun CameraSettingsSection(
 
                         OutlinedTextField(
                             value = wifiPassword,
-                            onValueChange = { wifiPassword = it },
+                            onValueChange = {
+                                wifiPassword = it
+                                wifiPasswordEdited = true
+                            },
                             label = { Text("Password") },
                             singleLine = true,
                             visualTransformation = if (wifiPasswordVisible) {
@@ -1383,7 +1402,7 @@ private fun CameraSettingsSection(
                         viewModel.sendWifiConfig(
                             wifiIsAccessPoint,
                             wifiSsid,
-                            wifiPassword,
+                            if (wifiPasswordEdited) wifiPassword else null,
                             wifiUseStaticIp,
                             wifiStaticIp,
                             wifiStaticNetmask,

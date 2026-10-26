@@ -765,21 +765,28 @@ class CameraViewModel : ViewModel() {
         cameraService.setConfig(agcEnabled, emissivity, gainMode)
     }
 
+    /** [password] is null when the user left the Password field untouched -- the camera never
+     *  returns its current password in get_wifi, so omitting the field (rather than sending an
+     *  empty string) tells the camera to keep whatever password it already has (issue #52/#53). */
     fun sendWifiConfig(
         isAccessPoint: Boolean,
         ssid: String,
-        password: String,
+        password: String?,
         useStaticIp: Boolean,
         staticIp: String,
         staticNetmask: String,
     ) {
         val args =
             when {
-                isAccessPoint -> {
+                isAccessPoint && password != null -> {
                     String.format(Constants.ARGS_SET_WIFI_AP, ssid, password)
                 }
 
-                useStaticIp -> {
+                isAccessPoint -> {
+                    String.format(Constants.ARGS_SET_WIFI_AP_NO_PW, ssid)
+                }
+
+                useStaticIp && password != null -> {
                     String.format(
                         Constants.ARGS_SET_WIFI_STATIC,
                         ssid,
@@ -789,8 +796,21 @@ class CameraViewModel : ViewModel() {
                     )
                 }
 
-                else -> {
+                useStaticIp -> {
+                    String.format(
+                        Constants.ARGS_SET_WIFI_STATIC_NO_PW,
+                        ssid,
+                        staticIp,
+                        staticNetmask,
+                    )
+                }
+
+                password != null -> {
                     String.format(Constants.ARGS_SET_WIFI_NOT_STATIC, ssid, password)
+                }
+
+                else -> {
+                    String.format(Constants.ARGS_SET_WIFI_NOT_STATIC_NO_PW, ssid)
                 }
             }
         cameraService.setWifi(args)
