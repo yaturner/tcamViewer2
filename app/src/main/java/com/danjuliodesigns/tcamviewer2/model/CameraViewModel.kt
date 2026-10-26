@@ -762,7 +762,23 @@ class CameraViewModel : ViewModel() {
         gainMode: Int,
     ) {
         _cameraConfig.value = CameraConfig(agcEnabled, emissivity, gainMode)
+        // The camera stops streaming internally when a sensor config change like AGC is applied,
+        // but never tells the app it did -- so the main screen's Stream/Stop control kept reading
+        // "Stop" until the user clicked it twice (issue #51). Mirror toggleStreaming()'s stop
+        // branch so the app's own state matches what the camera is about to do.
+        if (_isStreaming.value) stopStreamingState()
         cameraService.setConfig(agcEnabled, emissivity, gainMode)
+    }
+
+    /** Local-state half of stopping streaming (flag, recording wrap-up, fps reset) -- shared by
+     *  the user-initiated toggle and by sendCameraConfig's anticipation of a camera-side stop. */
+    private fun stopStreamingState() {
+        if (_isRecording.value) finishRecording(stopStreamIfAutoStarted = false)
+        cameraService.stopStreaming()
+        _isStreaming.value = false
+        frameCount = 0
+        fpsWindowStart = -1L
+        _fpsCounter.value = "-- fps"
     }
 
     /** [password] is null when the user left the Password field untouched -- the camera never
@@ -1061,12 +1077,7 @@ class CameraViewModel : ViewModel() {
 
     fun toggleStreaming() {
         if (_isStreaming.value) {
-            if (_isRecording.value) finishRecording(stopStreamIfAutoStarted = false)
-            cameraService.stopStreaming()
-            _isStreaming.value = false
-            frameCount = 0
-            fpsWindowStart = -1L
-            _fpsCounter.value = "-- fps"
+            stopStreamingState()
         } else {
             frameCount = 0
             fpsWindowStart = -1L
@@ -1213,9 +1224,28 @@ class CameraViewModel : ViewModel() {
                 }
                 recordingFrameCount++
             }
-            val dto = ImageDto.create(json, selectedPalette)
+            val paletteUsed = selectedPalette
+            val dto = ImageDto.create(json, paletteUsed)
             _currentImageDto.value = dto
-            _currentBitmap.value = dto.bitmap
+            // ImageDto.create suspends (bitmap decode), so the palette can change mid-build via
+            // observeSettings' remapCurrentFrame() racing this on a different dispatcher. If it
+            // did, publishing dto.bitmap here would overwrite the already-corrected image with one
+            // rendered in the now-stale palette (issue #49) -- remap against the current palette
+            // instead so whatever lands on screen always matches the current selection.
+            _currentBitmap.value = if (paletteUsed == selectedPalette) {
+                dto.bitmap
+            } else {
+                val currentPaletteName = selectedPalette
+                dto.paletteName = currentPaletteName
+                cameraUtils.remapWithPalette(
+                    dto,
+                    paletteFactory.getPaletteByName(currentPaletteName),
+                    cameraUtils.settingIsManualRange,
+                    cameraUtils.settingManualMin,
+                    cameraUtils.settingManualMax,
+                    cameraUtils.settingIsCelsius,
+                ) ?: dto.bitmap
+            }
             _histogram.value = dto.histogram
             if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
             refreshTempDisplays()
