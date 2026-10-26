@@ -480,12 +480,17 @@ class CameraViewModel : ViewModel() {
         val isManualRange = cameraUtils.settingIsManualRange
         val displayMaxText = if (isManualRange) formatManualBound(cameraUtils.settingManualMax, celsius) else maxText
         val displayMinText = if (isManualRange) formatManualBound(cameraUtils.settingManualMin, celsius) else minText
+        // The color-bar marker's position (CameraScreen's spotFraction) must divide by these same
+        // display bounds, not the real scene min/max, or a spot temp outside the manual range
+        // won't peg to the bar's ends (issue #54).
+        val displayMaxValue = if (isManualRange) cameraUtils.settingManualMax else maxValue
+        val displayMinValue = if (isManualRange) cameraUtils.settingManualMin else minValue
         _spotmeterTemp.value = spotText
         _maxTemp.value = displayMaxText
         _minTemp.value = displayMinText
         _spotmeterTempValue.value = spotValue
-        _maxTempValue.value = maxValue
-        _minTempValue.value = minValue
+        _maxTempValue.value = displayMaxValue
+        _minTempValue.value = displayMinValue
         checkTemperatureAlert(spotValue, maxValue, minValue, celsius)
 
         // In Region mode the chart tracks the box's own avg/min/max instead of the whole-frame
