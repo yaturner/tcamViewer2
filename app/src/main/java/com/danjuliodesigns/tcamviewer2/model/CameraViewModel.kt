@@ -579,17 +579,20 @@ class CameraViewModel : ViewModel() {
         _tempHistory.value = snapshot
     }
 
-    private fun clearTempHistory() {
+    private fun clearTempHistory(resetPaused: Boolean = true) {
         synchronized(tempHistoryBuffer) { tempHistoryBuffer.clear() }
         _tempHistory.value = emptyList()
-        tempHistoryPaused = false
-        _isChartHistoryPaused.value = false
+        if (resetPaused) {
+            tempHistoryPaused = false
+            _isChartHistoryPaused.value = false
+        }
     }
 
     /** User-triggered reset from the Temperature History dialog's Clear button — the buffer
      *  otherwise just keeps rolling, with no way to start a fresh window short of toggling
-     *  Region Measurement (which resets it as a side effect). */
-    fun clearChartHistory() = clearTempHistory()
+     *  Region Measurement (which resets it as a side effect). Doesn't unpause: if the user
+     *  stopped collection first, Clear shouldn't silently resume it (issue #57). */
+    fun clearChartHistory() = clearTempHistory(resetPaused = false)
 
     /** User-triggered Stop/Resume from the Temperature History dialog — stops new samples from
      *  being recorded without affecting an in-progress time-lapse capture itself. */
