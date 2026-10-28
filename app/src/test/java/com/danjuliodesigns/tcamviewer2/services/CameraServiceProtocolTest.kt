@@ -1,6 +1,7 @@
 package com.danjuliodesigns.tcamviewer2.services
 
 import com.danjuliodesigns.tcamviewer2.constants.Constants
+import com.danjuliodesigns.tcamviewer2.model.buildWifiConfigArgs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -428,5 +429,120 @@ class CameraServiceProtocolTest {
         assertTrue(cameraService.isConnected)
         assertFalse(lostSignalFired)
         disposable.dispose()
+    }
+
+    // --- filesystem listing (issues #40, #41, #59: the full tCam with no SD card, and the
+    // tCam-Mini which never supports filesystem commands at all, both answer get_filesystem_list
+    // without a "filesystem_list" key -- listDirectory must come back null, not hang or throw, so
+    // the UI can tell "no files" apart from "still loading") ---
+
+    @Test
+    fun listDirectoryReturnsNullWhenCameraHasNoFilesystemList() = runBlocking {
+        connectAndDrainSetTime()
+        val result = async(Dispatchers.IO) { cameraService.listDirectory("/") }
+        val cmd = server.readNextCommand()
+        assertTrue(cmd.contains("get_filesystem_list"))
+        // What an unsupported-command / no-SD-card camera actually sends back: a generic error
+        // shape with no "filesystem_list" key at all.
+        server.sendResponse("""{"cam_info":{"ret_stat":false}}""")
+        assertEquals(null, result.await())
+    }
+
+    @Test
+    fun listDirectoryReturnsNullOnTimeout() = runBlocking {
+        connectAndDrainSetTime()
+        val result = cameraService.listDirectory("/", timeoutMillis = 300L)
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun listDirectoryParsesNameListOnSuccess() = runBlocking {
+        connectAndDrainSetTime()
+        val result = async(Dispatchers.IO) { cameraService.listDirectory("/") }
+        server.readNextCommand()
+        server.sendResponse("""{"filesystem_list":{"name_list":"tcam_26_10_01,tcam_26_10_02,"}}""")
+        assertEquals(listOf("tcam_26_10_01", "tcam_26_10_02"), result.await())
+    }
+
+    // --- batch pause/resume around a multi-file download (issue #42: must pause once per batch,
+    // not once per file, or every stream_on/off round trip risks a lost ack) ---
+
+    @Test
+    fun pauseStreamingForBatchIsANoOpWhenNotStreaming() = runBlocking {
+        connectAndDrainSetTime()
+        assertFalse(cameraService.pauseStreamingForBatch())
+    }
+
+    @Test
+    fun pauseStreamingForBatchSendsStreamOffWhenStreaming() = runBlocking {
+        connectAndDrainSetTime()
+        cameraService.startStreaming()
+        server.readNextCommand() // drain startStreaming()'s own stream_on
+
+        val result = async(Dispatchers.IO) { cameraService.pauseStreamingForBatch() }
+        val cmd = server.readNextCommand()
+        assertTrue(cmd.contains("stream_off"))
+        server.sendResponse("""{"stream_status":{"stream_on":false}}""")
+        assertTrue("Should report it was streaming (and is now paused)", result.await())
+    }
+
+    @Test
+    fun resumeStreamingAfterBatchDoesNothingWhenDisconnected() = runBlocking {
+        // Never connected -- isConnected is false, so this must not attempt to write anything
+        // that would throw or hang.
+        cameraService.resumeStreamingAfterBatch()
+    }
+
+    // --- set_wifi (issues #52/#53: the camera config was built correctly but the write could
+    // silently lose a race against the caller tearing the connection down right after -- see
+    // CameraViewModel's sendWifiConfig()/reconnectAfterWifiChange(). setWifi() is now a suspend
+    // fun that awaits the actual socket write, which these tests exercise directly.) ---
+
+    @Test
+    fun setWifiWritesTheExactArgsItWasGiven() = runBlocking {
+        connectAndDrainSetTime()
+        val args = buildWifiConfigArgs(
+            isAccessPoint = false,
+            ssid = "laurie",
+            password = null,
+            useStaticIp = false,
+            staticIp = "",
+            staticNetmask = "",
+        )
+        val wrote = async(Dispatchers.IO) { cameraService.setWifi(args) }
+        val cmd = server.readNextCommand()
+        assertTrue(cmd.contains("\"cmd\":\"set_wifi\""))
+        assertTrue(cmd.contains("\"sta_ssid\": \"laurie\""))
+        assertFalse("An untouched password must never be sent", cmd.contains("sta_pw"))
+        assertTrue("setWifi() must report whether the write actually succeeded", wrote.await())
+    }
+
+    @Test
+    fun setWifiReturnsFalseWithoutHangingWhenNotConnected() = runBlocking {
+        // Never connected -- the old fire-and-forget version of setWifi() would just silently
+        // launch a doomed write; the suspend version must report failure instead.
+        val args = buildWifiConfigArgs(false, "laurie", null, false, "", "")
+        assertFalse(cameraService.setWifi(args))
+    }
+
+    @Test
+    fun setWifiCompletesTheWriteBeforeTheCallerCanTearDownTheSocket() = runBlocking {
+        // The actual regression this guards against: CameraViewModel's Save handler calls
+        // sendWifiConfig() (which awaits cameraService.setWifi()) and only THEN calls
+        // reconnectAfterWifiChange(), which disconnects. Before the fix, setWifi() returned
+        // immediately from a fire-and-forget launch{}, so disconnect() on the next line almost
+        // always won the race and tore the socket down before the write ever happened. Calling
+        // disconnect() here, synchronously, the instant setWifi() returns reproduces that same
+        // ordering -- if the write isn't awaited, the fake server sees nothing or a truncated
+        // command.
+        connectAndDrainSetTime()
+        val args = buildWifiConfigArgs(false, "laurie", null, false, "", "")
+        val received = async(Dispatchers.IO) { server.readNextCommand() }
+        val wrote = cameraService.setWifi(args) // suspends until the write genuinely completes
+        cameraService.disconnect() // the very next thing the real call site does
+        assertTrue(wrote)
+        val cmd = received.await()
+        assertTrue(cmd.contains("\"cmd\":\"set_wifi\""))
+        assertTrue(cmd.contains("\"sta_ssid\": \"laurie\""))
     }
 }

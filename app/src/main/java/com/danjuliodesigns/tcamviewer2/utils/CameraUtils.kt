@@ -2,8 +2,6 @@ package com.danjuliodesigns.tcamviewer2.utils
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Environment
 import com.danjuliodesigns.tcamviewer2.constants.Constants
@@ -53,22 +51,6 @@ class CameraUtils @Inject constructor(
         private const val offsetA: Int = 0
         private const val offsetB: Int = 80
         private const val offsetC: Int = 160
-
-        private val paintBlack: Paint = Paint().apply {
-            color = Color.BLACK
-            style = Paint.Style.FILL
-            strokeWidth = 1.0f
-        }
-        private val paintWhite: Paint = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 1.0f
-        }
-        private val paint: Paint = Paint().apply {
-            color = Color.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = 1.0f
-        }
 
         val IP_PATTERN: Pattern = Pattern.compile(
             "^(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.){3}([01]?\\d\\d?|2[0-4]\\d|25[0-5])$",
