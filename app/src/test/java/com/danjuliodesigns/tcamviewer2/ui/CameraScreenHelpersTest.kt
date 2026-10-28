@@ -21,6 +21,49 @@ class CameraScreenHelpersTest {
         this.bottom = bottom
     }
 
+    // --- colorBarMarkerFraction (issues #12, #54) ---
+
+    @Test
+    fun colorBarMarkerFraction_spotAtMaxPegsToTop() {
+        // 0 = top/max per the function's own contract
+        assertEquals(0f, colorBarMarkerFraction(spot = 30f, max = 30f, min = 10f)!!, 0.001f)
+    }
+
+    @Test
+    fun colorBarMarkerFraction_spotAtMinPegsToBottom() {
+        assertEquals(1f, colorBarMarkerFraction(spot = 10f, max = 30f, min = 10f)!!, 0.001f)
+    }
+
+    @Test
+    fun colorBarMarkerFraction_spotAtMidpoint() {
+        assertEquals(0.5f, colorBarMarkerFraction(spot = 20f, max = 30f, min = 10f)!!, 0.001f)
+    }
+
+    @Test
+    fun colorBarMarkerFraction_spotAboveMaxClampsToTopInsteadOfExtrapolating() {
+        // issue #54: in Manual mode, a spot reading above the manual max previously computed a
+        // negative fraction and floated somewhere in the middle instead of pegging to the end.
+        assertEquals(0f, colorBarMarkerFraction(spot = 45f, max = 30f, min = 10f)!!, 0.001f)
+    }
+
+    @Test
+    fun colorBarMarkerFraction_spotBelowMinClampsToBottom() {
+        assertEquals(1f, colorBarMarkerFraction(spot = 2f, max = 30f, min = 10f)!!, 0.001f)
+    }
+
+    @Test
+    fun colorBarMarkerFraction_nullWhenAnyInputMissing() {
+        assertEquals(null, colorBarMarkerFraction(spot = null, max = 30f, min = 10f))
+        assertEquals(null, colorBarMarkerFraction(spot = 20f, max = null, min = 10f))
+        assertEquals(null, colorBarMarkerFraction(spot = 20f, max = 30f, min = null))
+    }
+
+    @Test
+    fun colorBarMarkerFraction_nullWhenMaxEqualsMin() {
+        // would otherwise divide by zero
+        assertEquals(null, colorBarMarkerFraction(spot = 20f, max = 20f, min = 20f))
+    }
+
     // --- niceAxisStep ---
 
     @Test

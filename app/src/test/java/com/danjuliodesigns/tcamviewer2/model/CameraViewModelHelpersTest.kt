@@ -3,6 +3,7 @@ package com.danjuliodesigns.tcamviewer2.model
 import android.graphics.Rect
 import com.danjuliodesigns.tcamviewer2.constants.Constants
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CameraViewModelHelpersTest {
@@ -211,5 +212,61 @@ class CameraViewModelHelpersTest {
         val json = buildFooterJson(startMs = 0L, endMs = 0L, numFrames = 0)
         val parsed = org.json.JSONObject(json)
         assertEquals(0, parsed.getJSONObject("video_info").getInt("num_frames"))
+    }
+
+    // --- trimTempHistoryBuffer (issue #28: chart grows forever) ---
+
+    private fun sample(timestampMs: Long) = TempSample(timestampMs, spot = 20f, max = 25f, min = 15f)
+
+    @Test
+    fun trimTempHistoryBuffer_dropsSamplesOlderThanWindow() {
+        val buffer = ArrayDeque<TempSample>()
+        buffer.addLast(sample(0L)) // 10s old, outside a 5s window
+        buffer.addLast(sample(6_000L)) // 4s old, inside
+        buffer.addLast(sample(9_000L)) // 1s old, inside
+
+        trimTempHistoryBuffer(buffer, nowMs = 10_000L, windowMs = 5_000L, maxSamples = 10_000)
+
+        assertEquals(listOf(6_000L, 9_000L), buffer.map { it.timestampMs })
+    }
+
+    @Test
+    fun trimTempHistoryBuffer_keepsEverythingWithinWindowAndUnderCap() {
+        val buffer = ArrayDeque<TempSample>()
+        (1..50).forEach { buffer.addLast(sample(it * 1_000L)) }
+
+        trimTempHistoryBuffer(buffer, nowMs = 50_000L, windowMs = 60_000L, maxSamples = 10_000)
+
+        assertEquals(50, buffer.size)
+    }
+
+    @Test
+    fun trimTempHistoryBuffer_decimatesWhenStillOverCapAfterWindowTrim() {
+        // A window large enough that nothing ages out, but more samples than the cap allows --
+        // this is the pathological case the decimation fallback exists for (issue #28).
+        val buffer = ArrayDeque<TempSample>()
+        (0 until 101).forEach { buffer.addLast(sample(it.toLong())) }
+
+        trimTempHistoryBuffer(buffer, nowMs = 100L, windowMs = 1_000_000L, maxSamples = 100)
+
+        // Halved via "keep every other sample" (index % 2 == 0), preserving arrival order
+        assertEquals(51, buffer.size)
+        assertEquals(0L, buffer.first().timestampMs)
+        assertEquals(100L, buffer.last().timestampMs)
+        assertTrue(buffer.all { it.timestampMs % 2 == 0L })
+    }
+
+    @Test
+    fun trimTempHistoryBuffer_neverGrowsPastCapNoMatterHowManySamplesArrive() {
+        // Simulates a long-running chart: keep feeding samples one at a time the way
+        // recordTempSample does, and assert the buffer is always capped immediately after each
+        // trim call -- this is the actual regression #28 describes ("graph grows forever").
+        val buffer = ArrayDeque<TempSample>()
+        val maxSamples = 50
+        for (i in 0 until 5_000) {
+            buffer.addLast(sample(i.toLong()))
+            trimTempHistoryBuffer(buffer, nowMs = i.toLong(), windowMs = 1_000_000L, maxSamples = maxSamples)
+            assertTrue("buffer exceeded cap at i=$i: size=${buffer.size}", buffer.size <= maxSamples)
+        }
     }
 }

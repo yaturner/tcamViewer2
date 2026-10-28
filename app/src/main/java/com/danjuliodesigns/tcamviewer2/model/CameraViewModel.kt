@@ -56,6 +56,28 @@ data class TempSample(
     val min: Float,
 )
 
+/** Trims [buffer] in place to [windowMs] of history ending at [nowMs], then, if it's still over
+ *  [maxSamples], decimates it by half (keeping every other sample) so a long-running chart can't
+ *  grow its buffer (and the UI list it's rendered from) without bound (issue #28). The window trim
+ *  runs first since it's the common case; decimation is the fallback for pathological cases (e.g.
+ *  a very short window with an extremely high sample rate). */
+internal fun trimTempHistoryBuffer(
+    buffer: ArrayDeque<TempSample>,
+    nowMs: Long,
+    windowMs: Long,
+    maxSamples: Int,
+) {
+    val cutoff = nowMs - windowMs
+    while (buffer.isNotEmpty() && buffer.first().timestampMs < cutoff) {
+        buffer.removeFirst()
+    }
+    if (buffer.size > maxSamples) {
+        val decimated = buffer.filterIndexed { index, _ -> index % 2 == 0 }
+        buffer.clear()
+        buffer.addAll(decimated)
+    }
+}
+
 /** POINT is today's single-pixel-neighborhood spotmeter; REGION is a user-resizable box showing
  *  avg/min/max within it. Mutually exclusive in the UI — only one overlay/readout at a time. */
 enum class MeasurementMode { POINT, REGION }
@@ -570,15 +592,12 @@ class CameraViewModel : ViewModel() {
         val now = System.currentTimeMillis()
         val snapshot = synchronized(tempHistoryBuffer) {
             tempHistoryBuffer.addLast(TempSample(now, spot, max, min))
-            val cutoff = now - (tempHistoryWindowOverrideMs ?: tempHistoryWindowMs)
-            while (tempHistoryBuffer.isNotEmpty() && tempHistoryBuffer.first().timestampMs < cutoff) {
-                tempHistoryBuffer.removeFirst()
-            }
-            if (tempHistoryBuffer.size > maxTempSamples) {
-                val decimated = tempHistoryBuffer.filterIndexed { index, _ -> index % 2 == 0 }
-                tempHistoryBuffer.clear()
-                tempHistoryBuffer.addAll(decimated)
-            }
+            trimTempHistoryBuffer(
+                tempHistoryBuffer,
+                now,
+                tempHistoryWindowOverrideMs ?: tempHistoryWindowMs,
+                maxTempSamples,
+            )
             tempHistoryBuffer.toList()
         }
         _tempHistory.value = snapshot
@@ -796,43 +815,7 @@ class CameraViewModel : ViewModel() {
         staticIp: String,
         staticNetmask: String,
     ) {
-        val args =
-            when {
-                isAccessPoint && password != null -> {
-                    String.format(Constants.ARGS_SET_WIFI_AP, ssid, password)
-                }
-
-                isAccessPoint -> {
-                    String.format(Constants.ARGS_SET_WIFI_AP_NO_PW, ssid)
-                }
-
-                useStaticIp && password != null -> {
-                    String.format(
-                        Constants.ARGS_SET_WIFI_STATIC,
-                        ssid,
-                        password,
-                        staticIp,
-                        staticNetmask,
-                    )
-                }
-
-                useStaticIp -> {
-                    String.format(
-                        Constants.ARGS_SET_WIFI_STATIC_NO_PW,
-                        ssid,
-                        staticIp,
-                        staticNetmask,
-                    )
-                }
-
-                password != null -> {
-                    String.format(Constants.ARGS_SET_WIFI_NOT_STATIC, ssid, password)
-                }
-
-                else -> {
-                    String.format(Constants.ARGS_SET_WIFI_NOT_STATIC_NO_PW, ssid)
-                }
-            }
+        val args = buildWifiConfigArgs(isAccessPoint, ssid, password, useStaticIp, staticIp, staticNetmask)
         cameraService.setWifi(args)
     }
 
@@ -1304,6 +1287,54 @@ internal fun formatManualBound(
     value: Float,
     isCelsius: Boolean,
 ): String = if (isCelsius) "%.1f°C".format(value) else "%.1f°F".format(value)
+
+/** Builds the set_wifi "args" JSON for the given dialog state. [password] is null when the user
+ *  left the Password field untouched -- the camera never returns its current password in
+ *  get_wifi, so omitting the field (rather than sending an empty string) tells the camera to
+ *  keep whatever password it already has, instead of blanking it on every save (issue #52/#53). */
+internal fun buildWifiConfigArgs(
+    isAccessPoint: Boolean,
+    ssid: String,
+    password: String?,
+    useStaticIp: Boolean,
+    staticIp: String,
+    staticNetmask: String,
+): String = when {
+    isAccessPoint && password != null -> {
+        String.format(Constants.ARGS_SET_WIFI_AP, ssid, password)
+    }
+
+    isAccessPoint -> {
+        String.format(Constants.ARGS_SET_WIFI_AP_NO_PW, ssid)
+    }
+
+    useStaticIp && password != null -> {
+        String.format(
+            Constants.ARGS_SET_WIFI_STATIC,
+            ssid,
+            password,
+            staticIp,
+            staticNetmask,
+        )
+    }
+
+    useStaticIp -> {
+        String.format(
+            Constants.ARGS_SET_WIFI_STATIC_NO_PW,
+            ssid,
+            staticIp,
+            staticNetmask,
+        )
+    }
+
+    password != null -> {
+        String.format(Constants.ARGS_SET_WIFI_NOT_STATIC, ssid, password)
+    }
+
+    else -> {
+        String.format(Constants.ARGS_SET_WIFI_NOT_STATIC_NO_PW, ssid)
+    }
+}
 
 internal fun calcSpotTemp(
     imageData: IntArray,

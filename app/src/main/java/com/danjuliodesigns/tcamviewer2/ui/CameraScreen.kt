@@ -221,14 +221,7 @@ fun CameraScreen(
     // Fraction of the way down the color bar (0 = max/top, 1 = min/bottom) the current
     // spotmeter reading falls at, for the marker drawn beside the bar.
     val spotFraction = remember(spotmeterTempValue, maxTempValue, minTempValue) {
-        val spot = spotmeterTempValue
-        val max = maxTempValue
-        val min = minTempValue
-        if (spot != null && max != null && min != null && max != min) {
-            ((max - spot) / (max - min)).coerceIn(0f, 1f)
-        } else {
-            null
-        }
+        colorBarMarkerFraction(spotmeterTempValue, maxTempValue, minTempValue)
     }
 
     if (showConnectError) {
@@ -990,6 +983,17 @@ private fun TempHistoryDialog(
             }
         },
     )
+}
+
+/** Fraction of the way down the color bar (0 = max/top, 1 = min/bottom) [spot] falls at, for
+ *  positioning the marker beside the bar. [max]/[min] are whatever bounds are currently driving
+ *  the bar's display -- the real scene min/max in Automatic mode, or the user's configured bounds
+ *  in Manual mode (see CameraViewModel's displayMaxValue/displayMinValue) -- so a spot reading
+ *  outside those bounds still correctly pegs to 0 or 1 rather than landing in the middle
+ *  (issues #12, #54). Null if any input is missing or max == min (nothing to divide by). */
+internal fun colorBarMarkerFraction(spot: Float?, max: Float?, min: Float?): Float? {
+    if (spot == null || max == null || min == null || max == min) return null
+    return ((max - spot) / (max - min)).coerceIn(0f, 1f)
 }
 
 /** Rounds a raw axis range up to a "nice" tick step (1/2/5 × a power of ten) so gridlines land on
