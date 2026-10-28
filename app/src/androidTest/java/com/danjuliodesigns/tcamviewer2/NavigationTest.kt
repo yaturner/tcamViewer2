@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -95,5 +96,52 @@ class NavigationTest {
         // ModalNavigationDrawer keeps its content composed (just animated off-screen)
         // rather than removing it, so check visibility rather than tree presence.
         composeRule.onNodeWithText("tCam Viewer").assertIsNotDisplayed()
+    }
+
+    // --- issue #22: hardware back from a non-Camera tab returns to Camera, rather than falling
+    // through to the system default (which would exit the app) ---
+
+    @Test
+    fun hardwareBackFromSettingsReturnsToCameraInsteadOfExitingApp() {
+        openDrawer()
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Camera IP Address").assertIsDisplayed()
+
+        Espresso.pressBack()
+        composeRule.waitForIdle()
+
+        // Still on Camera (the Settings-only field is gone) and the Activity is still alive --
+        // a stray exit would make every following assertion on composeRule fail outright.
+        composeRule.onNodeWithText("Camera IP Address").assertDoesNotExist()
+        openDrawer()
+        composeRule.onNodeWithText("Camera").assertIsSelected()
+    }
+
+    @Test
+    fun hardwareBackFromLibraryReturnsToCamera() {
+        openDrawer()
+        composeRule.onNodeWithText("Library").performClick()
+        composeRule.waitForIdle()
+
+        Espresso.pressBack()
+        composeRule.waitForIdle()
+
+        openDrawer()
+        composeRule.onNodeWithText("Camera").assertIsSelected()
+    }
+
+    // --- issue #2: the selected tab survives a configuration change (e.g. rotation), instead of
+    // resetting back to Camera the way an un-saved plain `remember` would ---
+
+    @Test
+    fun selectedTabSurvivesActivityRecreate() {
+        openDrawer()
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Camera IP Address").assertIsDisplayed()
+
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("Camera IP Address").assertIsDisplayed()
     }
 }
