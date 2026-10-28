@@ -1083,6 +1083,7 @@ private fun CameraSettingsSection(
     val wifiInfo by viewModel.wifiInfo.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val wifiManager = remember {
         context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
     }
@@ -1418,20 +1419,26 @@ private fun CameraSettingsSection(
                 },
                 confirmButton = {
                     TextButton(onClick = {
-                        viewModel.sendWifiConfig(
-                            wifiIsAccessPoint,
-                            wifiSsid,
-                            if (wifiPasswordEdited) wifiPassword else null,
-                            wifiUseStaticIp,
-                            wifiStaticIp,
-                            wifiStaticNetmask,
-                        )
-                        val reconnectIp = when {
-                            wifiIsAccessPoint -> wifiInfo?.get("ap_ip_addr") ?: "192.168.4.1"
-                            wifiUseStaticIp -> wifiStaticIp
-                            else -> null // DHCP client — new address unknown, best-effort retry
+                        // reconnectAfterWifiChange tears down the current socket immediately --
+                        // it must not run until the command above has actually been written to
+                        // it, or the write can silently lose that race and never reach the
+                        // camera (issue #52/#53).
+                        coroutineScope.launch {
+                            viewModel.sendWifiConfig(
+                                wifiIsAccessPoint,
+                                wifiSsid,
+                                if (wifiPasswordEdited) wifiPassword else null,
+                                wifiUseStaticIp,
+                                wifiStaticIp,
+                                wifiStaticNetmask,
+                            )
+                            val reconnectIp = when {
+                                wifiIsAccessPoint -> wifiInfo?.get("ap_ip_addr") ?: "192.168.4.1"
+                                wifiUseStaticIp -> wifiStaticIp
+                                else -> null // DHCP client — new address unknown, best-effort retry
+                            }
+                            viewModel.reconnectAfterWifiChange(reconnectIp)
                         }
-                        viewModel.reconnectAfterWifiChange(reconnectIp)
                         showWifiSaveConfirm = false
                         showWifiDialog = false
                     }) { Text("OK") }

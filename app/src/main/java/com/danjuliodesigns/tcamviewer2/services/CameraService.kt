@@ -672,9 +672,14 @@ class CameraService : Service() {
         }
     }
 
-    fun setWifi(argsJson: String) {
-        serviceScope.launch {
-            val cmd = String.format(Constants.CMD_SET_WIFI, argsJson)
+    /** Suspends until the command is actually written -- the caller (reconnectAfterWifiChange)
+     *  tears down this same socket right after this returns, and that used to happen on the
+     *  Main thread immediately after a fire-and-forget launch{} here, almost always winning the
+     *  race against this write landing on the IO dispatcher. The command would silently never
+     *  reach the camera: "Save" appeared to work but nothing changed (issue #52/#53). */
+    suspend fun setWifi(argsJson: String): Boolean {
+        val cmd = String.format(Constants.CMD_SET_WIFI, argsJson)
+        return withContext(Dispatchers.IO) {
             writeCommand(cmd.toByteArray(StandardCharsets.UTF_8))
         }
     }

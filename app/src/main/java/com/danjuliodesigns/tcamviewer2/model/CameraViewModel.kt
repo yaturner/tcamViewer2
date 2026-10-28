@@ -783,8 +783,12 @@ class CameraViewModel : ViewModel() {
 
     /** [password] is null when the user left the Password field untouched -- the camera never
      *  returns its current password in get_wifi, so omitting the field (rather than sending an
-     *  empty string) tells the camera to keep whatever password it already has (issue #52/#53). */
-    fun sendWifiConfig(
+     *  empty string) tells the camera to keep whatever password it already has (issue #52/#53).
+     *
+     *  Suspends until the command is actually written to the socket -- the caller must await
+     *  this before tearing the connection down (e.g. reconnectAfterWifiChange), or the command
+     *  can silently never reach the camera (issue #52/#53). */
+    suspend fun sendWifiConfig(
         isAccessPoint: Boolean,
         ssid: String,
         password: String?,
