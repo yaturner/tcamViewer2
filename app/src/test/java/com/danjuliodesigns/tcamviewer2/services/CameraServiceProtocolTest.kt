@@ -18,6 +18,7 @@ import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -544,5 +545,188 @@ class CameraServiceProtocolTest {
         val cmd = received.await()
         assertTrue(cmd.contains("\"cmd\":\"set_wifi\""))
         assertTrue(cmd.contains("\"sta_ssid\": \"laurie\""))
+    }
+
+    // --- fetchFile cancellation (issue #38: cancelling a camera download mid-file must clean
+    // up so a fresh download started right afterward isn't stuck waiting on a dead request) ---
+
+    @Test
+    fun fetchFileCancellationPropagatesCancellationExceptionRatherThanSwallowingIt() = runBlocking {
+        connectAndDrainSetTime()
+        val job = async(Dispatchers.IO) { cameraService.fetchFile("tcam_26_10_07", "img_1.tjsn") }
+        server.readNextCommand() // get_file request
+
+        job.cancel()
+        // join() itself never throws for a cancelled job -- the real assertion is that the
+        // coroutine actually completed via cancellation, not some other path that swallowed it
+        // and returned normally (e.g. null) instead of propagating the CancellationException
+        // fetchFile's own catch-and-rethrow is supposed to preserve.
+        job.join()
+        assertTrue(job.isCancelled)
+    }
+
+    @Test
+    fun fetchFileClearsPendingStateOnCancelSoTheNextFetchIsNotStuck() = runBlocking {
+        connectAndDrainSetTime()
+        val cancelledJob = async(Dispatchers.IO) { cameraService.fetchFile("tcam_26_10_07", "img_1.tjsn") }
+        server.readNextCommand() // get_file request for img_1
+        cancelledJob.cancel()
+        cancelledJob.join()
+
+        // A brand-new download started right after (the issue's own acceptance criterion) must
+        // get its own file, not hang forever because the cancelled request's internal
+        // CompletableDeferred was left in place.
+        val nextJob = async(Dispatchers.IO) { cameraService.fetchFile("tcam_26_10_07", "img_2.tjsn") }
+        val cmd = server.readNextCommand()
+        assertTrue(cmd.contains("img_2.tjsn"))
+        server.sendResponse("""{"radiometric":"AA==","telemetry":"AA==","metadata":{}}""")
+
+        val result = nextJob.await()
+        assertTrue("The fetch right after a cancelled one must still complete normally", result != null)
+        assertTrue(result!!.has("radiometric"))
+    }
+
+    // --- OTA firmware update (issue #48): fw_update_request -> repeated get_fw/fw_segment ->
+    // a terminal cam_info. These exercise the real protocol state machine in updateFirmware()
+    // against a fake camera that drives it exactly like the tCam/tCam-Mini firmware does. ---
+
+    @Test
+    fun updateFirmwareSendsRequestThenSegmentThenReturnsOnSuccess() = runBlocking {
+        connectAndDrainSetTime()
+        val image = ByteArray(10) { it.toByte() }
+        val progress = mutableListOf<Int>()
+
+        val job = async(Dispatchers.IO) {
+            cameraService.updateFirmware(image, "3.3") { progress.add(it) }
+        }
+
+        val request = server.readNextCommand()
+        assertTrue(request.contains("\"cmd\":\"fw_update_request\""))
+        assertTrue(request.contains("\"length\":10"))
+        assertTrue(request.contains("\"version\":\"3.3\""))
+
+        server.sendResponse("""{"get_fw":{"start":0,"length":10}}""")
+
+        val segment = server.readNextCommand()
+        assertTrue(segment.contains("\"cmd\":\"fw_segment\""))
+        assertTrue(segment.contains("\"start\":0"))
+        assertTrue(segment.contains("\"length\":10"))
+        assertTrue(segment.contains(Base64.getEncoder().encodeToString(image)))
+
+        server.sendResponse("""{"cam_info":{"info_value":6,"info_string":"update success"}}""")
+
+        assertEquals("update success", job.await())
+        assertEquals(listOf(10), progress)
+    }
+
+    @Test
+    fun updateFirmwareAnswersEachGetFwRequestWithTheMatchingSlice() = runBlocking {
+        connectAndDrainSetTime()
+        val image = ByteArray(10) { it.toByte() }
+        val progress = mutableListOf<Int>()
+
+        val job = async(Dispatchers.IO) {
+            cameraService.updateFirmware(image, "3.3") { progress.add(it) }
+        }
+        server.readNextCommand() // fw_update_request
+
+        server.sendResponse("""{"get_fw":{"start":0,"length":4}}""")
+        val firstSegment = server.readNextCommand()
+        assertTrue(firstSegment.contains("\"start\":0"))
+        assertTrue(firstSegment.contains(Base64.getEncoder().encodeToString(image.copyOfRange(0, 4))))
+
+        server.sendResponse("""{"get_fw":{"start":4,"length":6}}""")
+        val secondSegment = server.readNextCommand()
+        assertTrue(secondSegment.contains("\"start\":4"))
+        assertTrue(secondSegment.contains(Base64.getEncoder().encodeToString(image.copyOfRange(4, 10))))
+
+        server.sendResponse("""{"cam_info":{"info_value":6,"info_string":"update success"}}""")
+
+        assertEquals("update success", job.await())
+        assertEquals(listOf(4, 10), progress)
+    }
+
+    @Test
+    fun updateFirmwareThrowsWhenCameraRequestsAnOutOfRangeSegment() = runBlocking {
+        connectAndDrainSetTime()
+        val image = ByteArray(10)
+
+        // async's own failure propagates to (and cancels) this runBlocking scope the instant
+        // the child throws, regardless of whether/when await() is called -- catch the exception
+        // INSIDE the child instead of trying to catch it at the await() call site.
+        val job = async(Dispatchers.IO) {
+            runCatching { cameraService.updateFirmware(image, "3.3") { } }
+        }
+        server.readNextCommand() // fw_update_request
+        server.sendResponse("""{"get_fw":{"start":5,"length":10}}""") // 5+10 > 10
+
+        val error = job.await().exceptionOrNull()
+        assertTrue(error is java.io.IOException)
+    }
+
+    @Test
+    fun updateFirmwareThrowsWithCameraReportedReasonOnRejection() = runBlocking {
+        connectAndDrainSetTime()
+        val image = ByteArray(10)
+
+        val job = async(Dispatchers.IO) {
+            runCatching { cameraService.updateFirmware(image, "3.3") { } }
+        }
+        server.readNextCommand() // fw_update_request
+        // Camera rejects outright (e.g. version/project-name mismatch) without ever requesting
+        // a segment -- CAM_INFO_NACK.
+        server.sendResponse("""{"cam_info":{"info_value":0,"info_string":"version mismatch"}}""")
+
+        val error = job.await().exceptionOrNull()
+        assertTrue(error is java.io.IOException)
+        assertEquals("version mismatch", error?.message)
+    }
+
+    @Test
+    fun updateFirmwareThrowsWhenCameraReportsFailureAfterTransfer() = runBlocking {
+        connectAndDrainSetTime()
+        val image = ByteArray(10)
+
+        val job = async(Dispatchers.IO) {
+            runCatching { cameraService.updateFirmware(image, "3.3") { } }
+        }
+        server.readNextCommand() // fw_update_request
+        server.sendResponse("""{"get_fw":{"start":0,"length":10}}""")
+        server.readNextCommand() // fw_segment
+        // A terminal cam_info whose text does not say "success" -- e.g. a checksum failure.
+        server.sendResponse("""{"cam_info":{"info_value":6,"info_string":"crc check failed"}}""")
+
+        val error = job.await().exceptionOrNull()
+        assertTrue(error is java.io.IOException)
+        assertEquals("crc check failed", error?.message)
+    }
+
+    @Test
+    fun updateFirmwareFailsImmediatelyWhenNotConnected() = runBlocking {
+        // Never call connect() -- isConnected is false from the start.
+        val error = runCatching { cameraService.updateFirmware(ByteArray(10), "3.3") { } }.exceptionOrNull()
+        assertTrue(error is java.io.IOException)
+    }
+
+    @Test
+    fun updateFirmwareIgnoresAckAndDebugCamInfoWhileWaitingForMoreSegments() = runBlocking {
+        connectAndDrainSetTime()
+        val image = ByteArray(10)
+        val progress = mutableListOf<Int>()
+
+        val job = async(Dispatchers.IO) {
+            cameraService.updateFirmware(image, "3.3") { progress.add(it) }
+        }
+        server.readNextCommand() // fw_update_request
+
+        // The camera ACKs the request (CAM_INFO_ACK) before ever asking for a segment -- must
+        // not be mistaken for a terminal status.
+        server.sendResponse("""{"cam_info":{"info_value":1,"info_string":"ack"}}""")
+        server.sendResponse("""{"get_fw":{"start":0,"length":10}}""")
+        server.readNextCommand() // fw_segment
+        server.sendResponse("""{"cam_info":{"info_value":6,"info_string":"update success"}}""")
+
+        assertEquals("update success", job.await())
+        assertEquals(listOf(10), progress)
     }
 }
