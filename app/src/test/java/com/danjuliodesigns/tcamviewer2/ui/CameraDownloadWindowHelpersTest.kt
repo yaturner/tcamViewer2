@@ -7,8 +7,7 @@ import org.junit.Test
 /** Regression tests for issue #56: a camera-downloaded file's SD-card name gets renamed, at
  *  download time, to match this app's own local naming convention. */
 class CameraDownloadWindowHelpersTest {
-    private fun metadata(date: String, time: String): JSONObject =
-        JSONObject().put("Date", date).put("Time", time)
+    private fun metadata(date: String, time: String): JSONObject = JSONObject().put("Date", date).put("Time", time)
 
     @Test
     fun localStyleName_validMetadataProducesLocalFolderAndFilename() {

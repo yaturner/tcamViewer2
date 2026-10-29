@@ -12,9 +12,9 @@ import com.danjuliodesigns.tcamviewer2.factory.PaletteFactory
 import com.danjuliodesigns.tcamviewer2.paletteFactory
 import com.danjuliodesigns.tcamviewer2.services.CameraService
 import com.danjuliodesigns.tcamviewer2.settingsDataManager
+import com.danjuliodesigns.tcamviewer2.utils
 import com.danjuliodesigns.tcamviewer2.utils.CameraUtils
 import com.danjuliodesigns.tcamviewer2.utils.Utils
-import com.danjuliodesigns.tcamviewer2.utils
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

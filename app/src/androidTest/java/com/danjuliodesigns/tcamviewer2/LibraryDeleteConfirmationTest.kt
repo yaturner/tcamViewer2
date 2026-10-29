@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertFalse
@@ -28,6 +29,12 @@ import java.util.Base64
  */
 @RunWith(AndroidJUnit4::class)
 class LibraryDeleteConfirmationTest {
+    // MainActivity requests this permission at runtime on launch (issue #37); without granting
+    // it ahead of time, the system permission dialog steals the foreground from MainActivity the
+    // instant it launches, and the Compose test framework finds no composed hierarchy at all.
+    @get:Rule
+    val permissionRule: GrantPermissionRule = GrantPermissionRule.grant("android.permission.ACCESS_LOCAL_NETWORK")
+
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
