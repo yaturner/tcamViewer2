@@ -1,6 +1,9 @@
 package com.danjuliodesigns.tcamviewer2.model
 
 import androidx.datastore.preferences.core.edit
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.danjuliodesigns.tcamviewer2.SettingsDataManager
@@ -16,6 +19,7 @@ import com.danjuliodesigns.tcamviewer2.utils
 import com.danjuliodesigns.tcamviewer2.utils.CameraUtils
 import com.danjuliodesigns.tcamviewer2.utils.Utils
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -35,6 +39,17 @@ import org.junit.runner.RunWith
 class CameraViewModelInstrumentedTest {
     private lateinit var viewModel: CameraViewModel
 
+    // A real ViewModelStore, so tearDown can actually call onCleared() -- constructing
+    // CameraViewModel() directly (as this used to) never does, which leaves its RxJava
+    // subscriptions (to cameraService's image/connection-lost streams) and viewModelScope
+    // coroutines alive indefinitely. Since cameraService/settingsDataManager are mutable
+    // globals reassigned fresh by every test's own setUp(), a leaked subscription from an
+    // earlier test can fire later against whatever those globals currently point to --
+    // surfaced as cross-test flakiness once a test elsewhere in the suite does a real connect.
+    private val viewModelStoreOwner = object : ViewModelStoreOwner {
+        override val viewModelStore = ViewModelStore()
+    }
+
     @Before
     fun setUp() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -51,7 +66,13 @@ class CameraViewModelInstrumentedTest {
         utils = Utils(context)
         appContext = context
 
-        viewModel = CameraViewModel()
+        viewModel = ViewModelProvider(viewModelStoreOwner).get(CameraViewModel::class.java)
+    }
+
+    @After
+    fun tearDown() {
+        viewModelStoreOwner.viewModelStore.clear() // calls CameraViewModel.onCleared()
+        cameraService.disconnect()
     }
 
     // --- issue #3: changing a camera setting (emissivity/AGC/gain) updates the app's own

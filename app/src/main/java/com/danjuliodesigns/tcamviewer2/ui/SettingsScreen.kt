@@ -51,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -162,6 +163,9 @@ fun SettingsScreen(
     val savedAlertMetric by dataManager.alertMetricFlow.collectAsState(initial = "Spot")
     val savedAlertComparison by dataManager.alertComparisonFlow.collectAsState(initial = "Above")
     val savedAlertThreshold by dataManager.alertThresholdFlow.collectAsState(initial = "100")
+    val savedMotionEnabled by dataManager.motionEnabledFlow.collectAsState(initial = false)
+    val savedMotionSensitivity by dataManager.motionSensitivityFlow.collectAsState(initial = "50")
+    val savedMotionRecordingSeconds by dataManager.motionRecordingSecondsFlow.collectAsState(initial = "30")
     val savedUnit by dataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val savedPalette by dataManager.selectedPaletteFlow.collectAsState(initial = "Rainbow")
 
@@ -184,6 +188,9 @@ fun SettingsScreen(
     var localAlertMetric by remember(savedAlertMetric, resetKey) { mutableStateOf(savedAlertMetric) }
     var localAlertComparison by remember(savedAlertComparison, resetKey) { mutableStateOf(savedAlertComparison) }
     var localAlertThreshold by remember(savedAlertThreshold, resetKey) { mutableStateOf(savedAlertThreshold) }
+    var localMotionEnabled by remember(savedMotionEnabled, resetKey) { mutableStateOf(savedMotionEnabled) }
+    var localMotionSensitivity by remember(savedMotionSensitivity, resetKey) { mutableStateOf(savedMotionSensitivity) }
+    var localMotionRecordingSeconds by remember(savedMotionRecordingSeconds, resetKey) { mutableStateOf(savedMotionRecordingSeconds) }
     var localUnit by remember(savedUnit, resetKey) { mutableStateOf(savedUnit) }
     var localPalette by remember(savedPalette, resetKey) { mutableStateOf(savedPalette) }
 
@@ -206,6 +213,9 @@ fun SettingsScreen(
             localAlertMetric != savedAlertMetric ||
             localAlertComparison != savedAlertComparison ||
             localAlertThreshold != savedAlertThreshold ||
+            localMotionEnabled != savedMotionEnabled ||
+            localMotionSensitivity != savedMotionSensitivity ||
+            localMotionRecordingSeconds != savedMotionRecordingSeconds ||
             localUnit != savedUnit ||
             localPalette != savedPalette
     var showDiscardConfirm by remember { mutableStateOf(false) }
@@ -233,6 +243,9 @@ fun SettingsScreen(
         dataManager.saveAlertMetric(localAlertMetric)
         dataManager.saveAlertComparison(localAlertComparison)
         dataManager.saveAlertThreshold(localAlertThreshold)
+        dataManager.saveMotionEnabled(localMotionEnabled)
+        dataManager.saveMotionSensitivity(localMotionSensitivity)
+        dataManager.saveMotionRecordingSeconds(localMotionRecordingSeconds)
         dataManager.saveTemperatureUnit(localUnit)
         dataManager.saveSelectedPalette(localPalette)
         dataManager.saveCameraAgc(localAgc)
@@ -676,6 +689,50 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    )
+                }
+            }
+
+            // Motion Detection — fires an in-app message (Snackbar on the Camera screen) and
+            // automatically records-and-saves a clip when the frame changes enough, then stays
+            // off for the duration of that recording (see CameraViewModel.checkMotion()) so it
+            // can't re-trigger itself.
+            Column(modifier = Modifier.fillMaxWidth()) {
+                ListItem(
+                    headlineContent = { Text("Motion Detection") },
+                    supportingContent = { Text(if (localMotionEnabled) "Enabled" else "Disabled") },
+                    trailingContent = {
+                        Switch(
+                            checked = localMotionEnabled,
+                            onCheckedChange = { localMotionEnabled = it },
+                            modifier = Modifier.testTag("switch_motion_enabled"),
+                        )
+                    },
+                )
+                if (localMotionEnabled) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        Text("Sensitivity", fontSize = 14.sp)
+                        Slider(
+                            value = localMotionSensitivity.toFloatOrNull() ?: 50f,
+                            onValueChange = { localMotionSensitivity = it.roundToInt().toString() },
+                            valueRange = 0f..100f,
+                            modifier = Modifier.testTag("slider_motion_sensitivity"),
+                        )
+                    }
+                    OutlinedTextField(
+                        value = localMotionRecordingSeconds,
+                        onValueChange = { localMotionRecordingSeconds = it },
+                        label = { Text("Recording length (seconds)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .testTag("field_motion_recording_seconds"),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     )

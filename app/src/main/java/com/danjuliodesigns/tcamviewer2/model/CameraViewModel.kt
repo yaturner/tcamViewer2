@@ -85,6 +85,46 @@ enum class MeasurementMode { POINT, REGION }
 // Upper bound on how long the Get spinner stays up if the camera never answers.
 private const val GET_TIMEOUT_MS = 5_000L
 
+// A pixel counts as "changed" once it moves more than this fraction of the current frame's
+// own dynamic range -- see frameChangeFraction().
+private const val MOTION_PER_PIXEL_THRESHOLD = 0.05f
+
+/** Fraction of pixels that moved more than a threshold tied to the CURRENT frame's own dynamic
+ *  range -- works unchanged for AGC (0-255) and radiometric (raw K*10/K*100) frames, and for
+ *  any manual-range setting, since it never compares against an absolute scale. */
+internal fun frameChangeFraction(
+    previous: IntArray?,
+    current: IntArray,
+    perPixelThresholdFraction: Float,
+): Float {
+    if (previous == null || previous.size != current.size) return 0f
+    val rangeSpan = (current.max() - current.min()).coerceAtLeast(1)
+    val perPixelDelta = rangeSpan * perPixelThresholdFraction
+    val changed = current.indices.count { kotlin.math.abs(current[it] - previous[it]) >= perPixelDelta }
+    return changed.toFloat() / current.size
+}
+
+/** Sensitivity 0-100 -> the changed-pixel fraction that counts as motion. Monotonic: higher
+ *  sensitivity needs a smaller fraction changed. Clamped so neither end is degenerate. */
+internal fun motionTriggerFraction(sensitivity: Float): Float = (((100f - sensitivity) / 100f) * 0.49f + 0.01f).coerceIn(0.01f, 0.5f)
+
+internal data class MotionCheckResult(val nowTriggered: Boolean, val fireEvent: Boolean)
+
+/** Same edge-triggered shape as checkTemperatureAlert: fires once on crossing into motion,
+ *  stays quiet while it remains, rearms once it drops back below. */
+internal fun evaluateMotionTrigger(
+    changeFraction: Float,
+    sensitivity: Float,
+    currentlyTriggered: Boolean,
+): MotionCheckResult {
+    val crossed = changeFraction >= motionTriggerFraction(sensitivity)
+    return when {
+        crossed && !currentlyTriggered -> MotionCheckResult(nowTriggered = true, fireEvent = true)
+        !crossed -> MotionCheckResult(nowTriggered = false, fireEvent = false)
+        else -> MotionCheckResult(nowTriggered = true, fireEvent = false)
+    }
+}
+
 class CameraViewModel : ViewModel() {
     private val _spotmeterTemp = MutableStateFlow("--")
     val spotmeterTemp: StateFlow<String> = _spotmeterTemp.asStateFlow()
@@ -174,6 +214,25 @@ class CameraViewModel : ViewModel() {
     // Edge-triggered: fires once when the condition first becomes true, not on every frame
     // while it remains true, and rearms once the value crosses back.
     @Volatile private var alertCurrentlyTriggered = false
+
+    private val _motionMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val motionMessage: SharedFlow<String> = _motionMessage.asSharedFlow()
+
+    // Motion-detection settings, cached the same way as the temperature-alert ones above.
+    @Volatile private var motionEnabled = false
+
+    @Volatile private var motionSensitivity = 50f
+
+    @Volatile private var motionRecordingSeconds = 30L
+
+    // Edge-triggered, same shape as alertCurrentlyTriggered.
+    @Volatile private var motionCurrentlyTriggered = false
+
+    // Only ever read/written from processFrame()'s single frame-processing dispatcher, so
+    // unlike the settings above it doesn't need to be @Volatile.
+    private var previousImageData: IntArray? = null
+
+    private var motionRecordingJob: Job? = null
 
     private var timeLapseJob: Job? = null
 
@@ -406,6 +465,22 @@ class CameraViewModel : ViewModel() {
                 alertThreshold = v.toFloatOrNull() ?: 100f
             }
         }
+        viewModelScope.launch {
+            settingsDataManager.motionEnabledFlow.collect { enabled ->
+                motionEnabled = enabled
+                motionCurrentlyTriggered = false // re-arm whenever the feature is toggled
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.motionSensitivityFlow.collect { v ->
+                motionSensitivity = v.toFloatOrNull() ?: 50f
+            }
+        }
+        viewModelScope.launch {
+            settingsDataManager.motionRecordingSecondsFlow.collect { v ->
+                motionRecordingSeconds = v.toLongOrNull()?.coerceAtLeast(1L) ?: 30L
+            }
+        }
     }
 
     private fun defaultSpotmeterRect(): Rect {
@@ -564,6 +639,36 @@ class CameraViewModel : ViewModel() {
             )
         } else if (!crossed) {
             alertCurrentlyTriggered = false
+        }
+    }
+
+    /** Edge-triggered motion detection: fires an in-app message and starts a timed recording
+     *  the moment the frame changes enough, then stays quiet (and doesn't re-evaluate at all
+     *  while a recording — motion-triggered or manual — is in progress, per its own guard
+     *  below) until the next time it crosses. */
+    private fun checkMotion(dto: ImageDto) {
+        val current = dto.imageData
+        if (!motionEnabled || _isRecording.value || current == null) {
+            motionCurrentlyTriggered = false
+            previousImageData = current
+            return
+        }
+        val fraction = frameChangeFraction(previousImageData, current, MOTION_PER_PIXEL_THRESHOLD)
+        val result = evaluateMotionTrigger(fraction, motionSensitivity, motionCurrentlyTriggered)
+        motionCurrentlyTriggered = result.nowTriggered
+        if (result.fireEvent) {
+            _motionMessage.tryEmit("Motion detected")
+            startMotionTriggeredRecording()
+        }
+        previousImageData = current
+    }
+
+    private fun startMotionTriggeredRecording() {
+        toggleRecording() // same start path as the Record button: starts streaming if needed
+        motionRecordingJob?.cancel()
+        motionRecordingJob = viewModelScope.launch {
+            delay(motionRecordingSeconds * 1000L)
+            if (_isRecording.value) finishRecording() // save = true, stop stream if auto-started
         }
     }
 
@@ -1118,6 +1223,10 @@ class CameraViewModel : ViewModel() {
         save: Boolean = true,
         stopStreamIfAutoStarted: Boolean = true,
     ) {
+        // However this recording is ending (manually, a config-change auto-stop, or here), a
+        // motion-triggered auto-stop timer that's still pending for it must never fire later
+        // against whatever is recording (or streaming) by then.
+        motionRecordingJob?.cancel()
         val stream = recordingStream
         val file = recordingFile
         recordingStream = null
@@ -1234,6 +1343,7 @@ class CameraViewModel : ViewModel() {
                 ) ?: dto.bitmap
             }
             _histogram.value = dto.histogram
+            checkMotion(dto)
             if (!userMovedSpotmeter) dto.spotmeterLocation?.let { _spotmeterRect.value = it }
             refreshTempDisplays()
             updateFps()

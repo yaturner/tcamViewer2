@@ -42,6 +42,9 @@ class SettingsDataManager(
         val ALERT_METRIC_KEY = stringPreferencesKey("alert_metric")
         val ALERT_COMPARISON_KEY = stringPreferencesKey("alert_comparison")
         val ALERT_THRESHOLD_KEY = stringPreferencesKey("alert_threshold")
+        val MOTION_ENABLED_KEY = booleanPreferencesKey("motion_enabled")
+        val MOTION_SENSITIVITY_KEY = stringPreferencesKey("motion_sensitivity")
+        val MOTION_RECORDING_SECONDS_KEY = stringPreferencesKey("motion_recording_seconds")
         val TEMPERATURE_UNIT_KEY = stringPreferencesKey("temperature_unit")
         val CAMERA_AGC_KEY = booleanPreferencesKey("camera_agc")
         val CAMERA_EMISSIVITY_KEY = stringPreferencesKey("camera_emissivity")
@@ -162,6 +165,21 @@ class SettingsDataManager(
             prefs[ALERT_THRESHOLD_KEY] ?: "100"
         }
 
+    val motionEnabledFlow: Flow<Boolean> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[MOTION_ENABLED_KEY] == true // Default off
+        }
+
+    val motionSensitivityFlow: Flow<String> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[MOTION_SENSITIVITY_KEY] ?: "50" // 0-100
+        }
+
+    val motionRecordingSecondsFlow: Flow<String> =
+        appContext.dataStore.data.map { prefs ->
+            prefs[MOTION_RECORDING_SECONDS_KEY] ?: "30"
+        }
+
     val temperatureUnitFlow: Flow<String> =
         appContext.dataStore.data.map { prefs ->
             prefs[TEMPERATURE_UNIT_KEY] ?: "Celsius"
@@ -243,6 +261,18 @@ class SettingsDataManager(
         appContext.dataStore.edit { prefs -> prefs[ALERT_THRESHOLD_KEY] = value }
     }
 
+    suspend fun saveMotionEnabled(enabled: Boolean) {
+        appContext.dataStore.edit { prefs -> prefs[MOTION_ENABLED_KEY] = enabled }
+    }
+
+    suspend fun saveMotionSensitivity(value: String) {
+        appContext.dataStore.edit { prefs -> prefs[MOTION_SENSITIVITY_KEY] = value }
+    }
+
+    suspend fun saveMotionRecordingSeconds(value: String) {
+        appContext.dataStore.edit { prefs -> prefs[MOTION_RECORDING_SECONDS_KEY] = value }
+    }
+
     suspend fun saveTemperatureUnit(unit: String) {
         appContext.dataStore.edit { prefs -> prefs[TEMPERATURE_UNIT_KEY] = unit }
     }
@@ -317,6 +347,12 @@ class SettingsDataManager(
     suspend fun getAlertComparison(): String = alertComparisonFlow.first()
 
     suspend fun getAlertThreshold(): String = alertThresholdFlow.first()
+
+    suspend fun getMotionEnabled(): Boolean = motionEnabledFlow.first()
+
+    suspend fun getMotionSensitivity(): String = motionSensitivityFlow.first()
+
+    suspend fun getMotionRecordingSeconds(): String = motionRecordingSecondsFlow.first()
 
     suspend fun getTemperatureUnit(): String = temperatureUnitFlow.first()
 

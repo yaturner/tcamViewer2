@@ -3,6 +3,7 @@ package com.danjuliodesigns.tcamviewer2.model
 import android.graphics.Rect
 import com.danjuliodesigns.tcamviewer2.constants.Constants
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -268,5 +269,72 @@ class CameraViewModelHelpersTest {
             trimTempHistoryBuffer(buffer, nowMs = i.toLong(), windowMs = 1_000_000L, maxSamples = maxSamples)
             assertTrue("buffer exceeded cap at i=$i: size=${buffer.size}", buffer.size <= maxSamples)
         }
+    }
+
+    // --- frameChangeFraction (motion detection) ---
+
+    @Test
+    fun frameChangeFraction_identicalFramesIsZero() {
+        val frame = IntArray(100) { 27315 + it }
+        assertEquals(0f, frameChangeFraction(frame, frame.copyOf(), 0.05f), 0.0001f)
+    }
+
+    @Test
+    fun frameChangeFraction_oneFarOutlierPixelIsCountedAgainstTheCurrentFramesOwnRange() {
+        val previous = IntArray(100) { 27315 }
+        val current = previous.copyOf()
+        current[50] = 37315 // one pixel 100C hotter than the rest
+        // current's own range is 27315..37315 (rangeSpan=10000) -> perPixelDelta = 500 at 5%;
+        // only index 50 clears that, so exactly 1/100 pixels count as changed.
+        assertEquals(0.01f, frameChangeFraction(previous, current, 0.05f), 0.0001f)
+    }
+
+    @Test
+    fun frameChangeFraction_nullPreviousIsZero() {
+        assertEquals(0f, frameChangeFraction(null, IntArray(10) { it }, 0.05f), 0.0001f)
+    }
+
+    @Test
+    fun frameChangeFraction_mismatchedSizesIsZero() {
+        assertEquals(0f, frameChangeFraction(IntArray(5), IntArray(10), 0.05f), 0.0001f)
+    }
+
+    // --- motionTriggerFraction ---
+
+    @Test
+    fun motionTriggerFraction_higherSensitivityNeedsASmallerFraction() {
+        assertTrue(motionTriggerFraction(90f) < motionTriggerFraction(10f))
+    }
+
+    @Test
+    fun motionTriggerFraction_clampedAtBothEnds() {
+        assertEquals(0.01f, motionTriggerFraction(100f), 0.0001f)
+        assertEquals(0.5f, motionTriggerFraction(0f), 0.0001f)
+        // Out-of-range inputs must not escape the clamp either.
+        assertEquals(0.01f, motionTriggerFraction(150f), 0.0001f)
+        assertEquals(0.5f, motionTriggerFraction(-50f), 0.0001f)
+    }
+
+    // --- evaluateMotionTrigger (edge-triggered, same shape as checkTemperatureAlert) ---
+
+    @Test
+    fun evaluateMotionTrigger_firesOnceStaysQuietRearmsThenFiresAgain() {
+        val sensitivity = 50f // triggerFraction = 0.255
+
+        val first = evaluateMotionTrigger(changeFraction = 0.6f, sensitivity = sensitivity, currentlyTriggered = false)
+        assertTrue("First crossing must fire", first.fireEvent)
+        assertTrue(first.nowTriggered)
+
+        val stillAbove = evaluateMotionTrigger(changeFraction = 0.6f, sensitivity = sensitivity, currentlyTriggered = true)
+        assertFalse("Must not refire while still above threshold", stillAbove.fireEvent)
+        assertTrue(stillAbove.nowTriggered)
+
+        val rearmed = evaluateMotionTrigger(changeFraction = 0.1f, sensitivity = sensitivity, currentlyTriggered = true)
+        assertFalse(rearmed.fireEvent)
+        assertFalse("Dropping below threshold must rearm", rearmed.nowTriggered)
+
+        val second = evaluateMotionTrigger(changeFraction = 0.6f, sensitivity = sensitivity, currentlyTriggered = false)
+        assertTrue("Crossing again after rearming must fire again", second.fireEvent)
+        assertTrue(second.nowTriggered)
     }
 }

@@ -203,6 +203,12 @@ fun CameraScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.motionMessage.collect { msg ->
+            snackbarHostState.showSnackbar(msg)
+        }
+    }
+
     // Build a 1×256 bitmap from palette entries: index 255 at top, index 0 at bottom
     val colorBarBitmap = remember(currentPalette) {
         val palette = paletteFactory.getPaletteByName(currentPalette)

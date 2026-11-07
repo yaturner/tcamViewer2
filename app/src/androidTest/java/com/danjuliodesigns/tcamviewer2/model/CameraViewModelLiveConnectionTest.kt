@@ -1,6 +1,9 @@
 package com.danjuliodesigns.tcamviewer2.model
 
 import androidx.datastore.preferences.core.edit
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.danjuliodesigns.tcamviewer2.SettingsDataManager
@@ -15,14 +18,18 @@ import com.danjuliodesigns.tcamviewer2.settingsDataManager
 import com.danjuliodesigns.tcamviewer2.utils
 import com.danjuliodesigns.tcamviewer2.utils.CameraUtils
 import com.danjuliodesigns.tcamviewer2.utils.Utils
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.EOFException
+import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
@@ -53,6 +60,11 @@ private class FakeCameraServer {
     @Volatile var respondToGetImage: Boolean = true
     val getImageCount = java.util.concurrent.atomic.AtomicInteger(0)
     val getImageTimestamps: MutableList<Long> = CopyOnWriteArrayList()
+
+    // Consumed once by the next get_image response, then reset to null -- lets a test control
+    // exactly what a specific Get returns (e.g. a frame that looks nothing like the previous
+    // one, to drive motion detection), without affecting any Get before or after it.
+    @Volatile var nextFrameJson: String? = null
 
     private val running = AtomicBoolean(true)
 
@@ -86,7 +98,10 @@ private class FakeCameraServer {
                 cmd.contains("get_image") -> {
                     getImageCount.incrementAndGet()
                     getImageTimestamps.add(System.currentTimeMillis())
-                    if (respondToGetImage) sendResponse(syntheticFrameJson())
+                    if (respondToGetImage) {
+                        val frame = nextFrameJson?.also { nextFrameJson = null } ?: syntheticFrameJson()
+                        sendResponse(frame)
+                    }
                 }
                 // set_time and anything else: no response expected.
             }
@@ -140,11 +155,19 @@ private class FakeCameraServer {
     }
 }
 
-/** A flat, all-zero (non-AGC, non-thermal-flagged) 160x120 frame -- valid enough for
- *  ImageDto.create()/processFrame() to accept without throwing; these tests only care about
- *  the Get/isGetting state machine around its arrival, not its decoded content. */
-private fun syntheticFrameJson(): String {
-    val radiometricBytes = ByteArray(160 * 120 * 2)
+/** A flat (non-AGC, non-thermal-flagged) 160x120 frame, every pixel set to [baseValue] unless
+ *  [hotspotValue] is given, in which case the first half of the frame is set to it instead --
+ *  valid enough for ImageDto.create()/processFrame() to accept without throwing. Two calls with
+ *  the same [baseValue] and no [hotspotValue] are pixel-identical (no motion); a [hotspotValue]
+ *  that's far from [baseValue] produces a frame checkMotion() recognizes as motion. */
+private fun syntheticFrameJson(baseValue: Int = 27315, hotspotValue: Int? = null): String {
+    val numPixels = 160 * 120
+    val radiometricBytes = ByteArray(numPixels * 2)
+    for (i in 0 until numPixels) {
+        val v = if (hotspotValue != null && i < numPixels / 2) hotspotValue else baseValue
+        radiometricBytes[i * 2] = (v and 0xFF).toByte()
+        radiometricBytes[i * 2 + 1] = ((v shr 8) and 0xFF).toByte()
+    }
     val telBytes = ByteArray(480)
     return """{"radiometric":"${Base64.getEncoder().encodeToString(radiometricBytes)}",""" +
         """"telemetry":"${Base64.getEncoder().encodeToString(telBytes)}",""" +
@@ -163,6 +186,19 @@ class CameraViewModelLiveConnectionTest {
     private lateinit var viewModel: CameraViewModel
     private lateinit var server: FakeCameraServer
 
+    // A real ViewModelStore, so tearDown can actually call onCleared() -- constructing
+    // CameraViewModel() directly never does, which leaves its RxJava subscriptions (to
+    // cameraService's image/connection-lost streams) and viewModelScope coroutines (including
+    // a live connect/auto-reconnect loop, since these tests do a REAL connect) alive
+    // indefinitely. Since cameraService/settingsDataManager are mutable globals reassigned
+    // fresh by every test's own setUp(), a leaked subscription from an earlier test can fire
+    // later against whatever those globals currently point to -- the root cause of a flake seen
+    // in this exact file (a stale auto-reconnect loop from one test racing a later test's own
+    // connect attempt against port 5001).
+    private val viewModelStoreOwner = object : ViewModelStoreOwner {
+        override val viewModelStore = ViewModelStore()
+    }
+
     @Before
     fun setUp() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -175,12 +211,13 @@ class CameraViewModelLiveConnectionTest {
         utils = Utils(context)
         appContext = context
 
-        viewModel = CameraViewModel()
+        viewModel = ViewModelProvider(viewModelStoreOwner).get(CameraViewModel::class.java)
         server = FakeCameraServer()
     }
 
     @After
     fun tearDown() {
+        viewModelStoreOwner.viewModelStore.clear() // calls CameraViewModel.onCleared()
         cameraService.disconnect()
         server.close()
     }
@@ -236,7 +273,10 @@ class CameraViewModelLiveConnectionTest {
         viewModel.sendCameraConfig(agcEnabled = true, emissivity = 90, gainMode = 0)
         viewModel.refreshAfterConfigChange()
 
-        awaitValue(3_000) { server.getImageCount.get() > countBefore }
+        // Generous margin (consistent with the other waits in this file): the mechanism itself
+        // is a 500ms delay plus a near-instant loopback round trip, well under a second
+        // normally -- the slack just absorbs occasional device/test-process load.
+        awaitValue(6_000) { server.getImageCount.get() > countBefore }
         assertTrue(
             "Changing AGC and refreshing must request a new frame automatically",
             server.getImageCount.get() > countBefore,
@@ -258,11 +298,95 @@ class CameraViewModelLiveConnectionTest {
         viewModel.sendCameraConfig(agcEnabled = true, emissivity = 90, gainMode = 0)
         viewModel.refreshAfterConfigChange()
 
-        awaitValue(3_000) { viewModel.isGetting.value }
+        awaitValue(6_000) { viewModel.isGetting.value }
         assertTrue(viewModel.isGetting.value)
 
         awaitValue(5_000) { !viewModel.isGetting.value }
         assertFalse(viewModel.isGetting.value)
+    }
+
+    // --- motion detection: fires an in-app message and auto-records-and-saves a clip ---
+
+    @Test
+    fun motionDetection_firesSnackbarStartsARecordingAndAutoStopsAfterTheConfiguredLength() = runBlocking {
+        connectAndWait()
+        settingsDataManager.saveMotionEnabled(true)
+        settingsDataManager.saveMotionSensitivity("80") // fairly sensitive -> small triggerFraction
+        settingsDataManager.saveMotionRecordingSeconds("2") // short, for test speed
+        delay(300L) // let observeSettings()'s collectors pick up the new DataStore values
+
+        val motionMessages = mutableListOf<String>()
+        val collector = launch { viewModel.motionMessage.collect { motionMessages.add(it) } }
+
+        val moviesDir = InstrumentationRegistry.getInstrumentation().targetContext
+            .getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)
+        val filesBefore = moviesDir?.walkTopDown()?.filter { it.isFile }?.map { it.path }?.toSet() ?: emptySet()
+
+        // Baseline Get: seeds previousImageData without looking like motion against whatever
+        // frame the initial auto-connect Get happened to deliver.
+        server.nextFrameJson = syntheticFrameJson(baseValue = 27315)
+        viewModel.getImage()
+        awaitValue(3_000) { !viewModel.isGetting.value }
+        assertFalse(viewModel.isRecording.value)
+        assertTrue("No motion yet", motionMessages.isEmpty())
+
+        // Half the frame flips to a value far outside the baseline's own range -> motion.
+        server.nextFrameJson = syntheticFrameJson(baseValue = 27315, hotspotValue = 37315)
+        viewModel.getImage()
+        awaitValue(3_000) { viewModel.isRecording.value }
+
+        assertTrue("Motion must fire the Snackbar message", motionMessages.isNotEmpty())
+        assertTrue("Motion must start a recording", viewModel.isRecording.value)
+
+        awaitValue(6_000) { !viewModel.isRecording.value }
+        assertFalse("Recording must auto-stop after motionRecordingSeconds", viewModel.isRecording.value)
+
+        val filesAfter = moviesDir?.walkTopDown()?.filter { it.isFile }?.map { it.path }?.toSet() ?: emptySet()
+        val newFiles = filesAfter - filesBefore
+        assertTrue("The auto-stopped recording must have been saved to a new file", newFiles.isNotEmpty())
+        newFiles.forEach { File(it).delete() }
+
+        collector.cancel()
+    }
+
+    @Test
+    fun motionDetection_doesNotRefireOrStartASecondRecordingWhileOneIsInProgress() = runBlocking {
+        connectAndWait()
+        settingsDataManager.saveMotionEnabled(true)
+        settingsDataManager.saveMotionSensitivity("80")
+        settingsDataManager.saveMotionRecordingSeconds("3") // long enough to outlast the repeat() below
+        delay(300L)
+
+        val motionMessages = mutableListOf<String>()
+        val collector = launch { viewModel.motionMessage.collect { motionMessages.add(it) } }
+
+        server.nextFrameJson = syntheticFrameJson(baseValue = 27315)
+        viewModel.getImage()
+        awaitValue(3_000) { !viewModel.isGetting.value }
+
+        server.nextFrameJson = syntheticFrameJson(baseValue = 27315, hotspotValue = 37315)
+        viewModel.getImage()
+        awaitValue(3_000) { viewModel.isRecording.value }
+        assertEquals(1, motionMessages.size)
+
+        // More large frame-to-frame changes while the first recording is still in progress --
+        // checkMotion()'s _isRecording.value guard must suppress these entirely: no second
+        // Snackbar, no second (nested) recording start.
+        repeat(3) {
+            server.nextFrameJson = syntheticFrameJson(baseValue = 17315, hotspotValue = 47315)
+            viewModel.getImage()
+            awaitValue(3_000) { !viewModel.isGetting.value }
+        }
+
+        assertEquals("Motion must not refire while a recording is in progress", 1, motionMessages.size)
+        assertTrue("The original recording must still be the only one running", viewModel.isRecording.value)
+
+        // Wait out the one recording this test did start, rather than leaving its auto-stop
+        // timer to fire after this test method (and its @After teardown) have already moved on.
+        awaitValue(6_000) { !viewModel.isRecording.value }
+        assertFalse(viewModel.isRecording.value)
+
+        collector.cancel()
     }
 
     private suspend fun awaitValue(timeoutMs: Long, condition: () -> Boolean) {
