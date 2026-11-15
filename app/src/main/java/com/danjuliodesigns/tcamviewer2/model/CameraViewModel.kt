@@ -415,6 +415,12 @@ class CameraViewModel : ViewModel() {
             }
         }
         viewModelScope.launch {
+            settingsDataManager.imageRotationFlow.collect { v ->
+                cameraUtils.settingImageRotation = v.toIntOrNull() ?: 0
+                remapCurrentFrame(selectedPalette)
+            }
+        }
+        viewModelScope.launch {
             settingsDataManager.temperatureUnitFlow.collect { v ->
                 _isCelsius.value = (v == "Celsius")
                 cameraUtils.settingIsCelsius = (v == "Celsius")

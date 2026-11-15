@@ -36,6 +36,7 @@ object VideoExporter {
         outputFile: File,
         width: Int,
         height: Int,
+        rotationDegrees: Int = 0,
     ) = withContext(Dispatchers.Default) {
         require(frames.isNotEmpty()) { "No frames to export" }
         require(frames.size == frameDurationsMs.size) { "Frame/duration count mismatch" }
@@ -79,7 +80,7 @@ object VideoExporter {
                         if (frameIndex < frames.size) {
                             val scaled = Bitmap.createScaledBitmap(frames[frameIndex], width, height, true)
                             spotmeterRects[frameIndex]?.let { rect ->
-                                drawHotspotMarker(Canvas(scaled), rect, width, height)
+                                drawHotspotMarker(Canvas(scaled), rect, width, height, rotationDegrees)
                             }
                             val image = codec.getInputImage(inIndex)
                             if (image != null) {

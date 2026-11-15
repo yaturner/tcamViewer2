@@ -31,6 +31,7 @@ class SettingsDataManager(
         val EXPORT_PICTURE_KEY = booleanPreferencesKey("export_picture")
         val EXPORT_METADATA_KEY = booleanPreferencesKey("export_metadata")
         val EXPORT_RESOLUTION_KEY = stringPreferencesKey("export_resolution")
+        val IMAGE_ROTATION_KEY = stringPreferencesKey("image_rotation")
         val MANUAL_RANGE_KEY = booleanPreferencesKey("manual_range")
         val MIN_VALUE_KEY = stringPreferencesKey("min_value")
         val MAX_VALUE_KEY = stringPreferencesKey("max_value")
@@ -108,6 +109,11 @@ class SettingsDataManager(
     val exportResolutionFlow: Flow<String> =
         appContext.dataStore.data.map { preferences ->
             preferences[EXPORT_RESOLUTION_KEY] ?: "320x240"
+        }
+
+    val imageRotationFlow: Flow<String> =
+        appContext.dataStore.data.map { preferences ->
+            preferences[IMAGE_ROTATION_KEY] ?: "0"
         }
 
     val manualRangeFlow: Flow<Boolean> =
@@ -215,6 +221,10 @@ class SettingsDataManager(
 
     suspend fun saveExportResolution(quality: String) {
         appContext.dataStore.edit { preferences -> preferences[EXPORT_RESOLUTION_KEY] = quality }
+    }
+
+    suspend fun saveImageRotation(degrees: String) {
+        appContext.dataStore.edit { preferences -> preferences[IMAGE_ROTATION_KEY] = degrees }
     }
 
     suspend fun saveManualRange(enabled: Boolean) {
@@ -325,6 +335,8 @@ class SettingsDataManager(
     suspend fun getExportMetadata(): Boolean = exportMetadataFlow.first()
 
     suspend fun getExportResolution(): String = exportResolutionFlow.first()
+
+    suspend fun getImageRotation(): String = imageRotationFlow.first()
 
     suspend fun getManualRange(): Boolean = manualRangeFlow.first()
 

@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.datastore.preferences.core.edit
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -59,7 +60,7 @@ class SettingsScreenUiTest {
         manager.saveExportPicture(false)
 
         openSettings()
-        composeRule.onNodeWithTag("switch_export_picture").performClick()
+        composeRule.onNodeWithTag("switch_export_picture").performScrollTo().performClick()
         composeRule.onNodeWithText("Save").performClick()
         // Save runs several sequential DataStore writes before leaving Settings -- real disk I/O
         // that waitForIdle()'s Compose-only idling doesn't track -- so poll instead of asserting
@@ -76,7 +77,7 @@ class SettingsScreenUiTest {
         manager.saveSpotmeter(true)
 
         openSettings()
-        composeRule.onNodeWithTag("switch_spotmeter").performClick()
+        composeRule.onNodeWithTag("switch_spotmeter").performScrollTo().performClick()
         composeRule.onNodeWithText("Cancel").performClick()
         composeRule.waitForIdle()
 
@@ -90,8 +91,8 @@ class SettingsScreenUiTest {
         manager.saveShutterSound(true)
 
         openSettings()
-        composeRule.onNodeWithTag("switch_manual_range").performClick()
-        composeRule.onNodeWithTag("switch_shutter_sound").performClick()
+        composeRule.onNodeWithTag("switch_manual_range").performScrollTo().performClick()
+        composeRule.onNodeWithTag("switch_shutter_sound").performScrollTo().performClick()
         composeRule.onNodeWithText("Save").performClick()
         // Save runs ~20 sequential DataStore writes before leaving Settings -- real disk I/O
         // that waitForIdle()'s Compose-only idling doesn't track -- so poll instead of asserting
@@ -109,7 +110,7 @@ class SettingsScreenUiTest {
         manager.saveExportMetadata(false)
 
         openSettings()
-        composeRule.onNodeWithTag("switch_export_metadata").performClick()
+        composeRule.onNodeWithTag("switch_export_metadata").performScrollTo().performClick()
         composeRule.onNodeWithText("Cancel").performClick()
         composeRule.waitForIdle()
 

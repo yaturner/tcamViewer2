@@ -2,6 +2,7 @@ package com.danjuliodesigns.tcamviewer2.utils
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.os.Environment
 import com.danjuliodesigns.tcamviewer2.constants.Constants
@@ -46,6 +47,8 @@ class CameraUtils @Inject constructor(
     @Volatile var settingManualMax: Float = 100f
 
     @Volatile var settingIsCelsius: Boolean = true
+
+    @Volatile var settingImageRotation: Int = 0
 
     companion object {
         private const val offsetA: Int = 0
@@ -145,7 +148,19 @@ class CameraUtils @Inject constructor(
 
         val bmp = Bitmap.createBitmap(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, Bitmap.Config.ARGB_8888)
         bmp.setPixels(pixels, 0, Constants.IMAGE_WIDTH, 0, 0, Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT)
-        imageDto.bitmap = bmp
+        imageDto.bitmap = rotateForDisplay(bmp)
+    }
+
+    /** Applies the Image Rotation setting as a final display transform -- imageData,
+     *  spotmeterLocation, and every temperature calculation stay in raw, unrotated sensor space;
+     *  only the rendered Bitmap itself is rotated. A no-op (returns [bmp] unchanged) when the
+     *  setting is 0. */
+    private fun rotateForDisplay(bmp: Bitmap): Bitmap {
+        if (settingImageRotation == 0) return bmp
+        val matrix = Matrix().apply { postRotate(settingImageRotation.toFloat()) }
+        val rotated = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, matrix, true)
+        if (rotated !== bmp) bmp.recycle()
+        return rotated
     }
 
     private fun rgbToPixel(rgb: IntArray?): Int {
@@ -191,7 +206,7 @@ class CameraUtils @Inject constructor(
         }
         val bmp = Bitmap.createBitmap(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, Bitmap.Config.ARGB_8888)
         bmp.setPixels(out, 0, Constants.IMAGE_WIDTH, 0, 0, Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT)
-        return bmp
+        return rotateForDisplay(bmp)
     }
 
     fun getRadiometricTemperatures(

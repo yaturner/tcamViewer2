@@ -96,6 +96,10 @@ import com.danjuliodesigns.tcamviewer2.model.MeasurementMode
 import com.danjuliodesigns.tcamviewer2.model.TempSample
 import com.danjuliodesigns.tcamviewer2.paletteFactory
 import com.danjuliodesigns.tcamviewer2.settingsDataManager
+import com.danjuliodesigns.tcamviewer2.utils.rotatePoint
+import com.danjuliodesigns.tcamviewer2.utils.rotatedSize
+import com.danjuliodesigns.tcamviewer2.utils.unrotateDelta
+import com.danjuliodesigns.tcamviewer2.utils.unrotatePoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -118,8 +122,11 @@ fun CameraScreen(
     onOpenDrawer: () -> Unit = {},
     viewModel: CameraViewModel = viewModel(),
 ) {
-    val displayImageWidth = 320.dp
-    val displayImageHeight = 240.dp
+    val imageRotation by settingsDataManager.imageRotationFlow.collectAsState(initial = "0")
+    val rotationDegrees = imageRotation.toIntOrNull() ?: 0
+    val (rotatedDisplayW, rotatedDisplayH) = rotatedSize(320, 240, rotationDegrees)
+    val displayImageWidth = rotatedDisplayW.dp
+    val displayImageHeight = rotatedDisplayH.dp
     val colorBarWidth = 32.dp
     val histogramWidth = 192.dp
 
@@ -375,13 +382,25 @@ fun CameraScreen(
                                         .then(
                                             if (measurementMode == MeasurementMode.POINT) {
                                                 if (spotmeterEnabled) {
-                                                    Modifier.pointerInput(isConnected) {
+                                                    Modifier.pointerInput(isConnected, rotationDegrees) {
                                                         if (!isConnected) return@pointerInput
                                                         detectTapGestures { offset ->
-                                                            val camX = (offset.x / size.width * Constants.IMAGE_WIDTH)
-                                                                .toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
-                                                            val camY = (offset.y / size.height * Constants.IMAGE_HEIGHT)
-                                                                .toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
+                                                            val (dispW, dispH) = rotatedSize(
+                                                                Constants.IMAGE_WIDTH,
+                                                                Constants.IMAGE_HEIGHT,
+                                                                rotationDegrees,
+                                                            )
+                                                            val dispX = offset.x / size.width * dispW
+                                                            val dispY = offset.y / size.height * dispH
+                                                            val (rawX, rawY) = unrotatePoint(
+                                                                dispX,
+                                                                dispY,
+                                                                Constants.IMAGE_WIDTH,
+                                                                Constants.IMAGE_HEIGHT,
+                                                                rotationDegrees,
+                                                            )
+                                                            val camX = rawX.toInt().coerceIn(0, Constants.IMAGE_WIDTH - 1)
+                                                            val camY = rawY.toInt().coerceIn(0, Constants.IMAGE_HEIGHT - 1)
                                                             viewModel.setSpotmeter(camX, camY)
                                                         }
                                                     }
@@ -390,18 +409,31 @@ fun CameraScreen(
                                                     Modifier
                                                 }
                                             } else {
-                                                // Keyed only on isConnected/mode (not the region itself, which
-                                                // changes every drag step) — always reads/writes the ViewModel's
-                                                // StateFlow.value directly so the gesture never restarts mid-drag.
-                                                Modifier.pointerInput(isConnected, measurementMode) {
+                                                // Keyed only on isConnected/mode/rotation (not the region itself,
+                                                // which changes every drag step) — always reads/writes the
+                                                // ViewModel's StateFlow.value directly so the gesture never
+                                                // restarts mid-drag.
+                                                Modifier.pointerInput(isConnected, measurementMode, rotationDegrees) {
                                                     if (!isConnected) return@pointerInput
                                                     var dragTarget = RegionDragTarget.NONE
                                                     detectDragGestures(
                                                         onDragStart = { start ->
                                                             val region = viewModel.measurementRegion.value
                                                                 ?: return@detectDragGestures
-                                                            val camX = start.x / size.width * Constants.IMAGE_WIDTH
-                                                            val camY = start.y / size.height * Constants.IMAGE_HEIGHT
+                                                            val (dispW, dispH) = rotatedSize(
+                                                                Constants.IMAGE_WIDTH,
+                                                                Constants.IMAGE_HEIGHT,
+                                                                rotationDegrees,
+                                                            )
+                                                            val dispX = start.x / size.width * dispW
+                                                            val dispY = start.y / size.height * dispH
+                                                            val (camX, camY) = unrotatePoint(
+                                                                dispX,
+                                                                dispY,
+                                                                Constants.IMAGE_WIDTH,
+                                                                Constants.IMAGE_HEIGHT,
+                                                                rotationDegrees,
+                                                            )
                                                             dragTarget = resolveRegionDragTarget(region, camX, camY)
                                                         },
                                                         onDrag = { change, dragAmount ->
@@ -409,8 +441,14 @@ fun CameraScreen(
                                                             if (dragTarget == RegionDragTarget.NONE) return@detectDragGestures
                                                             val region = viewModel.measurementRegion.value
                                                                 ?: return@detectDragGestures
-                                                            val dCamX = dragAmount.x / size.width * Constants.IMAGE_WIDTH
-                                                            val dCamY = dragAmount.y / size.height * Constants.IMAGE_HEIGHT
+                                                            val (dispW, dispH) = rotatedSize(
+                                                                Constants.IMAGE_WIDTH,
+                                                                Constants.IMAGE_HEIGHT,
+                                                                rotationDegrees,
+                                                            )
+                                                            val dDispX = dragAmount.x / size.width * dispW
+                                                            val dDispY = dragAmount.y / size.height * dispH
+                                                            val (dCamX, dCamY) = unrotateDelta(dDispX, dDispY, rotationDegrees)
                                                             viewModel.setMeasurementRegion(
                                                                 applyRegionDrag(region, dragTarget, dCamX, dCamY),
                                                             )
@@ -424,9 +462,9 @@ fun CameraScreen(
 
                                 // Spotmeter / region overlay — mutually exclusive with each other
                                 if (measurementMode == MeasurementMode.REGION) {
-                                    RegionOverlay(measurementRegion)
+                                    RegionOverlay(measurementRegion, rotationDegrees)
                                 } else if (spotmeterEnabled) {
-                                    SpotmeterOverlay(spotmeterRect)
+                                    SpotmeterOverlay(spotmeterRect, rotationDegrees)
                                 }
 
                                 if (isGetting) {
@@ -1263,19 +1301,24 @@ internal fun applyRegionDrag(region: Rect, target: RegionDragTarget, dx: Float, 
 
 /** Draws the resizable region box — a hollow rectangle (same black+white outline style as
  *  SpotmeterOverlay) plus small corner handles marking the resize grab points. The image here is
- *  always shown with ContentScale.FillBounds inside a Box already sized to the image's aspect
- *  ratio, so no letterboxing correction is needed — size.width/height map directly to
- *  IMAGE_WIDTH/HEIGHT, the same assumption the drag gesture's own coordinate math uses. */
+ *  always shown with ContentScale.FillBounds inside a Box already sized to the image's (rotated)
+ *  aspect ratio, so no letterboxing correction is needed — size.width/height map directly to the
+ *  rotated display size, the same assumption the drag gesture's own coordinate math uses.
+ *  [region] is always in raw, unrotated sensor space (see utils/ImageRotation.kt); its corners
+ *  are rotated here to match whatever CameraUtils.rotateForDisplay() did to the bitmap. */
 @Composable
-private fun RegionOverlay(region: Rect?, modifier: Modifier = Modifier) {
+private fun RegionOverlay(region: Rect?, rotationDegrees: Int = 0, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.fillMaxSize()) {
         val r = region ?: return@Canvas
-        val sx = size.width / Constants.IMAGE_WIDTH
-        val sy = size.height / Constants.IMAGE_HEIGHT
-        val left = r.left * sx
-        val top = r.top * sy
-        val w = (r.right - r.left) * sx
-        val h = (r.bottom - r.top) * sy
+        val (dispWidth, dispHeight) = rotatedSize(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, rotationDegrees)
+        val sx = size.width / dispWidth
+        val sy = size.height / dispHeight
+        val (rx1, ry1) = rotatePoint(r.left.toFloat(), r.top.toFloat(), Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, rotationDegrees)
+        val (rx2, ry2) = rotatePoint(r.right.toFloat(), r.bottom.toFloat(), Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, rotationDegrees)
+        val left = minOf(rx1, rx2) * sx
+        val top = minOf(ry1, ry2) * sy
+        val w = kotlin.math.abs(rx2 - rx1) * sx
+        val h = kotlin.math.abs(ry2 - ry1) * sy
         val topLeft = Offset(left, top)
         val regionSize = Size(w, h)
         drawRect(color = Color.Black, topLeft = topLeft, size = regionSize, style = Stroke(width = 3.dp.toPx()))

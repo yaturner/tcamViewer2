@@ -141,8 +141,10 @@ fun SettingsScreen(
     var showFirmwareDialog by rememberSaveable { mutableStateOf(false) }
     var tempDialogPalette by remember { mutableStateOf("Rainbow") }
     var resMenuExpanded by remember { mutableStateOf(false) }
+    var rotationMenuExpanded by remember { mutableStateOf(false) }
 
     val resolutions = listOf("160x120", "320x240", "480x360", "640x480")
+    val rotationOptions = listOf("0", "90", "180", "270")
     val paletteOptions = listOf(
         "Arctic", "Banded", "Blackhot", "DoubleRainbow", "Fusion",
         "Gray", "Ironblack", "Isotherm", "Rainbow", "Sepia",
@@ -153,6 +155,7 @@ fun SettingsScreen(
     val savedExportPic by dataManager.exportPictureFlow.collectAsState(initial = false)
     val savedExportMeta by dataManager.exportMetadataFlow.collectAsState(initial = false)
     val savedExportRes by dataManager.exportResolutionFlow.collectAsState(initial = "320x240")
+    val savedImageRotation by dataManager.imageRotationFlow.collectAsState(initial = "0")
     val savedManualRange by dataManager.manualRangeFlow.collectAsState(initial = false)
     val savedMin by dataManager.minValueFlow.collectAsState(initial = "0")
     val savedMax by dataManager.maxValueFlow.collectAsState(initial = "100")
@@ -178,6 +181,7 @@ fun SettingsScreen(
     var localExportPic by remember(savedExportPic, resetKey) { mutableStateOf(savedExportPic) }
     var localExportMeta by remember(savedExportMeta, resetKey) { mutableStateOf(savedExportMeta) }
     var localResolution by remember(savedExportRes, resetKey) { mutableStateOf(savedExportRes) }
+    var localImageRotation by remember(savedImageRotation, resetKey) { mutableStateOf(savedImageRotation) }
     var localManualRange by remember(savedManualRange, resetKey) { mutableStateOf(savedManualRange) }
     var localMin by remember(savedMin, resetKey) { mutableStateOf(savedMin) }
     var localMax by remember(savedMax, resetKey) { mutableStateOf(savedMax) }
@@ -203,6 +207,7 @@ fun SettingsScreen(
             localExportPic != savedExportPic ||
             localExportMeta != savedExportMeta ||
             localResolution != savedExportRes ||
+            localImageRotation != savedImageRotation ||
             localManualRange != savedManualRange ||
             localMin != savedMin ||
             localMax != savedMax ||
@@ -228,6 +233,7 @@ fun SettingsScreen(
         dataManager.saveExportPicture(localExportPic)
         dataManager.saveExportMetadata(localExportMeta)
         dataManager.saveExportResolution(localResolution)
+        dataManager.saveImageRotation(localImageRotation)
         dataManager.saveManualRange(localManualRange)
         // Cap at sane bounds — nothing previously stopped a stray/garbage value (e.g. a leftover
         // "2299") from being saved and silently breaking the manual-range display. Min is floored
@@ -458,6 +464,38 @@ fun SettingsScreen(
                             onClick = {
                                 localResolution = option
                                 resMenuExpanded = false
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                        )
+                    }
+                }
+            }
+
+            // Image Rotation dropdown — rotates the image everywhere it's shown or saved (live
+            // Camera screen, Library stills, video playback, and exports).
+            ExposedDropdownMenuBox(
+                expanded = rotationMenuExpanded,
+                onExpandedChange = { rotationMenuExpanded = it },
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth().menuAnchor(),
+                    value = "$localImageRotation°",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Image Rotation") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = rotationMenuExpanded) },
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                )
+                ExposedDropdownMenu(
+                    expanded = rotationMenuExpanded,
+                    onDismissRequest = { rotationMenuExpanded = false },
+                ) {
+                    rotationOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text("$option°") },
+                            onClick = {
+                                localImageRotation = option
+                                rotationMenuExpanded = false
                             },
                             contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
                         )

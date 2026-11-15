@@ -107,6 +107,7 @@ import com.danjuliodesigns.tcamviewer2.paletteFactory
 import com.danjuliodesigns.tcamviewer2.settingsDataManager
 import com.danjuliodesigns.tcamviewer2.utils.VideoExporter
 import com.danjuliodesigns.tcamviewer2.utils.drawHotspotMarker
+import com.danjuliodesigns.tcamviewer2.utils.rotatedSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -549,6 +550,8 @@ private fun BrowseWindow(
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
     val spotmeterEnabled by settingsDataManager.spotmeterFlow.collectAsState(initial = true)
+    val imageRotation by settingsDataManager.imageRotationFlow.collectAsState(initial = "0")
+    val rotationDegrees = imageRotation.toIntOrNull() ?: 0
 
     LaunchedEffect(file) {
         dto = null // show spinner while loading the new image
@@ -704,12 +707,15 @@ private fun BrowseWindow(
                                 val labelH = if (hasThermal) 26.dp else 0.dp
                                 val availW = (maxWidth - sidebarW).coerceAtLeast(1.dp)
                                 val availH = (maxHeight - labelH).coerceAtLeast(1.dp)
+                                // imageBitmap's own width/height already reflect the Image Rotation
+                                // setting (CameraUtils rotates the bitmap before it ever reaches here),
+                                // so sizing against them handles rotation automatically.
                                 val fitScale = minOf(
-                                    availW.value / Constants.IMAGE_WIDTH,
-                                    availH.value / Constants.IMAGE_HEIGHT,
+                                    availW.value / imageBitmap.width,
+                                    availH.value / imageBitmap.height,
                                 )
-                                val imgW = (Constants.IMAGE_WIDTH * fitScale).dp
-                                val imgH = (Constants.IMAGE_HEIGHT * fitScale).dp
+                                val imgW = (imageBitmap.width * fitScale).dp
+                                val imgH = (imageBitmap.height * fitScale).dp
 
                                 Row(
                                     modifier = Modifier.align(Alignment.Center),
@@ -745,7 +751,7 @@ private fun BrowseWindow(
                                                 contentScale = ContentScale.FillBounds,
                                             )
                                             if (hasThermal && spotmeterEnabled) {
-                                                SpotmeterOverlay(currentDto.spotmeterLocation)
+                                                SpotmeterOverlay(currentDto.spotmeterLocation, rotationDegrees)
                                             }
                                         }
                                     }
@@ -932,10 +938,14 @@ private fun ThumbnailGridCell(file: File, isSelected: Boolean, onClick: () -> Un
             .clickable(onClick = onClick)
             .padding(4.dp),
     ) {
+        // Derived from the decoded thumbnail's own (already-rotated) dimensions, rather than a
+        // hardcoded 4:3, so a 90/270 Image Rotation setting shows a portrait cell instead of
+        // squishing the image to fit a landscape one.
+        val aspect = thumbnail?.let { it.width.toFloat() / it.height } ?: (4f / 3f)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(4f / 3f),
+                .aspectRatio(aspect),
         ) {
             if (thumbnail != null) {
                 Image(
@@ -1114,6 +1124,8 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
     val tempUnit by settingsDataManager.temperatureUnitFlow.collectAsState(initial = "Celsius")
     val isCelsius = tempUnit == "Celsius"
     val spotmeterEnabled by settingsDataManager.spotmeterFlow.collectAsState(initial = true)
+    val imageRotation by settingsDataManager.imageRotationFlow.collectAsState(initial = "0")
+    val rotationDegrees = imageRotation.toIntOrNull() ?: 0
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -1324,12 +1336,15 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                             val labelH = if (hasThermal) 26.dp else 0.dp
                             val availW = (maxWidth - sidebarW).coerceAtLeast(1.dp)
                             val availH = (maxHeight - labelH).coerceAtLeast(1.dp)
+                            // currentFrame.bitmap's own width/height already reflect the Image
+                            // Rotation setting (CameraUtils rotates the bitmap before it ever reaches
+                            // here), so sizing against them handles rotation automatically.
                             val fitScale = minOf(
-                                availW.value / Constants.IMAGE_WIDTH,
-                                availH.value / Constants.IMAGE_HEIGHT,
+                                availW.value / currentFrame.bitmap.width,
+                                availH.value / currentFrame.bitmap.height,
                             )
-                            val imgW = (Constants.IMAGE_WIDTH * fitScale).dp
-                            val imgH = (Constants.IMAGE_HEIGHT * fitScale).dp
+                            val imgW = (currentFrame.bitmap.width * fitScale).dp
+                            val imgH = (currentFrame.bitmap.height * fitScale).dp
 
                             Row(
                                 modifier = Modifier.align(Alignment.Center),
@@ -1360,7 +1375,7 @@ private fun VideoPlayerWindow(file: File, onDismiss: () -> Unit) {
                                             contentScale = ContentScale.FillBounds,
                                         )
                                         if (hasThermal && spotmeterEnabled) {
-                                            SpotmeterOverlay(currentFrame.dto.spotmeterLocation)
+                                            SpotmeterOverlay(currentFrame.dto.spotmeterLocation, rotationDegrees)
                                         }
                                     }
                                 }
@@ -1523,7 +1538,12 @@ private suspend fun exportVideoAsMp4(
     frames: List<VideoFrame>,
     intervals: List<Long>,
 ): File = withContext(Dispatchers.Default) {
-    val (rawW, rawH) = parseResolution(settingsDataManager.getExportResolution()) ?: (320 to 240)
+    val rotationDegrees = settingsDataManager.getImageRotation().toIntOrNull() ?: 0
+    val (parsedW, parsedH) = parseResolution(settingsDataManager.getExportResolution()) ?: (320 to 240)
+    // The source frame bitmaps are already rotated (CameraUtils rotates them before they're ever
+    // stored on the dto) -- swap the configured export resolution to match, or a rotated 90/270
+    // source gets stretched into the wrong aspect ratio.
+    val (rawW, rawH) = rotatedSize(parsedW, parsedH, rotationDegrees)
     val width = VideoExporter.align16(rawW)
     val height = VideoExporter.align16(rawH)
     val spotmeterEnabled = settingsDataManager.getSpotmeter()
@@ -1533,7 +1553,7 @@ private suspend fun exportVideoAsMp4(
     }
     val exportDir = File(context.cacheDir, "share").also { it.mkdirs() }
     val outputFile = File(exportDir, "${sourceFile.nameWithoutExtension}.mp4")
-    VideoExporter.exportMp4(bitmaps, intervals, spotmeterRects, outputFile, width, height)
+    VideoExporter.exportMp4(bitmaps, intervals, spotmeterRects, outputFile, width, height, rotationDegrees)
     outputFile
 }
 
@@ -1582,8 +1602,13 @@ suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
     // All dimensions in px (off-screen bitmap — not dp). Every other constant here was
     // tuned against the 640×480 (160×4) design size, so scale them together with it to
     // follow the "Export Resolution" setting rather than always rendering at 640×480.
-    val (imgW, imgH) = parseResolution(settingsDataManager.getExportResolution()) ?: (640 to 480)
-    val scale = imgW / 640f
+    // `scale` tracks the chosen quality level and stays tied to the UNROTATED width, so it
+    // doesn't change just because the image is being rotated 90/270 for output; `imgW`/`imgH`
+    // (the actual canvas/output dimensions) are what swap for a rotated source bitmap.
+    val rotationDegrees = settingsDataManager.getImageRotation().toIntOrNull() ?: 0
+    val (parsedW, parsedH) = parseResolution(settingsDataManager.getExportResolution()) ?: (640 to 480)
+    val scale = parsedW / 640f
+    val (imgW, imgH) = rotatedSize(parsedW, parsedH, rotationDegrees)
     // With Export Metadata off, the export is just the plain colorized picture at the
     // selected resolution — no header/sidebar/footer chrome around it.
     val headerH = if (exportMetadata) (64 * scale).toInt() else 0 // room for the centred spotmeter temperature
@@ -1626,7 +1651,7 @@ suspend fun buildShareBitmap(dto: ImageDto, isCelsius: Boolean): Bitmap {
         // Hotspot marker — same fixed 4x4-camera-pixel square shown on-screen, only when enabled.
         if (spotmeterEnabled) {
             dto.spotmeterLocation?.let { rect ->
-                drawHotspotMarker(canvas, rect, imgW, imgH, offsetY = headerH.toFloat())
+                drawHotspotMarker(canvas, rect, imgW, imgH, rotationDegrees, offsetY = headerH.toFloat())
             }
         }
 

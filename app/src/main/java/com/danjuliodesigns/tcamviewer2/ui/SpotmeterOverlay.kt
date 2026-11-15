@@ -11,19 +11,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.danjuliodesigns.tcamviewer2.constants.Constants
+import com.danjuliodesigns.tcamviewer2.utils.rotatePoint
+import com.danjuliodesigns.tcamviewer2.utils.rotatedSize
 
 /** Fixed marker size, in camera pixels (160x120 space), regardless of the reported rect's own size. */
 private const val MARKER_SIZE_PX = 4f
 
 /**
- * Draws a fixed-size 4x4 camera-pixel hotspot/spotmeter square, centered on [spotmeterRect],
- * over a thermal image shown with ContentScale.Fit, mapping into the letterboxed image bounds.
+ * Draws a fixed-size 4x4 camera-pixel hotspot/spotmeter square, centered on [spotmeterRect]
+ * (always in raw, unrotated sensor space -- see utils/ImageRotation.kt), over a thermal image
+ * shown with ContentScale.Fit, mapping into the letterboxed image bounds. [rotationDegrees] is
+ * the current Image Rotation setting; the marker's position is rotated to match whatever
+ * CameraUtils.rotateForDisplay() already did to the bitmap itself.
  */
 @Composable
-fun SpotmeterOverlay(spotmeterRect: Rect?, modifier: Modifier = Modifier) {
+fun SpotmeterOverlay(spotmeterRect: Rect?, rotationDegrees: Int = 0, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.fillMaxSize()) {
         spotmeterRect?.let { rect ->
-            val imgAspect = Constants.IMAGE_WIDTH.toFloat() / Constants.IMAGE_HEIGHT
+            val (dispWidth, dispHeight) = rotatedSize(Constants.IMAGE_WIDTH, Constants.IMAGE_HEIGHT, rotationDegrees)
+            val imgAspect = dispWidth.toFloat() / dispHeight
             val boxAspect = size.width / size.height
             val fittedW: Float
             val fittedH: Float
@@ -36,10 +42,15 @@ fun SpotmeterOverlay(spotmeterRect: Rect?, modifier: Modifier = Modifier) {
             }
             val offsetX = (size.width - fittedW) / 2f
             val offsetY = (size.height - fittedH) / 2f
-            val sx = fittedW / Constants.IMAGE_WIDTH
-            val sy = fittedH / Constants.IMAGE_HEIGHT
-            val centerCol = (rect.left + rect.right) / 2f
-            val centerRow = (rect.top + rect.bottom) / 2f
+            val sx = fittedW / dispWidth
+            val sy = fittedH / dispHeight
+            val (centerCol, centerRow) = rotatePoint(
+                (rect.left + rect.right) / 2f,
+                (rect.top + rect.bottom) / 2f,
+                Constants.IMAGE_WIDTH,
+                Constants.IMAGE_HEIGHT,
+                rotationDegrees,
+            )
             val left = offsetX + (centerCol - MARKER_SIZE_PX / 2f) * sx
             val top = offsetY + (centerRow - MARKER_SIZE_PX / 2f) * sy
             val w = MARKER_SIZE_PX * sx
