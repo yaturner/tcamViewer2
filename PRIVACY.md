@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: August 30, 2026**
+**Last updated: November 15, 2026**
 
 tCam Viewer ("the app") is a viewer for [tCam](https://github.com/danjulio/tCam) thermal imaging
 cameras. This page explains what data the app accesses and what, if anything, leaves your device.
@@ -40,6 +40,17 @@ the app crashes or hits an unexpected error, a report is sent containing:
 
 These reports do not include your camera's IP address, saved images, telemetry, or anything else
 you've captured. They exist to help fix bugs.
+
+### Check for updates
+Both distributions include a "Check for updates" row in Settings. The build distributed via
+Google Play uses Play's own In-App Updates API, which Google Play handles directly. The build
+distributed via GitHub Releases instead makes an unauthenticated request to GitHub's public API
+(`api.github.com`) to look up this repo's latest release tag — no account, device identifier, or
+other personal data is sent, only the request itself (which, like any HTTPS request, is visible to
+GitHub and your network as having come from your device's IP address). This request only happens
+when you tap "Check" on that row, not automatically in the background. Choosing
+"Update" opens that release's page in your browser; downloading and installing it from there is
+the same as installing any other sideloaded APK.
 
 ## What the app does not do
 
