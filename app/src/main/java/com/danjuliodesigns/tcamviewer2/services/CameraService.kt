@@ -788,11 +788,16 @@ class CameraService : Service() {
                                     fileDeferred = null
                                     pendingFile.complete(parsedJson)
                                 } else if (!routeToPendingRequest(parsedJson)) {
-                                    // Resolve a pending single-image capture (time lapse) if waiting
+                                    // Resolve a pending single-image capture (time lapse) if waiting.
+                                    // This same frame is also published to imageChannel below for the
+                                    // live display pipeline, which mutates its nested "metadata" object
+                                    // in place (ImageDto's paletteName setter) -- handing the deferred a
+                                    // separate JSONObject instance avoids a ConcurrentModificationException
+                                    // from the two consumers racing on the same mutable object tree.
                                     val deferred = singleImageDeferred
                                     if (deferred != null && !deferred.isCompleted && parsedJson.has("radiometric")) {
                                         singleImageDeferred = null
-                                        deferred.complete(parsedJson)
+                                        deferred.complete(JSONObject(parsedJson.toString()))
                                     }
                                     imageChannel.onNext(parsedJson)
                                 }
